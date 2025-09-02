@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "GliderMon",
+    "slug": "glidermon-mobile",
+    "scheme": "glidermon",
+    "orientation": "portrait",
+    "plugins": [
+      ["react-native-ble-plx"]
+    ],
+    "ios": {
+      "bundleIdentifier": "com.kevin.glidermon",
+      "infoPlist": {
+        "NSBluetoothAlwaysUsageDescription": "GliderMon uses Bluetooth to send CGM readings to your device."
+      }
+    },
+    "android": {
+      "package": "com.kevin.glidermon",
+      "permissions": [
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
+    }
+  }
+}

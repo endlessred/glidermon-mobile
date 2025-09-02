@@ -1,0 +1,28 @@
+{
+  "name": "glidermon-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "main": "node_modules/expo/AppEntry.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "prebuild": "expo prebuild",
+    "lint": "echo 'add eslint if you want'"
+  },
+  "dependencies": {
+    "expo": "^51.0.0",
+    "expo-auth-session": "~5.5.2",
+    "expo-crypto": "~13.0.2",
+    "expo-linking": "~6.3.1",
+    "expo-status-bar": "~1.12.1",
+    "react": "18.2.0",
+    "react-native": "0.74.3",
+    "react-native-ble-plx": "^2.1.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "@types/react": "~18.2.79",
+    "@types/react-native": "~0.73.0"
+  }
+}
