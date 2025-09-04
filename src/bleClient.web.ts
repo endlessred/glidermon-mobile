@@ -12,6 +12,8 @@ let gService: BluetoothRemoteGATTService | null = null;
 let gIngest:  BluetoothRemoteGATTCharacteristic | null = null;
 let gStats:   BluetoothRemoteGATTCharacteristic | null = null;
 
+const LS_KEY = "glidermonDeviceId";
+
 function resetCache() {
   gServer = null; gService = null; gIngest = null; gStats = null;
 }
@@ -24,20 +26,32 @@ export function mapDexTrendToCode(trend?: string | null): TrendCode {
   return 3;
 }
 
+async function resumeKnownDevice(): Promise<BluetoothDevice | null> {
+  const nav = navigator as Navigator & { bluetooth: Bluetooth & { getDevices?: () => Promise<BluetoothDevice[]> } };
+  const savedId = localStorage.getItem(LS_KEY);
+  if (!nav.bluetooth || !("getDevices" in nav.bluetooth) || !savedId) return null;
+
+  const devices = await nav.bluetooth.getDevices!();
+  const dev = devices.find(d => d.id === savedId);
+  if (!dev) return null;
+
+  gDevice = dev;
+  dev.addEventListener("gattserverdisconnected", () => resetCache());
+  return dev;
+}
+
 async function ensureConnected(): Promise<void> {
-  if (!gDevice) throw new Error("No device chosen");
-  const gatt = gDevice.gatt!;
-  if (!gatt.connected) {
-    gServer = await gatt.connect();
-  } else {
-    gServer = gatt;
+  if (!gDevice) {
+    await resumeKnownDevice(); // try silent resume after auth / reload
+    if (!gDevice) throw new Error("No device chosen");
   }
+  const gatt = gDevice.gatt!;
+  gServer = gatt.connected ? gatt : await gatt.connect();
 }
 
 async function ensureCharacteristics(): Promise<void> {
   await ensureConnected();
   if (!gServer) throw new Error("No GATT server");
-  // If we lost handles (after a disconnect), reacquire them
   if (!gService) gService = await gServer.getPrimaryService(SERVICE_UUID);
   if (!gIngest)  gIngest  = await gService.getCharacteristic(INGEST_CHAR);
   if (!gStats)   gStats   = await gService.getCharacteristic(STATS_CHAR);
@@ -45,20 +59,17 @@ async function ensureCharacteristics(): Promise<void> {
 
 export async function findAndConnect(): Promise<BluetoothDevice> {
   const nav = navigator as Navigator & { bluetooth: Bluetooth };
-  if (!nav.bluetooth) throw new Error("Web Bluetooth not supported in this browser");
+  if (!nav.bluetooth) throw new Error("Web Bluetooth not supported");
 
-  // Must be called from a user gesture (button click)
+  // Must be called from a user gesture
   const device = await nav.bluetooth.requestDevice({
     filters: [{ services: [SERVICE_UUID] }],
     optionalServices: [SERVICE_UUID],
   });
 
-  // Cache + listen for disconnects
   gDevice = device;
-  device.addEventListener("gattserverdisconnected", () => {
-    resetCache();
-    // (Optional) you can auto-reconnect here, but it's nicer to require a user tap
-  });
+  localStorage.setItem(LS_KEY, device.id || "");
+  device.addEventListener("gattserverdisconnected", () => resetCache());
 
   await ensureCharacteristics();
   return device;
@@ -80,14 +91,13 @@ export async function writeReading(
   trendCode: TrendCode,
   epochSec: number
 ) {
-  await ensureCharacteristics(); // <— recheck/restore connection before every write
-  if (!gIngest) throw new Error("Ingest characteristic unavailable");
+  await ensureCharacteristics(); // <- reconnect & reacquire handles if needed
   const bytes = pack8(mgdl, trendCode, epochSec);
 
   const props = (gIngest as any).properties;
-  if (props?.writeWithoutResponse && "writeValueWithoutResponse" in gIngest) {
+  if (props?.writeWithoutResponse && "writeValueWithoutResponse" in gIngest!) {
     // @ts-ignore
-    await gIngest.writeValueWithoutResponse(bytes);
+    await gIngest!.writeValueWithoutResponse(bytes);
   } else if ("writeValueWithResponse" in (gIngest as any)) {
     // @ts-ignore
     await (gIngest as any).writeValueWithResponse(bytes);
@@ -98,8 +108,39 @@ export async function writeReading(
 }
 
 export async function readStats(): Promise<string | null> {
-  await ensureCharacteristics(); // <— recheck/restore
-  if (!gStats) return null;
-  const dv = await gStats.readValue();
+  await ensureCharacteristics(); // <- reconnect if dropped
+  const dv = await gStats!.readValue();
   return new TextDecoder().decode(dv);
+}
+
+export async function disconnectBle(opts?: { forget?: boolean; waitMs?: number }) {
+  const { forget = false, waitMs = 300 } = opts || {};
+  try {
+    if (gDevice?.gatt?.connected) {
+      await new Promise<void>((resolve) => {
+        const once = () => resolve();
+        gDevice!.addEventListener("gattserverdisconnected", once, { once: true });
+        try { gDevice!.gatt!.disconnect(); } catch { resolve(); }
+        setTimeout(resolve, waitMs);
+      });
+    }
+  } finally {
+    resetCache();
+  }
+  if (forget) {
+    try { localStorage.removeItem(LS_KEY); } catch {}
+    const nav = navigator as Navigator & { bluetooth: Bluetooth & { getDevices?: () => Promise<BluetoothDevice[]> } };
+    if (nav.bluetooth.getDevices) {
+      const list = await nav.bluetooth.getDevices();
+      for (const d of list) {
+        try { if (d.gatt?.connected) d.gatt.disconnect(); } catch {}
+      }
+    }
+    gDevice = null;
+  }
+}
+
+export async function forceReconnect(): Promise<BluetoothDevice> {
+  await disconnectBle({ forget: false });
+  return findAndConnect();
 }

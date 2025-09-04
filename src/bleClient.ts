@@ -1,102 +1,165 @@
-import { BleManager, Device, State, Subscription, Characteristic } from "react-native-ble-plx";
-// If you use base64 decode elsewhere:
-import { decode as atob, encode as btoa } from "base-64";
+/// <reference types="web-bluetooth" />
 
 const SERVICE_UUID = "12345678-1234-5678-1234-56789abcdef0";
 const INGEST_CHAR  = "12345678-1234-5678-1234-56789abcdef1";
 const STATS_CHAR   = "12345678-1234-5678-1234-56789abcdef2";
 
-const manager = new BleManager();
+export type TrendCode = 0 | 1 | 2 | 3;
 
-async function waitForPoweredOn(timeoutMs = 8000): Promise<void> {
-  const cur = await manager.state();
-  if (cur === State.PoweredOn) return;
+let gDevice:  BluetoothDevice | null = null;
+let gServer:  BluetoothRemoteGATTServer | null = null;
+let gService: BluetoothRemoteGATTService | null = null;
+let gIngest:  BluetoothRemoteGATTCharacteristic | null = null;
+let gStats:   BluetoothRemoteGATTCharacteristic | null = null;
 
-  await new Promise<void>((resolve, reject) => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const sub: Subscription = manager.onStateChange((s) => {
-      if (s === State.PoweredOn) {
-        if (timer) clearTimeout(timer);
-        sub.remove();
-        resolve();
-      }
-    }, true);
+const LS_KEY = "glidermonDeviceId";
 
-    timer = setTimeout(() => {
-      sub.remove();
-      reject(new Error("BLE state wait timeout"));
-    }, timeoutMs);
+const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
+function resetCache() { gServer = gService = gIngest = gStats = null; }
+
+export function mapDexTrendToCode(trend?: string | null): TrendCode {
+  const t = (trend || "").toLowerCase();
+  if (t.includes("flat")) return 1;
+  if (t.includes("up"))   return 2;
+  if (t.includes("down")) return 0;
+  return 3;
+}
+
+async function connectWithRetry(dev: BluetoothDevice, tries = 3): Promise<BluetoothRemoteGATTServer> {
+  let lastErr: any;
+  for (let i = 0; i < tries; i++) {
+    try {
+      // if already connected, reuse
+      if (dev.gatt?.connected) return dev.gatt!;
+      const server = await dev.gatt!.connect();
+      return server;
+    } catch (e) {
+      lastErr = e;
+      await sleep(300 + i * 200); // backoff
+    }
+  }
+  throw lastErr ?? new Error("Failed to connect");
+}
+
+async function resumeKnownDevice(): Promise<void> {
+  const nav = navigator as Navigator & { bluetooth: Bluetooth & { getDevices?: () => Promise<BluetoothDevice[]> } };
+  const savedId = localStorage.getItem(LS_KEY);
+  if (!nav.bluetooth || !nav.bluetooth.getDevices || !savedId) return;
+  const devices = await nav.bluetooth.getDevices();
+  const dev = devices.find(d => d.id === savedId);
+  if (!dev) return;
+  gDevice = dev;
+  dev.addEventListener("gattserverdisconnected", () => resetCache());
+}
+
+async function ensureConnected(): Promise<void> {
+  if (!gDevice) {
+    await resumeKnownDevice();
+    if (!gDevice) throw new Error("No device selected");
+  }
+  gServer = await connectWithRetry(gDevice);
+}
+
+async function ensureCharacteristics(): Promise<void> {
+  await ensureConnected();
+  if (!gServer) throw new Error("No GATT server");
+  if (!gService) gService = await gServer.getPrimaryService(SERVICE_UUID);
+  if (!gIngest)  gIngest  = await gService.getCharacteristic(INGEST_CHAR);
+  if (!gStats)   gStats   = await gService.getCharacteristic(STATS_CHAR);
+}
+
+export async function findAndConnect(): Promise<BluetoothDevice> {
+  const nav = navigator as Navigator & { bluetooth: Bluetooth };
+  if (!nav.bluetooth) throw new Error("Web Bluetooth not supported");
+
+  // Use name/namePrefix filter to avoid reliance on 128-bit UUIDs in the advert
+  const device = await nav.bluetooth.requestDevice({
+    filters: [{ name: "GliderMon" }, { namePrefix: "Glider" }],
+    optionalServices: [SERVICE_UUID]
   });
+
+  gDevice = device;
+  localStorage.setItem(LS_KEY, device.id || "");
+  device.addEventListener("gattserverdisconnected", () => resetCache());
+
+  await ensureCharacteristics(); // connect + discover with retries
+  return device;
 }
 
-export async function findAndConnect(timeoutMs = 10000): Promise<Device> {
-  await waitForPoweredOn();
-
-  return new Promise<Device>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      manager.stopDeviceScan();
-      reject(new Error("Scan timeout"));
-    }, timeoutMs);
-
-    manager.startDeviceScan([SERVICE_UUID], { allowDuplicates: false }, async (error, dev) => {
-      if (error) {
-        clearTimeout(timer);
-        manager.stopDeviceScan();
-        reject(error);
-        return;
-      }
-      if (dev && (dev.serviceUUIDs?.includes(SERVICE_UUID) || dev.name === "GliderMon")) {
-        clearTimeout(timer);
-        manager.stopDeviceScan();
-        try {
-          const connected = await dev.connect();
-          await connected.discoverAllServicesAndCharacteristics();
-          resolve(connected);
-        } catch (e) { reject(e); }
-      }
-    });
-  });
-}
-
-// pack/write helpers (unchanged)
-function bytesToB64(bytes: number[]) {
-  return btoa(String.fromCharCode(...bytes));
-}
-function pack8le(mgdl: number, trendCode: number, epochSec: number) {
-  const b = new Uint8Array(8);
-  b[0] = mgdl & 0xff; b[1] = (mgdl >> 8) & 0xff;
-  b[2] = trendCode & 0xff;
-  b[3] = epochSec & 0xff;
-  b[4] = (epochSec >> 8) & 0xff;
-  b[5] = (epochSec >> 16) & 0xff;
-  b[6] = (epochSec >> 24) & 0xff;
-  b[7] = 0;
-  return bytesToB64(Array.from(b));
+function pack8(mgdl: number, trend: TrendCode, epochSec: number): Uint8Array {
+  const buf = new ArrayBuffer(8);
+  const dv = new DataView(buf);
+  dv.setUint16(0, mgdl, true);
+  dv.setUint8(2, trend);
+  dv.setUint32(3, epochSec, true);
+  dv.setUint8(7, 0);
+  return new Uint8Array(buf);
 }
 
 export async function writeReading(
-  device: Device,
+  _device: BluetoothDevice | null,
   mgdl: number,
   trendCode: TrendCode,
   epochSec: number
 ) {
-  const payloadB64 = pack8le(mgdl, trendCode, epochSec);
-  await device.writeCharacteristicWithoutResponseForService(SERVICE_UUID, INGEST_CHAR, payloadB64);
+  await ensureCharacteristics();
+  const bytes = pack8(mgdl, trendCode, epochSec);
+  const props = (gIngest as any).properties;
+  if (props?.writeWithoutResponse && "writeValueWithoutResponse" in gIngest!) {
+    // @ts-ignore
+    await gIngest!.writeValueWithoutResponse(bytes);
+  } else if ("writeValueWithResponse" in (gIngest as any)) {
+    // @ts-ignore
+    await (gIngest as any).writeValueWithResponse(bytes);
+  } else {
+    // @ts-ignore
+    await (gIngest as any).writeValue(bytes);
+  }
 }
 
-export async function readStats(device: Device): Promise<string | null> {
+export async function readStats(): Promise<string | null> {
+  await ensureCharacteristics();
+  const dv = await gStats!.readValue();
+  return new TextDecoder().decode(dv);
+}
+
+export function isBleReady() {
+  return !!(gDevice && gServer?.connected && gIngest && gStats);
+}
+
+export async function disconnectBle(opts?: { forget?: boolean; waitMs?: number }) {
+  const { forget = false, waitMs = 300 } = opts || {};
   try {
-    const ch: Characteristic = await device.readCharacteristicForService(SERVICE_UUID, STATS_CHAR);
-    return ch.value ? atob(ch.value) : null;
-  } catch { return null; }
+    if (gDevice?.gatt?.connected) {
+      // Wait for the real disconnect event so the OS frees the link
+      await new Promise<void>((resolve) => {
+        const once = () => resolve();
+        gDevice!.addEventListener("gattserverdisconnected", once, { once: true });
+        try { gDevice!.gatt!.disconnect(); } catch { resolve(); }
+        // Safety timeout in case the event never fires
+        setTimeout(resolve, waitMs);
+      });
+    }
+  } finally {
+    resetCache();
+  }
+  if (forget) {
+    try { localStorage.removeItem(LS_KEY); } catch {}
+    // If available, also disconnect any remembered devices for this origin
+    const nav = navigator as Navigator & { bluetooth: Bluetooth & { getDevices?: () => Promise<BluetoothDevice[]> } };
+    if (nav.bluetooth.getDevices) {
+      const list = await nav.bluetooth.getDevices();
+      for (const d of list) {
+        if ((gDevice && d.id === gDevice.id) || (d.name || "").includes("GliderMon")) {
+          try { if (d.gatt?.connected) d.gatt.disconnect(); } catch {}
+        }
+      }
+    }
+    gDevice = null;
+  }
 }
 
-export type TrendCode = 0 | 1 | 2 | 3; // 0=down, 1=flat, 2=up, 3=unknown
-export function mapDexTrendToCode(trend?: string | null): TrendCode {
-  const t = (trend || "").toLowerCase();
-  // covers: singleUp/doubleUp/fortyFiveUp, etc.
-  if (t.includes("flat")) return 1;
-  if (t.includes("up"))   return 2;
-  if (t.includes("down")) return 0;
-  return 3; // none, unknown, notComputable, rateOutOfRange
+export async function forceReconnect(): Promise<BluetoothDevice> {
+  await disconnectBle({ /* keep permission */ forget: false });
+  return findAndConnect(); // your existing requestDevice() + discover
 }

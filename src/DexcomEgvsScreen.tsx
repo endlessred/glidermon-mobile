@@ -1,109 +1,83 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Button, Text, View } from "react-native";
 import * as AuthSession from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
-import { findAndConnect, writeReading, mapDexTrendToCode } from "./bleClient";
-import { Platform } from "react-native";
+import {
+  findAndConnect,
+  readStats,
+  writeReading,
+  disconnectBle,
+  forceReconnect,
+} from "./bleClient";
+import type { TrendCode } from "./bleClient";
 
 WebBrowser.maybeCompleteAuthSession();
 
-const DEX_DISCOVERY = {
-  authorizationEndpoint: "https://sandbox-api.dexcom.com/v2/oauth2/login",
-  tokenEndpoint:        "https://sandbox-api.dexcom.com/v2/oauth2/token"
-};
+// ---- Config ----
+const BACKEND_BASE = "http://localhost:8787"; // your backend
+const CLIENT_ID = "Xn5y9VSU4kwDaBNK9PgB1UvRc1SEGkm3"; // Dexcom sandbox client
 
-// point this to your deployed backend
-const BACKEND_BASE = "http://localhost:8787";
-const CLIENT_ID = "Xn5y9VSU4kwDaBNK9PgB1UvRc1SEGkm3";
-
-const useProxy = Platform.OS !== "web"; // OK in dev; for prod builds, you can set false and keep scheme below
 const redirectUri = AuthSession.makeRedirectUri({
-  scheme: "glidermon",   // for native
+  scheme: "glidermon",
   path: "auth",
-  preferLocalhost: true, // web dev: http://localhost rather than 127.0.0.1
+  preferLocalhost: true,
 });
-console.log("Dexcom redirectUri =>", redirectUri);
 
 const discovery = {
   authorizationEndpoint: "https://sandbox-api.dexcom.com/v2/oauth2/login",
-  tokenEndpoint:        "https://sandbox-api.dexcom.com/v2/oauth2/token",
+  tokenEndpoint: "https://sandbox-api.dexcom.com/v2/oauth2/token",
 };
+
+// Auto-send cadence
+const POLL_MS_MIN = 60_000;      // 1 minute
+const POLL_MS_BACKOFF = 120_000; // 2 minutes if nothing new
+
+// ---- Trend mapper (0=down, 1=flat, 2=up, 3=unknown) ----
+function mapDexTrendToCode(trend?: string): TrendCode {
+  const t = (trend || "").toLowerCase();
+  if (t.includes("up") || t.includes("rising")) return 2 as TrendCode;        // singleUp/doubleUp/fortyFiveUp/risingQuickly
+  if (t.includes("down") || t.includes("falling")) return 0 as TrendCode;     // singleDown/doubleDown/fortyFiveDown/fallingQuickly
+  if (t.includes("flat") || t.includes("steady")) return 1 as TrendCode;      // flat/steady
+  if (t.includes("notcomputable") || t.includes("rateoutofrange")) return 3 as TrendCode;
+  return 3 as TrendCode;
+}
+
+// Narrow the AuthSession result safely to get a code
+function getAuthCode(
+  r: AuthSession.AuthSessionResult | null
+): string | null {
+  if (!r || r.type !== "success") return null;
+  const anyR = r as any;
+  const params = anyR?.params;
+  const code = params?.code;
+  return typeof code === "string" ? code : null;
+}
 
 export default function DexcomEgvsScreen() {
   const [device, setDevice] = useState<any>(null);
   const [tokens, setTokens] = useState<any>(null);
   const [status, setStatus] = useState<string>("");
+  const [autoSend, setAutoSend] = useState(false);
 
-const [request, response, promptAsync] = AuthSession.useAuthRequest(
-  {
-    clientId: CLIENT_ID,
-    redirectUri,
-    scopes: ["offline_access"],
-    responseType: AuthSession.ResponseType.Code,
-    usePKCE: true,
-  },
-  discovery
-);
+  const lastSentIsoRef = useRef<string | null>(null);
+  const autoTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-function dexFmtSeconds(d: Date) {
-  const p=(n:number)=>String(n).padStart(2,"0");
-  return `${d.getUTCFullYear()}-${p(d.getUTCMonth()+1)}-${p(d.getUTCDate())}T${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
-}
+  const [request, response, promptAsync] = AuthSession.useAuthRequest(
+    {
+      clientId: CLIENT_ID,
+      redirectUri,
+      scopes: ["offline_access"],
+      responseType: AuthSession.ResponseType.Code,
+      usePKCE: true,
+    },
+    discovery
+  );
 
-async function fetchLatestAndSend() {
-  try {
-    if (!tokens?.access_token) { setStatus("Not authorized yet."); return; }
+  useEffect(() => {
+    console.log("Dexcom redirectUri =>", redirectUri);
+  }, []);
 
-    // 1) Ask Dexcom where EGVs actually exist
-    const drRes = await fetch(`${BACKEND_BASE}/dexcom/data-range`, {
-      headers: { Authorization: `Bearer ${tokens.access_token}` }
-    });
-    const dr = await drRes.json();
-
-    // Prefer systemTime; fall back to displayTime
-    const latestStr: string | undefined =
-      dr?.egvs?.end?.systemTime || dr?.egvs?.end?.displayTime;
-    if (!latestStr) { setStatus("No egvs end time in dataRange."); return; }
-
-    // Parse and build robust windows: 30m, then 24h, then 10 days
-    const latest = new Date(latestStr); // Dexcom accepts seconds-only; we'll trim below
-    const windows = [30*60e3, 24*60*60e3, 10*24*60*60e3];
-
-    let recs: any[] = [];
-    for (const span of windows) {
-      const start = new Date(latest.getTime() - span);
-      const r = await fetch(`${BACKEND_BASE}/dexcom/egvs`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          access_token: tokens.access_token,
-          startDate: dexFmtSeconds(start),
-          endDate:   dexFmtSeconds(latest),
-        })
-      });
-      const data = await r.json();
-      recs = data.records || [];
-      if (recs.length) break;
-    }
-
-    if (!recs.length) {
-      setStatus("No EGVs in last 10 days for this sandbox user. Try 'User7' in the sandbox login.");
-      return;
-    }
-
-    const last = recs[recs.length - 1];
-    const mgdl = Number(last.value);
-    const trendCode = mapDexTrendToCode(last.trend);
-    const epochSec = Math.floor(new Date(last.systemTime || last.displayTime).getTime()/1000);
-
-    if (!device) { setStatus("BLE device not connected."); return; }
-    await writeReading(device, mgdl, trendCode, epochSec);
-    setStatus(`Sent mg/dL=${mgdl} trend=${trendCode} ts=${epochSec}`);
-  } catch (e:any) {
-    setStatus(`Send error: ${e.message}`);
-  }
-}
-
+  // Connect to GliderMon once on mount
   useEffect(() => {
     (async () => {
       try {
@@ -117,88 +91,193 @@ async function fetchLatestAndSend() {
     })();
   }, []);
 
+  // When tokens arrive, try to silently resume BLE
+  useEffect(() => {
+    if (!tokens) return;
+    (async () => {
+      try {
+        const s = await readStats();
+        if (s) setStatus(`Reconnected. Stats: ${s}`);
+      } catch {
+        /* user can tap Connect/Reconnect if needed */
+      }
+    })();
+  }, [tokens]);
+
+  // Handle OAuth response → exchange code for tokens
   useEffect(() => {
     (async () => {
-      if (response?.type === "success" && response.params?.code) {
+      const code = getAuthCode(response);
+      if (!code) return;
+      try {
         setStatus("Exchanging code…");
-const r = await fetch(`${BACKEND_BASE}/dexcom/token`, {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ code: response.params.code, redirectUri })
-});
-
-const text = await r.text();
-let json: any;
-try { json = JSON.parse(text); }
-catch {
-  console.error("Non-JSON from token endpoint:", text);
-  setStatus(`Token error: non-JSON (${r.status} ${r.statusText})`);
-  return;
-}
-
-if (!r.ok) { setStatus(`Token error: ${JSON.stringify(json)}`); return; }
-setTokens(json);
-setStatus("Authorized.");
+        const r = await fetch(`${BACKEND_BASE}/dexcom/token`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code, redirectUri }),
+        });
+        const text = await r.text();
+        let json: any;
+        try { json = JSON.parse(text); }
+        catch {
+          console.error("Non-JSON from token endpoint:", text);
+          setStatus(`Token error: non-JSON (${r.status} ${r.statusText})`);
+          return;
+        }
+        if (!r.ok) { setStatus(`Token error: ${JSON.stringify(json)}`); return; }
+        setTokens(json);
+        setStatus("Authorized.");
+      } catch (e: any) {
+        setStatus(`Token exchange failed: ${e.message}`);
       }
     })();
   }, [response]);
 
-  async function fetchAndSend() {
+  // Fetch newest EGV and send over BLE
+  async function fetchLatestAndSend(): Promise<boolean> {
+    if (!tokens?.access_token) { setStatus("Not authorized."); return false; }
     try {
-      if (!tokens?.access_token) { setStatus("Not authorized yet."); return; }
-      const end = new Date();
-      const start = new Date(end.getTime() - 10 * 60 * 1000);
-      const qs = new URLSearchParams({ startDate: start.toISOString(), endDate: end.toISOString() });
-      const r = await fetch(`${BACKEND_BASE}/dexcom/egvs`, {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({
-    access_token: tokens.access_token,
-    startDate: dexDate(start),
-    endDate: dexDate(end)
-  })
-});
-      const data = await r.json();
-      if (!r.ok) { setStatus(`EGV error: ${JSON.stringify(data)}`); return; }
-      const recs = data.records || [];
-      if (!recs.length) { setStatus("No EGV records."); return; }
-      const last = recs[recs.length - 1];
-      const mgdl = Number(last.value);
-      const trendCode = mapDexTrendToCode(last.trend);
-      const epochSec = Math.floor(new Date(last.systemTime || last.displayTime).getTime() / 1000);
-      if (!device) { setStatus("BLE device missing."); return; }
-      await writeReading(device, mgdl, trendCode, epochSec);
-      setStatus(`Sent mg/dL=${mgdl}, trend=${trendCode}, ts=${epochSec}`);
+      // 1) Anchor with Dexcom dataRange
+      const drRes = await fetch(`${BACKEND_BASE}/dexcom/data-range`, {
+        headers: { Authorization: `Bearer ${tokens.access_token}` },
+      });
+      const dr = await drRes.json();
+      const endIso: string | undefined =
+        dr?.egvs?.end?.systemTime || dr?.egvs?.end?.displayTime;
+      if (!endIso) { setStatus("No egvs end time in dataRange."); return false; }
+
+      // 2) Ask for 30m → 24h → 10d until we get records
+      const latest = new Date(endIso);
+      const fmt = (d: Date) => {
+        const p = (n: number) => String(n).padStart(2, "0");
+        return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}T${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
+      };
+
+      let records: any[] = [];
+      for (const spanMs of [30 * 60_000, 24 * 60 * 60_000, 10 * 24 * 60 * 60_000]) {
+        const start = new Date(latest.getTime() - spanMs);
+        const r = await fetch(`${BACKEND_BASE}/dexcom/egvs`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            access_token: tokens.access_token,
+            startDate: fmt(start),
+            endDate: fmt(latest),
+          }),
+        });
+        const j = await r.json();
+        records = j.records || [];
+        if (records.length) break;
+      }
+      if (!records.length) { setStatus("No EGVs in selected window."); return false; }
+
+      // Pick the newest by timestamp (don’t trust order)
+      const ts = (r: any) => new Date(r.systemTime || r.displayTime).getTime();
+      const newest = records.reduce((a, b) => (ts(b) > ts(a) ? b : a), records[0]);
+      const iso: string = newest.systemTime || newest.displayTime;
+
+      if (lastSentIsoRef.current === iso) {
+        setStatus("No new EGV yet.");
+        return false;
+      }
+
+      // 3) Ensure BLE is connected, then write
+      try { await readStats(); } catch {}
+      const mgdl = Number(newest.value);
+      const trendCode: TrendCode = mapDexTrendToCode(newest.trend);
+      const epochSec = Math.floor(new Date(iso).getTime() / 1000);
+
+      await writeReading(null, mgdl, trendCode, epochSec);
+      lastSentIsoRef.current = iso;
+      setStatus(`Sent mg/dL=${mgdl} trend=${trendCode} ts=${epochSec}`);
+      return true;
     } catch (e: any) {
-      setStatus(`Send error: ${e.message}`);
+      setStatus(`EGV fetch/send failed: ${e.message}`);
+      return false;
     }
   }
+
+  // Auto-send loop (1m; back off to 2m if nothing new)
+  useEffect(() => {
+    if (!autoSend || !tokens) return;
+    let running = false;
+    let intervalMs = POLL_MS_MIN;
+
+    const tick = async () => {
+      if (running) return;
+      running = true;
+      try {
+        const sent = await fetchLatestAndSend();
+        intervalMs = sent ? POLL_MS_MIN : POLL_MS_BACKOFF;
+      } finally {
+        running = false;
+        if (autoTimerRef.current) clearInterval(autoTimerRef.current);
+        autoTimerRef.current = setInterval(tick, intervalMs);
+      }
+    };
+
+    // start now, then on interval
+    tick();
+
+    return () => {
+      if (autoTimerRef.current) {
+        clearInterval(autoTimerRef.current);
+        autoTimerRef.current = null;
+      }
+    };
+  }, [autoSend, tokens]);
 
   return (
     <View style={{ padding: 16, gap: 12 }}>
       <Text style={{ fontWeight: "600" }}>GliderMon — Dexcom → BLE</Text>
       <Text selectable>{status}</Text>
+
       <Button
-  title="Authorize Dexcom"
-  onPress={() => promptAsync()} // <-- no options here
-  disabled={!request}
-/>
-      <Button title="Fetch latest EGV & Send" onPress={fetchLatestAndSend} />
-      <Button title="Connect to GliderMon" onPress={async () => {
-  try {
-    const dev = await findAndConnect();
-    setStatus(`Connected to ${dev.name || dev.id}`);
-  } catch (e: any) {
-    setStatus(`BLE: ${e.message}`);
-  }
-}} />
-<Button title="Check Data Range" onPress={async () => {
-  const r = await fetch(`${BACKEND_BASE}/dexcom/data-range`, {
-    headers: { Authorization: `Bearer ${tokens?.access_token || ""}` }
-  });
-  const json = await r.json();
-  setStatus(`dataRange: ${JSON.stringify(json)}`);
-}}/>
+        title="Authorize Dexcom"
+        onPress={async () => {
+          try { await disconnectBle({ forget: false }); } catch {}
+          await promptAsync();
+        }}
+      />
+
+      <Button
+        title={autoSend ? "Stop Auto-Send" : "Start Auto-Send (1m)"}
+        onPress={() => setAutoSend(v => !v)}
+      />
+
+      <Button title="Fetch latest EGV & Send (manual)" onPress={fetchLatestAndSend} />
+
+      <Button
+        title="Connect / Reconnect"
+        onPress={async () => {
+          try {
+            const dev = await forceReconnect();
+            setDevice(dev);
+            setStatus(`Connected to ${dev.name || dev.id}`);
+          } catch (e: any) {
+            setStatus(`BLE: ${e.message}`);
+          }
+        }}
+      />
+
+      <Button
+        title="Check Data Range"
+        onPress={async () => {
+          const r = await fetch(`${BACKEND_BASE}/dexcom/data-range`, {
+            headers: { Authorization: `Bearer ${tokens?.access_token || ""}` },
+          });
+          const json = await r.json();
+          setStatus(`dataRange: ${JSON.stringify(json)}`);
+        }}
+      />
+
+      <Button
+        title="Force Disconnect"
+        onPress={async () => {
+          await disconnectBle({ forget: false });
+          setStatus("BLE disconnected");
+        }}
+      />
     </View>
   );
 }
