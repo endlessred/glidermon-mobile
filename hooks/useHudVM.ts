@@ -1,10 +1,13 @@
-// hooks/useHudVM.ts
 import { useMemo, useRef } from "react";
 import { useGameStore } from "../stores/gameStore";
 
 type TrendCode = 0 | 1 | 2 | 3;
 type HistPoint = { ts: number; mgdl: number };
-export type HudVM = { currentMgdl: number | null; currentTrendCode: TrendCode | null; history: HistPoint[] };
+export type HudVM = {
+  currentMgdl: number | null;
+  currentTrendCode: TrendCode | null;
+  history: HistPoint[];
+};
 
 function toTs(x: any): number | null {
   if (typeof x === "number") return x;
@@ -16,36 +19,36 @@ function toTs(x: any): number | null {
 }
 
 export function useHudVM(): HudVM {
-  // Select the engine, then cast to a permissive shape for flexible probing.
+  // Always call hooks in the same order (no early returns).
+  const hud = useGameStore((s) => s.hud);
   const engineAny = useGameStore((s) => s.engine) as unknown as Record<string, any> | null;
 
-  const currentMgdl: number | null =
+  // Derive from engine (we’ll prefer HUD later, but we still compute so hook order is stable).
+  const engineMgdl: number | null =
     engineAny?.currentMgdl ??
     engineAny?.mgdl ??
     engineAny?.glucose?.mgdl ??
     engineAny?.egvs?.current?.mgdl ??
     null;
 
-  const currentTrendCode: TrendCode | null =
+  const engineTrend: TrendCode | null =
     (engineAny?.currentTrendCode ??
       engineAny?.trendCode ??
       engineAny?.egvs?.current?.trendCode ??
       null) as TrendCode | null;
 
-  // Pull the history reference (no work yet, keep ref-stable)
-  const historyRef =
+  const engineHistRef =
     (engineAny?.history ??
       engineAny?.egvs?.history ??
       engineAny?.readings) as any[] | undefined;
 
-  // Memoize normalized history by source reference to avoid loops
   const lastRef = useRef<any[] | undefined>(undefined);
   const lastOut = useRef<HistPoint[]>([]);
 
-  const history = useMemo(() => {
-    if (historyRef === lastRef.current) return lastOut.current;
+  const engineHistory = useMemo(() => {
+    if (engineHistRef === lastRef.current) return lastOut.current;
 
-    const src = Array.isArray(historyRef) ? historyRef : [];
+    const src = Array.isArray(engineHistRef) ? engineHistRef : [];
     const out: HistPoint[] = [];
     for (const r of src) {
       if (!r) continue;
@@ -57,11 +60,14 @@ export function useHudVM(): HudVM {
     }
     out.sort((a, b) => a.ts - b.ts);
     const trimmed = out.slice(-120);
-
-    lastRef.current = historyRef;
+    lastRef.current = engineHistRef;
     lastOut.current = trimmed;
     return trimmed;
-  }, [historyRef]);
+  }, [engineHistRef]);
 
-  return { currentMgdl, currentTrendCode, history };
+  // Prefer HUD slice if it has data; otherwise fall back to engine-derived values.
+  const hasHud = !!hud && (hud.currentMgdl != null || (hud.history?.length ?? 0) > 0);
+  return hasHud
+    ? { currentMgdl: hud.currentMgdl, currentTrendCode: hud.currentTrendCode, history: hud.history }
+    : { currentMgdl: engineMgdl, currentTrendCode: engineTrend, history: engineHistory };
 }

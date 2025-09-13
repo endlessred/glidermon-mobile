@@ -1,6 +1,6 @@
 // DexcomEgvsScreen.tsx
 import React, { useEffect, useRef, useState } from "react";
-import { Button, Text, View } from "react-native";
+import { Button, Text, View, Switch } from "react-native";
 import * as AuthSession from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
 import {
@@ -11,15 +11,12 @@ import {
   forceReconnect,
 } from "./bleClient";
 import type { TrendCode } from "./bleClient";
-
-// ⬇️ Game store (wraps the pure TS engine)
 import { useGameStore } from "../stores/gameStore";
 
 WebBrowser.maybeCompleteAuthSession();
 
-// ---- Config ----
-const BACKEND_BASE = "http://localhost:8787"; // your backend
-const CLIENT_ID = "Xn5y9VSU4kwDaBNK9PgB1UvRc1SEGkm3"; // Dexcom sandbox client
+const BACKEND_BASE = "http://localhost:8787";
+const CLIENT_ID = "Xn5y9VSU4kwDaBNK9PgB1UvRc1SEGkm3";
 
 const redirectUri = AuthSession.makeRedirectUri({
   scheme: "glidermon",
@@ -32,33 +29,30 @@ const discovery = {
   tokenEndpoint: "https://sandbox-api.dexcom.com/v2/oauth2/token",
 };
 
-// Auto-send cadence
-const POLL_MS_MIN = 60_000;      // 1 minute
-const POLL_MS_BACKOFF = 120_000; // 2 minutes if nothing new
+const POLL_MS_MIN = 60_000;
+const POLL_MS_BACKOFF = 120_000;
 
-// ---- Trend mapper (0=down, 1=flat, 2=up, 3=unknown) ----
+// ---- helpers ----
 function mapDexTrendToCode(trend?: string): TrendCode {
   const t = (trend || "").toLowerCase();
-  if (t.includes("up") || t.includes("rising")) return 2 as TrendCode;        // singleUp/doubleUp/fortyFiveUp/risingQuickly
-  if (t.includes("down") || t.includes("falling")) return 0 as TrendCode;     // singleDown/doubleDown/fortyFiveDown/fallingQuickly
-  if (t.includes("flat") || t.includes("steady")) return 1 as TrendCode;      // flat/steady
+  if (t.includes("up") || t.includes("rising")) return 2 as TrendCode;
+  if (t.includes("down") || t.includes("falling")) return 0 as TrendCode;
+  if (t.includes("flat") || t.includes("steady")) return 1 as TrendCode;
   if (t.includes("notcomputable") || t.includes("rateoutofrange")) return 3 as TrendCode;
   return 3 as TrendCode;
 }
-
-// Narrow the AuthSession result safely to get a code
+function dexFmt(d: Date) {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}T${p(d.getUTCHours())}:${p(
+    d.getUTCMinutes()
+  )}:${p(d.getUTCSeconds())}`;
+}
+// Narrow the AuthSession result safely
 function getAuthCode(r: AuthSession.AuthSessionResult | null): string | null {
   if (!r || r.type !== "success") return null;
   const anyR = r as any;
-  const params = anyR?.params;
-  const code = params?.code;
+  const code = anyR?.params?.code;
   return typeof code === "string" ? code : null;
-}
-
-// --- helpers (Dexcom time formatting) ---
-function dexFmt(d: Date) {
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}T${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
 }
 
 export default function DexcomEgvsScreen() {
@@ -67,10 +61,12 @@ export default function DexcomEgvsScreen() {
   const [status, setStatus] = useState<string>("");
   const [autoSend, setAutoSend] = useState(false);
 
+  // NEW: whether we attempt BLE writes (optional)
+  const [sendToDevice, setSendToDevice] = useState(false);
+
   const lastSentIsoRef = useRef<string | null>(null);
   const autoTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // grab the game feed function (no re-render needed on each call)
   const onEgvs = useGameStore.getState().onEgvs;
 
   const [request, response, promptAsync] = AuthSession.useAuthRequest(
@@ -88,34 +84,22 @@ export default function DexcomEgvsScreen() {
     console.log("Dexcom redirectUri =>", redirectUri);
   }, []);
 
-  // Connect to GliderMon once on mount
-  useEffect(() => {
-    (async () => {
-      try {
-        setStatus("Scanning for GliderMon…");
-        const dev = await findAndConnect();
-        setDevice(dev);
-        setStatus(`Connected to ${dev.name || dev.id}`);
-      } catch (e: any) {
-        setStatus(`BLE: ${e.message}`);
-      }
-    })();
-  }, []);
+  // NOTE: removed "connect on mount" behavior. BLE is optional.
 
-  // When tokens arrive, try to silently resume BLE
+  // tokens → try to read BLE stats (optional, ignore errors)
   useEffect(() => {
     if (!tokens) return;
     (async () => {
       try {
         const s = await readStats();
-        if (s) setStatus(`Reconnected. Stats: ${s}`);
+        if (s) setStatus(`BLE stats: ${typeof s === "string" ? s : JSON.stringify(s)}`);
       } catch {
-        /* user can tap Connect/Reconnect if needed */
+        /* it's fine if not connected */
       }
     })();
   }, [tokens]);
 
-  // Handle OAuth response → exchange code for tokens
+  // Handle OAuth response → exchange code
   useEffect(() => {
     (async () => {
       const code = getAuthCode(response);
@@ -144,20 +128,31 @@ export default function DexcomEgvsScreen() {
     })();
   }, [response]);
 
-  // --- data range + latest EGV fetcher ---
+  // NEW: safe BLE write that no-ops if not connected or fails
+  async function safeWriteToDevice(mgdl: number, trendCode: TrendCode, epochSec: number) {
+    if (!sendToDevice) return; // user disabled device writes
+    try {
+      // optional: a cheap ping to ensure connection (ignore result)
+      try { await readStats(); } catch {}
+      await writeReading(null, mgdl, trendCode, epochSec);
+    } catch {
+      // swallow — app-side still updates
+    }
+  }
+
+  // --- fetch latest and update app (BLE optional) ---
   async function fetchLatestAndSend(): Promise<boolean> {
     if (!tokens?.access_token) { setStatus("Not authorized."); return false; }
     try {
-      // 1) Anchor with Dexcom dataRange
+      // 1) dataRange to anchor latest time
       const drRes = await fetch(`${BACKEND_BASE}/dexcom/data-range`, {
         headers: { Authorization: `Bearer ${tokens.access_token}` },
       });
       const dr = await drRes.json();
-      const endIso: string | undefined =
-        dr?.egvs?.end?.systemTime || dr?.egvs?.end?.displayTime;
+      const endIso: string | undefined = dr?.egvs?.end?.systemTime || dr?.egvs?.end?.displayTime;
       if (!endIso) { setStatus("No egvs end time in dataRange."); return false; }
 
-      // 2) Ask for 30m → 24h → 10d until we get records
+      // 2) query windows until we get records
       const latest = new Date(endIso);
       let records: any[] = [];
       for (const spanMs of [30 * 60_000, 24 * 60 * 60_000, 10 * 24 * 60 * 60_000]) {
@@ -177,7 +172,7 @@ export default function DexcomEgvsScreen() {
       }
       if (!records.length) { setStatus("No EGVs in selected window."); return false; }
 
-      // Pick the newest by timestamp (don’t trust order)
+      // newest record
       const ts = (r: any) => new Date(r.systemTime || r.displayTime).getTime();
       const newest = records.reduce((a, b) => (ts(b) > ts(a) ? b : a), records[0]);
       const iso: string = newest.systemTime || newest.displayTime;
@@ -187,29 +182,26 @@ export default function DexcomEgvsScreen() {
         return false;
       }
 
-      // 3) Ensure BLE is connected, then write
-      try { await readStats(); } catch {}
       const mgdl = Number(newest.value);
       const trendCode: TrendCode = mapDexTrendToCode(newest.trend);
       const epochSec = Math.floor(new Date(iso).getTime() / 1000);
 
-      // Send to device HUD
-      await writeReading(null, mgdl, trendCode, epochSec);
-
-      // Feed the phone-side game
+      // A) update the phone-side game (always)
       onEgvs(mgdl, trendCode, epochSec);
 
+      // B) attempt BLE write (optional, no-op on failure)
+      await safeWriteToDevice(mgdl, trendCode, epochSec);
+
       lastSentIsoRef.current = iso;
-      setStatus(`Sent mg/dL=${mgdl} trend=${trendCode} ts=${epochSec}`);
+      setStatus(`App updated mg/dL=${mgdl} trend=${trendCode} ts=${epochSec}${sendToDevice ? " • (device attempted)" : ""}`);
       return true;
     } catch (e: any) {
-      setStatus(`EGV fetch/send failed: ${e.message}`);
+      setStatus(`EGV fetch failed: ${e.message}`);
       return false;
     }
   }
 
-  // ---- utilities for seeding history & windows ----
-  // fetch a window of EGVs and return ascending by time
+  // fetch a window and feed the app (no BLE required)
   async function fetchEgvsWindow(access_token: string, minutes = 75) {
     const end = new Date();
     const start = new Date(end.getTime() - minutes * 60_000);
@@ -224,7 +216,6 @@ export default function DexcomEgvsScreen() {
     });
     const j = await r.json();
     const recs = (j.records || []).slice();
-    // Dexcom responses are often newest-first; we want oldest-first to play nicely with history
     recs.sort((a: any, b: any) =>
       new Date(a.systemTime || a.displayTime).getTime() -
       new Date(b.systemTime || b.displayTime).getTime()
@@ -232,30 +223,24 @@ export default function DexcomEgvsScreen() {
     return recs;
   }
 
-  // send a burst to seed history on the Pi and the phone game
-  async function seedHistoryOnConnect(access_token: string) {
-    const recs = await fetchEgvsWindow(access_token, 75);
-    if (!recs.length) return 0;
-
+  // NEW: seed the app only; BLE write optional
+  async function seedAppHistory(minutes = 75) {
+    if (!tokens?.access_token) { setStatus("Not authorized."); return; }
+    const recs = await fetchEgvsWindow(tokens.access_token, minutes);
+    if (!recs.length) { setStatus("No EGVs to seed."); return; }
     for (const r of recs) {
       const iso = r.systemTime || r.displayTime;
       const epochSec = Math.floor(new Date(iso).getTime() / 1000);
       const mgdl = Number(r.value);
-      const trendCode = mapDexTrendToCode(r.trend); // 0/1/2/3
-
-      // write using the same packet
-      await writeReading(null, mgdl, trendCode, epochSec);
-
-      // feed the game engine too
-      onEgvs(mgdl, trendCode, epochSec);
-
-      // tiny pacing so Web Bluetooth/BlueZ don’t choke on rapid writes
-      await new Promise(res => setTimeout(res, 20));
+      const trendCode = mapDexTrendToCode(r.trend);
+      onEgvs(mgdl, trendCode, epochSec);          // always update app
+      await safeWriteToDevice(mgdl, trendCode, epochSec); // optional device write
+      await new Promise(res => setTimeout(res, 10));
     }
-    return recs.length;
+    setStatus(`Seeded ${recs.length} readings to app${sendToDevice ? " (+device)" : ""}.`);
   }
 
-  // Auto-send loop (1m; back off to 2m if nothing new)
+  // Auto-send loop (works with or without BLE)
   useEffect(() => {
     if (!autoSend || !tokens) return;
     let running = false;
@@ -274,21 +259,25 @@ export default function DexcomEgvsScreen() {
       }
     };
 
-    // start now, then on interval
     tick();
-
     return () => {
       if (autoTimerRef.current) {
         clearInterval(autoTimerRef.current);
         autoTimerRef.current = null;
       }
     };
-  }, [autoSend, tokens]);
+  }, [autoSend, tokens, sendToDevice]); // re-evaluate if toggle changes
 
   return (
     <View style={{ padding: 16, gap: 12 }}>
-      <Text style={{ fontWeight: "600" }}>GliderMon — Dexcom → BLE → Game</Text>
+      <Text style={{ fontWeight: "600" }}>GliderMon — Dexcom → App (BLE optional)</Text>
       <Text selectable>{status}</Text>
+
+      {/* BLE write toggle */}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+        <Switch value={sendToDevice} onValueChange={setSendToDevice} />
+        <Text>Also send to device HUD (BLE)</Text>
+      </View>
 
       <Button
         title="Authorize Dexcom"
@@ -303,47 +292,37 @@ export default function DexcomEgvsScreen() {
         onPress={() => setAutoSend(v => !v)}
       />
 
-      <Button title="Fetch latest EGV & Send (manual)" onPress={fetchLatestAndSend} />
+      <Button title="Fetch latest EGV & Update App" onPress={fetchLatestAndSend} />
 
+      {/* BLE controls (manual, optional) */}
       <Button
-        title="Connect / Reconnect"
+        title="Connect / Reconnect (BLE)"
         onPress={async () => {
           try {
-            const dev = await forceReconnect();
+            const dev = device ? await forceReconnect() : await findAndConnect();
             setDevice(dev);
-            setStatus(`Connected to ${dev.name || dev.id}`);
+            setStatus(`Connected to ${dev?.name || dev?.id || "GliderMon"}`);
           } catch (e: any) {
             setStatus(`BLE: ${e.message}`);
           }
         }}
       />
-
       <Button
-        title="Seed 75m History (device + game)"
+        title="Read BLE Stats"
         onPress={async () => {
-          if (!tokens?.access_token) { setStatus("Not authorized."); return; }
-          const n = await seedHistoryOnConnect(tokens.access_token);
-          setStatus(`Seeded ${n} readings.`);
+          try { const s = await readStats(); setStatus(`BLE stats: ${JSON.stringify(s)}`); }
+          catch (e: any) { setStatus(`BLE: ${e.message}`); }
         }}
       />
-
       <Button
-        title="Check Data Range"
-        onPress={async () => {
-          const r = await fetch(`${BACKEND_BASE}/dexcom/data-range`, {
-            headers: { Authorization: `Bearer ${tokens?.access_token || ""}` },
-          });
-          const json = await r.json();
-          setStatus(`dataRange: ${JSON.stringify(json)}`);
-        }}
+        title="Disconnect (BLE)"
+        onPress={async () => { await disconnectBle({ forget: false }); setDevice(null); setStatus("BLE disconnected"); }}
       />
 
+      {/* App history seeding (no BLE required) */}
       <Button
-        title="Force Disconnect"
-        onPress={async () => {
-          await disconnectBle({ forget: false });
-          setStatus("BLE disconnected");
-        }}
+        title="Seed 75m History (App; +Device if enabled)"
+        onPress={() => seedAppHistory(75)}
       />
     </View>
   );
