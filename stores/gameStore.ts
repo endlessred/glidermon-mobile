@@ -25,9 +25,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
       ui: { ...s.ui, toasts: [...s.ui.toasts, { id: Math.random().toString(36).slice(2), text, ts: Date.now() }] }
     })),
   clearOldToasts: () =>
-    set((s) => ({
-      ui: { ...s.ui, toasts: s.ui.toasts.filter(t => Date.now() - t.ts < 2500) }
-    })),
+  set((s) => {
+    const filtered = s.ui.toasts.filter(t => Date.now() - t.ts < 2500);
+    if (filtered.length === s.ui.toasts.length) return s; // no-op if unchanged
+    return { ui: { ...s.ui, toasts: filtered } };
+  }),
   onEgvs: (mgdl, trendCode, epochSec) => {
     const s = get().engine;
     const { event } = applyEgvsTick(s, {
