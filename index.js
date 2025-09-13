@@ -1,5 +1,5 @@
-import { registerRootComponent } from "expo";
-import React from "react";
-import DexcomEgvsScreen from "./src/DexcomEgvsScreen";
-function App() { return <DexcomEgvsScreen />; }
+// index.js
+import 'react-native-reanimated'; // MUST be first
+import { registerRootComponent } from 'expo';
+import App from './App';
 registerRootComponent(App);

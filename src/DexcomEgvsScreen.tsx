@@ -1,3 +1,4 @@
+// DexcomEgvsScreen.tsx
 import React, { useEffect, useRef, useState } from "react";
 import { Button, Text, View } from "react-native";
 import * as AuthSession from "expo-auth-session";
@@ -10,6 +11,9 @@ import {
   forceReconnect,
 } from "./bleClient";
 import type { TrendCode } from "./bleClient";
+
+// ⬇️ Game store (wraps the pure TS engine)
+import { useGameStore } from "../stores/gameStore";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -43,14 +47,18 @@ function mapDexTrendToCode(trend?: string): TrendCode {
 }
 
 // Narrow the AuthSession result safely to get a code
-function getAuthCode(
-  r: AuthSession.AuthSessionResult | null
-): string | null {
+function getAuthCode(r: AuthSession.AuthSessionResult | null): string | null {
   if (!r || r.type !== "success") return null;
   const anyR = r as any;
   const params = anyR?.params;
   const code = params?.code;
   return typeof code === "string" ? code : null;
+}
+
+// --- helpers (Dexcom time formatting) ---
+function dexFmt(d: Date) {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}T${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
 }
 
 export default function DexcomEgvsScreen() {
@@ -61,6 +69,9 @@ export default function DexcomEgvsScreen() {
 
   const lastSentIsoRef = useRef<string | null>(null);
   const autoTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // grab the game feed function (no re-render needed on each call)
+  const onEgvs = useGameStore.getState().onEgvs;
 
   const [request, response, promptAsync] = AuthSession.useAuthRequest(
     {
@@ -133,7 +144,7 @@ export default function DexcomEgvsScreen() {
     })();
   }, [response]);
 
-  // Fetch newest EGV and send over BLE
+  // --- data range + latest EGV fetcher ---
   async function fetchLatestAndSend(): Promise<boolean> {
     if (!tokens?.access_token) { setStatus("Not authorized."); return false; }
     try {
@@ -148,11 +159,6 @@ export default function DexcomEgvsScreen() {
 
       // 2) Ask for 30m → 24h → 10d until we get records
       const latest = new Date(endIso);
-      const fmt = (d: Date) => {
-        const p = (n: number) => String(n).padStart(2, "0");
-        return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}T${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
-      };
-
       let records: any[] = [];
       for (const spanMs of [30 * 60_000, 24 * 60 * 60_000, 10 * 24 * 60 * 60_000]) {
         const start = new Date(latest.getTime() - spanMs);
@@ -161,8 +167,8 @@ export default function DexcomEgvsScreen() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             access_token: tokens.access_token,
-            startDate: fmt(start),
-            endDate: fmt(latest),
+            startDate: dexFmt(start),
+            endDate: dexFmt(latest),
           }),
         });
         const j = await r.json();
@@ -187,7 +193,12 @@ export default function DexcomEgvsScreen() {
       const trendCode: TrendCode = mapDexTrendToCode(newest.trend);
       const epochSec = Math.floor(new Date(iso).getTime() / 1000);
 
+      // Send to device HUD
       await writeReading(null, mgdl, trendCode, epochSec);
+
+      // Feed the phone-side game
+      onEgvs(mgdl, trendCode, epochSec);
+
       lastSentIsoRef.current = iso;
       setStatus(`Sent mg/dL=${mgdl} trend=${trendCode} ts=${epochSec}`);
       return true;
@@ -195,6 +206,53 @@ export default function DexcomEgvsScreen() {
       setStatus(`EGV fetch/send failed: ${e.message}`);
       return false;
     }
+  }
+
+  // ---- utilities for seeding history & windows ----
+  // fetch a window of EGVs and return ascending by time
+  async function fetchEgvsWindow(access_token: string, minutes = 75) {
+    const end = new Date();
+    const start = new Date(end.getTime() - minutes * 60_000);
+    const r = await fetch(`${BACKEND_BASE}/dexcom/egvs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        access_token,
+        startDate: dexFmt(start),
+        endDate:   dexFmt(end),
+      }),
+    });
+    const j = await r.json();
+    const recs = (j.records || []).slice();
+    // Dexcom responses are often newest-first; we want oldest-first to play nicely with history
+    recs.sort((a: any, b: any) =>
+      new Date(a.systemTime || a.displayTime).getTime() -
+      new Date(b.systemTime || b.displayTime).getTime()
+    );
+    return recs;
+  }
+
+  // send a burst to seed history on the Pi and the phone game
+  async function seedHistoryOnConnect(access_token: string) {
+    const recs = await fetchEgvsWindow(access_token, 75);
+    if (!recs.length) return 0;
+
+    for (const r of recs) {
+      const iso = r.systemTime || r.displayTime;
+      const epochSec = Math.floor(new Date(iso).getTime() / 1000);
+      const mgdl = Number(r.value);
+      const trendCode = mapDexTrendToCode(r.trend); // 0/1/2/3
+
+      // write using the same packet
+      await writeReading(null, mgdl, trendCode, epochSec);
+
+      // feed the game engine too
+      onEgvs(mgdl, trendCode, epochSec);
+
+      // tiny pacing so Web Bluetooth/BlueZ don’t choke on rapid writes
+      await new Promise(res => setTimeout(res, 20));
+    }
+    return recs.length;
   }
 
   // Auto-send loop (1m; back off to 2m if nothing new)
@@ -229,7 +287,7 @@ export default function DexcomEgvsScreen() {
 
   return (
     <View style={{ padding: 16, gap: 12 }}>
-      <Text style={{ fontWeight: "600" }}>GliderMon — Dexcom → BLE</Text>
+      <Text style={{ fontWeight: "600" }}>GliderMon — Dexcom → BLE → Game</Text>
       <Text selectable>{status}</Text>
 
       <Button
@@ -257,6 +315,15 @@ export default function DexcomEgvsScreen() {
           } catch (e: any) {
             setStatus(`BLE: ${e.message}`);
           }
+        }}
+      />
+
+      <Button
+        title="Seed 75m History (device + game)"
+        onPress={async () => {
+          if (!tokens?.access_token) { setStatus("Not authorized."); return; }
+          const n = await seedHistoryOnConnect(tokens.access_token);
+          setStatus(`Seeded ${n} readings.`);
         }}
       />
 
