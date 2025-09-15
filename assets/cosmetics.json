@@ -5,6 +5,7 @@
       "name": "Leaf Cap",
       "socket": "headTop",
       "texKey": "leaf_hat",
+      "cost": 200,
       "pivot": { "x": 18, "y": 20 },
       "offset": { "dx": -15, "dy": 5 },
       "zBias": 1

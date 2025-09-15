@@ -1,21 +1,23 @@
 // App.tsx
-import React, { useState } from 'react';
-import { SafeAreaView, View, Text, Pressable } from 'react-native';
-import SkiaBootstrap from './SkiaBootstrap';
-import HudScreen from './screens/HudScreen';
-import DexcomEgvsScreen from './src/DexcomEgvsScreen';
-import GameCanvas from './view/GameCanvas';
+import React, { useState } from "react";
+import { SafeAreaView, View, Text, Pressable } from "react-native";
+import SkiaBootstrap from "./SkiaBootstrap";
+import HudScreen from "./screens/HudScreen";
+import DexcomEgvsScreen from "./src/DexcomEgvsScreen";
+import GameCanvas from "./view/GameCanvas";
+import ShopScreen from "./screens/ShopScreen"; // ← add this
 
-type Tab = 'HUD' | 'DEXCOM' | 'GAME';
+const TABS = ["HUD", "DEXCOM", "GAME", "SHOP"] as const;
+type Tab = typeof TABS[number];
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>('HUD');
+  const [tab, setTab] = useState<Tab>("HUD");
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#0e141b' }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#0e141b" }}>
       {/* top tabs */}
-      <View style={{ flexDirection: 'row', padding: 8, gap: 8, backgroundColor: '#111a23' }}>r
-        {(['HUD', 'DEXCOM', 'GAME'] as const).map((t) => (
+      <View style={{ flexDirection: "row", padding: 8, gap: 8, backgroundColor: "#111a23" }}>
+        {TABS.map((t) => (
           <Pressable
             key={t}
             onPress={() => setTab(t)}
@@ -23,12 +25,12 @@ export default function App() {
               paddingVertical: 8,
               paddingHorizontal: 12,
               borderRadius: 10,
-              backgroundColor: tab === t ? '#1d2a36' : '#0e141b',
+              backgroundColor: tab === t ? "#1d2a36" : "#0e141b",
               borderWidth: 1,
-              borderColor: tab === t ? '#3b556e' : '#1d2a36',
+              borderColor: tab === t ? "#3b556e" : "#1d2a36",
             }}
           >
-            <Text style={{ color: '#cfe6ff', fontWeight: '600' }}>{t}</Text>
+            <Text style={{ color: "#cfe6ff", fontWeight: "600" }}>{t}</Text>
           </Pressable>
         ))}
       </View>
@@ -36,9 +38,10 @@ export default function App() {
       {/* content */}
       <SkiaBootstrap>
         <View style={{ flex: 1 }}>
-          {tab === 'HUD' && <HudScreen />}
-          {tab === 'DEXCOM' && <DexcomEgvsScreen />}
-          {tab === 'GAME' && <GameCanvas />}
+          {tab === "HUD" && <HudScreen />}
+          {tab === "DEXCOM" && <DexcomEgvsScreen />}
+          {tab === "GAME" && <GameCanvas />}
+          {tab === "SHOP" && <ShopScreen />}{/* ← render the shop */}
         </View>
       </SkiaBootstrap>
     </SafeAreaView>

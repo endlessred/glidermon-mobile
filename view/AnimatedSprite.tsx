@@ -1,5 +1,6 @@
 // view/AnimatedSprite.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Platform, Image as RNImage } from "react-native"; // ← add this import
 import type { SpriteRig } from "../sprites/rig";
 
 type Props = {
@@ -16,6 +17,7 @@ type Props = {
   flipX?: boolean;
   nudgeY?: number;         // pre-scale pixels to move whole sprite up/down
   clipTopPx?: number;      // crop N px from top to avoid neighbor-frame bleed
+  fps?: number;            // sprite frame fps (default 8)
 
   // accessory (hat) — drawn at the frame's 'headTop' anchor
   hatTex?: string | number;
@@ -23,8 +25,13 @@ type Props = {
   hatOffset?: { dx?: number; dy?: number };
 
   // blink support — alternate sheet with SAME grid as base
+  // Option A: periodic blinking
   blinkTex?: string | number;
-  blinkEvery?: number;     // replace the ENTIRE loop every N loops (default 4)
+  blinkEvery?: number;     // replace the ENTIRE loop every N loops
+  // Option B: randomized blinking between min..max loops
+  blinkMinLoops?: number;
+  blinkMaxLoops?: number;
+  debugAnchors?: boolean;
 };
 
 export default function AnimatedSprite({
@@ -37,13 +44,36 @@ export default function AnimatedSprite({
   flipX = false,
   nudgeY = 0,
   clipTopPx = 0,
+  fps = 8,
   hatTex,
   hatPivot,
   hatOffset,
   blinkTex,
-  blinkEvery = 4,
+  blinkEvery,
+  blinkMinLoops,
+  blinkMaxLoops,
+  debugAnchors
 }: Props) {
   const { useImage, Image: SkImage, Group, rect } = Skia;
+
+  // Converts Metro image modules to URI strings on web; pass-through elsewhere.
+  const toSkiaSrc = (src: any) => {
+    if (Platform.OS !== "web" || src == null) return src;
+    // On RN-web, require(...) may be a number or an object; resolve to {uri}
+    const resolver: any = (RNImage as any)?.resolveAssetSource;
+    if (resolver) {
+      // numeric module id OR object → { uri, width, height, ...}
+      const out = resolver(src);
+      return out?.uri ?? src;
+    }
+    // Fallback: if it already looks like {uri}, use that
+    if (typeof src === "object" && typeof src.uri === "string") return src.uri;
+    return src; // last resort
+  };
+
+  const baseSrc  = useMemo(() => toSkiaSrc(rig.tex), [rig.tex]);
+  const blinkSrc = useMemo(() => toSkiaSrc(blinkTex), [blinkTex]);
+  const hatSrc   = useMemo(() => toSkiaSrc(hatTex), [hatTex]);
 
   // --- tag definition ---
   const tagDef = useMemo(
@@ -59,46 +89,101 @@ export default function AnimatedSprite({
   const frameCount = Math.max(1, tagDef.to - tagDef.from + 1);
 
   // --- images (hooks always called) ---
-  const baseImg  = useImage(rig.tex as any);
-  const blinkImg = useImage(blinkTex as any);
-  const hatImg   = useImage(hatTex as any);
+  const baseImg  = useImage(baseSrc as any);
+  const blinkImg = useImage(blinkSrc as any);
+  const hatImg   = useImage(hatSrc as any);
+
+  useEffect(() => {
+  if (hatImg) {
+    try {
+      console.log("[AnimatedSprite] hat loaded", hatImg.width(), hatImg.height());
+    } catch {}
+  }
+}, [hatImg]);
 
   // --- frame stepping at low FPS, with refs for exact loop boundaries ---
-  const SPRITE_FPS = 8;
-
-  // local frame index state (triggers render)
   const [frameIndex, setFrameIndex] = useState(tagDef.from);
-
-  // refs track loop progress synchronously
   const localRef = useRef(0);        // 0..frameCount-1 within the loop
   const loopOrdRef = useRef(1);      // current loop ordinal (first loop = 1)
 
-  // reset on tag/sheet change
+  // Blink scheduler refs
+  const nextBlinkAtRef = useRef<number | null>(null);  // target loop ordinal
+  const activeBlinkLoopRef = useRef<number | null>(null); // loop ordinal currently blinking
+
+  const randInt = (min: number, max: number) =>
+    min + Math.floor(Math.random() * (max - min + 1));
+
+  const scheduleFirstBlink = () => {
+    // precedence: periodic (blinkEvery) over randomized range
+    if (blinkEvery && blinkEvery > 0) {
+      nextBlinkAtRef.current = blinkEvery; // first blink on loop 'blinkEvery'
+    } else if (
+      blinkMinLoops != null &&
+      blinkMaxLoops != null &&
+      blinkMaxLoops >= blinkMinLoops
+    ) {
+      // after 1..N initial loops
+      nextBlinkAtRef.current = 1 + randInt(blinkMinLoops, blinkMaxLoops);
+    } else {
+      nextBlinkAtRef.current = null;
+    }
+    activeBlinkLoopRef.current = null;
+  };
+
+  const scheduleNextAfter = (currentLoop: number) => {
+    if (blinkEvery && blinkEvery > 0) {
+      nextBlinkAtRef.current = currentLoop + blinkEvery;
+    } else if (
+      blinkMinLoops != null &&
+      blinkMaxLoops != null &&
+      blinkMaxLoops >= blinkMinLoops
+    ) {
+      nextBlinkAtRef.current = currentLoop + randInt(blinkMinLoops, blinkMaxLoops);
+    } else {
+      nextBlinkAtRef.current = null;
+    }
+  };
+
+  // reset on tag/grid change or when blink config changes
   useEffect(() => {
     localRef.current = 0;
     loopOrdRef.current = 1;
     setFrameIndex(tagDef.from);
-  }, [tagDef.from, frameCount]);
+    scheduleFirstBlink();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tagDef.from, frameCount, blinkEvery, blinkMinLoops, blinkMaxLoops]);
 
   useEffect(() => {
-    const stepMs = Math.max(16, Math.round(1000 / SPRITE_FPS));
+    const stepMs = Math.max(16, Math.round(1000 / (fps || 8)));
     const id = setInterval(() => {
-      // compute next frame locally, bump loop counter BEFORE drawing frame 0
+      // compute next frame locally
       const nextLocal = (localRef.current + 1) % frameCount;
+
+      // when we wrap to 0, a NEW loop begins; bump loop counter first
       if (nextLocal === 0) {
-        loopOrdRef.current += 1; // next loop starts now
+        loopOrdRef.current += 1;
+
+        // if this new loop hits the target, activate blink and schedule the next one
+        if (
+          nextBlinkAtRef.current != null &&
+          loopOrdRef.current === nextBlinkAtRef.current
+        ) {
+          activeBlinkLoopRef.current = loopOrdRef.current;
+          scheduleNextAfter(loopOrdRef.current);
+        }
       }
+
       localRef.current = nextLocal;
       setFrameIndex(tagDef.from + nextLocal);
     }, stepMs);
     return () => clearInterval(id);
-  }, [SPRITE_FPS, frameCount, tagDef.from]);
+  }, [frameCount, tagDef.from, fps]);
 
   // decide which sheet to use for THIS loop
   const isBlinkLoop =
     !!blinkImg &&
-    blinkEvery > 0 &&
-    (loopOrdRef.current % blinkEvery === 0);
+    activeBlinkLoopRef.current != null &&
+    loopOrdRef.current === activeBlinkLoopRef.current;
 
   const image = isBlinkLoop ? blinkImg : baseImg;
 
@@ -136,6 +221,19 @@ export default function AnimatedSprite({
           height={image.height() * scale}
         />
       </Group>
+
+        {debugAnchors && a && (
+        <Group>
+            {/* 3x3 crosshair at the anchor */}
+            <SkImage
+            image={image} // any image just to access Canvas; we can also draw a rect
+            x={ax - 1}
+            y={ay - 1}
+            width={2}
+            height={2}
+            />
+        </Group>
+        )}
 
       {/* accessory on headTop (rotates with anchor tilt, mirrors on flipX) */}
       {a && hatImg && (

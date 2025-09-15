@@ -7,6 +7,7 @@ import HudScreen from "../screens/HudScreen";
 import GameScreen from "../screens/GameScreen";
 import DexcomEgvsScreen from "../src/DexcomEgvsScreen";
 import SettingsScreen from "../screens/SettingsScreen";
+import ShopScreen from "../screens/ShopScreen";
 
 const Tab = createBottomTabNavigator();
 
@@ -35,6 +36,7 @@ export default function AppNavigator() {
           component={DexcomEgvsScreen}
           options={{ tabBarLabel: ({ color }) => <Text style={{ color }}>Dexcom</Text> }}
         />
+        <Tab.Screen name="Shop" component={ShopScreen} />
         <Tab.Screen
           name="Settings"
           component={SettingsScreen}

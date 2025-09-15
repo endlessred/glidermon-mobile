@@ -1,15 +1,13 @@
-import { Platform } from "react-native";
-import { Asset } from "expo-asset";
 import cosmeticsJson from "../assets/cosmetics.json";
 import { AssetMap, AssetKey } from "../assets/assetMap";
-
-export type SpriteSource = string | number;
+import { resolveModuleId, type SpriteSource } from "./assetResolver";
 
 export type CosmeticDef = {
   id: string;
   name: string;
-  socket: string;                // e.g., "headTop"
-  tex: SpriteSource;             // module id (native) or uri (web)
+  socket: "headTop" | "hand" | "earL" | "earR" | "center";
+  cost: number;
+  tex: SpriteSource;                     // resolved for Skia/RN Image
   pivot: { x: number; y: number };
   offset?: { dx?: number; dy?: number };
   zBias?: number;
@@ -17,7 +15,8 @@ export type CosmeticDef = {
 
 export async function loadCosmetics(): Promise<CosmeticDef[]> {
   const items = (cosmeticsJson as any).items as Array<{
-    id: string; name: string; socket: string; texKey: AssetKey;
+    id: string; name: string; socket: CosmeticDef["socket"];
+    texKey: AssetKey; cost: number;
     pivot: { x: number; y: number };
     offset?: { dx?: number; dy?: number };
     zBias?: number;
@@ -26,13 +25,7 @@ export async function loadCosmetics(): Promise<CosmeticDef[]> {
   const out: CosmeticDef[] = [];
   for (const it of items) {
     const moduleId = AssetMap[it.texKey];
-    if (Platform.OS === "web") {
-      const a = Asset.fromModule(moduleId);
-      if (!a.downloaded) { try { await a.downloadAsync(); } catch {} }
-      out.push({ ...it, tex: a.localUri ?? a.uri });
-    } else {
-      out.push({ ...it, tex: moduleId });
-    }
+    out.push({ ...it, tex: resolveModuleId(moduleId) });
   }
   return out;
 }
