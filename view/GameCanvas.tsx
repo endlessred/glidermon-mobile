@@ -1,245 +1,119 @@
-// app/view/GameCanvas.tsx
+// view/GameCanvas.tsx
 import React, { useEffect, useMemo, useState } from "react";
-import { View, useWindowDimensions, Platform, Text as RNText } from "react-native";
-import { useGameStore } from "../stores/gameStore";
-import { selectHudVM } from "./selectViewModel";
+import { View, useWindowDimensions, Platform, Text } from "react-native";
+import { Asset } from "expo-asset";
+import AnimatedSprite from "./AnimatedSprite";
+import { makeGridRig } from "../sprites/rig";
 
-type TrendCode = 0 | 1 | 2 | 3; // 0=down, 1=flat, 2=up, 3=unknown
-
-// --- tolerant extractors (adjust to your engine once finalized) ---
-function getMgdl(engine: any): number | null {
-  if (!engine) return null;
-  return (
-    engine.currentMgdl ??
-    engine.mgdl ??
-    engine.glucose?.mgdl ??
-    engine.egvs?.current?.mgdl ??
-    null
-  );
-}
-function getTrendCode(engine: any): TrendCode | null {
-  if (!engine) return null;
-  const v =
-    engine.currentTrendCode ??
-    engine.trendCode ??
-    engine.egvs?.current?.trendCode ??
-    null;
-  return (v ?? null) as TrendCode | null;
-}
-type HistPoint = { ts: number; mgdl: number };
-function toTs(x: any): number | null {
-  if (typeof x === "number") return x;
-  if (typeof x === "string") {
-    const n = Date.parse(x);
-    return Number.isFinite(n) ? n : null;
-  }
-  return null;
-}
-function normalizeHistory(engine: any): HistPoint[] {
-  const raw =
-    engine?.history ??
-    engine?.egvs?.history ??
-    engine?.readings ??
-    [];
-  const out: HistPoint[] = [];
-  for (const r of raw) {
-    if (!r) continue;
-    const mgdl =
-      Number(r.mgdl ?? r.value ?? r.value_mgdl ?? r.glucose ?? NaN);
-    const ts =
-      r.ts ??
-      r.tsMs ??
-      r.ms ??
-      toTs(r.time) ??
-      toTs(r.systemTime) ??
-      toTs(r.displayTime) ??
-      null;
-    if (Number.isFinite(mgdl) && typeof ts === "number") {
-      out.push({ ts, mgdl });
-    }
-  }
-  // oldest-first + trim
-  out.sort((a, b) => a.ts - b.ts);
-  return out.slice(-120);
-}
-function bucketOf(mgdl: number | null, low = 80, high = 180): "LOW" | "IN_RANGE" | "HIGH" {
-  if (mgdl == null) return "IN_RANGE";
-  if (mgdl < low) return "LOW";
-  if (mgdl > high) return "HIGH";
-  return "IN_RANGE";
-}
-function trendGlyph(tc: TrendCode | null) {
-  if (tc === 0) return "↓";
-  if (tc === 1) return "→";
-  if (tc === 2) return "↑";
-  return "•";
-}
+// Local module ids (paths are from /view → /assets)
+const idleModule  = require("../assets/idle8.png");
+const blinkModule = require("../assets/idle8blink.png");
+const hatModule   = require("../assets/GliderMonLeafHat.png");
 
 export default function GameCanvas() {
   const { width, height } = useWindowDimensions();
-  const [SkiaMod, setSkiaMod] = useState<any>(null);
 
-  // subscribe to engine + toasts
-  const engine = useGameStore((s: any) => s.engine);
-  const { currentMgdl: mgdl, currentTrendCode: trendCode, history } =
-  useGameStore(selectHudVM);
-  const toasts = useGameStore((s: any) => s.ui?.toasts ?? []);
+  // Skia module (lazy)
+  const [Skia, setSkia] = useState<any>(null);
 
-  
+  // Resolved sources for Skia.useImage
+  //  • web: URI string (from expo-asset)
+  //  • native: numeric module id
+  const [texSource,   setTexSource]   = useState<string | number>(Platform.OS === "web" ? "" : idleModule);
+  const [blinkSource, setBlinkSource] = useState<string | number>(Platform.OS === "web" ? "" : blinkModule);
+  const [hatSource,   setHatSource]   = useState<string | number>(Platform.OS === "web" ? "" : hatModule);
 
-  // load Skia (web waits for CanvasKit)
+  // Resolve assets (once)
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (Platform.OS === "web") {
+        const aIdle  = Asset.fromModule(idleModule);
+        const aBlink = Asset.fromModule(blinkModule);
+        const aHat   = Asset.fromModule(hatModule);
+        if (!aIdle.downloaded)  { try { await aIdle.downloadAsync(); }  catch {} }
+        if (!aBlink.downloaded) { try { await aBlink.downloadAsync(); } catch {} }
+        if (!aHat.downloaded)   { try { await aHat.downloadAsync(); }   catch {} }
+        if (mounted) {
+          setTexSource(aIdle.localUri ?? aIdle.uri);
+          setBlinkSource(aBlink.localUri ?? aBlink.uri);
+          setHatSource(aHat.localUri ?? aHat.uri);
+        }
+      } else {
+        setTexSource(idleModule);
+        setBlinkSource(blinkModule);
+        setHatSource(hatModule);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  // Build the rig once the base texture is known
+  const rig = useMemo(
+    () => (texSource ? makeGridRig(texSource, 4, 2, 64, 64, 32, 61, { x: 34, y: 12 }) : null),
+    [texSource]
+  );
+
+  // Lazy-load Skia (native immediately; web after CanvasKit bootstrap)
   useEffect(() => {
     if (Platform.OS !== "web") {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
-      setSkiaMod(require("@shopify/react-native-skia"));
+      setSkia(require("@shopify/react-native-skia"));
       return;
     }
     const tryLoad = () => {
       if ((globalThis as any).CanvasKit) {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
-        setSkiaMod(require("@shopify/react-native-skia"));
+        setSkia(require("@shopify/react-native-skia"));
         return true;
       }
       return false;
     };
     if (!tryLoad()) {
-      const id = setInterval(() => {
-        if (tryLoad()) clearInterval(id);
-      }, 30);
+      const id = setInterval(() => { if (tryLoad()) clearInterval(id); }, 30);
       return () => clearInterval(id);
     }
   }, []);
 
-  if (!SkiaMod) {
+  if (!Skia || !rig || !blinkSource || !hatSource) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#0d1117" }}>
-        <RNText style={{ color: "#9cc4e4" }}>Initializing Skia…</RNText>
+        <Text style={{ color: "#9cc4e4" }}>
+          {!Skia ? "Initializing Skia…" : "Loading sprites…"}
+        </Text>
       </View>
     );
   }
 
-  const { Canvas, Rect, Path, PathKit } = SkiaMod;
+  const { Canvas, Rect } = Skia;
 
-  // visuals
-  const bucket = bucketOf(mgdl);
-  const bg = "#0d1117";
-  const band = bucket === "LOW" ? "#1f6feb" : bucket === "HIGH" ? "#ef4444" : "#10b981";
-  const bandHeight = Math.max(60, Math.floor(height * 0.18));
-  const pad = 12;
-
-  // sparkline path
-  const sparkPath = useMemo(() => {
-    const p = PathKit.Path.Make();
-    if (!history.length) return p;
-
-    const left = 16;
-    const right = width - 16;
-    const top = bandHeight + 12;
-    const bottom = height - 20;
-
-    const xs = history.map(h => h.ts);
-    const ys = history.map(h => h.mgdl);
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs);
-    const minY = Math.min(70, ...ys);
-    const maxY = Math.max(200, ...ys);
-    const spanX = Math.max(1, maxX - minX);
-    const spanY = Math.max(1, maxY - minY);
-
-    const xOf = (t: number) => left + ((t - minX) / spanX) * (right - left);
-    const yOf = (v: number) => bottom - ((v - minY) / spanY) * (bottom - top);
-
-    history.forEach((pt, i) => {
-      const x = xOf(pt.ts);
-      const y = yOf(pt.mgdl);
-      if (i === 0) p.moveTo(x, y);
-      else p.lineTo(x, y);
-    });
-    return p;
-  }, [history, width, height, bandHeight, PathKit]);
+  // Place our sprite near the bottom center
+  const pivotX = Math.round(width / 2);
+  const groundY = Math.round(height * 0.75);
 
   return (
     <View style={{ flex: 1 }}>
       <Canvas style={{ width, height }}>
         {/* background */}
-        <Rect x={0} y={0} width={width} height={height} color={bg} />
+        <Rect x={0} y={0} width={width} height={height} color="#0d1117" />
 
-        {/* top band (state color) */}
-        <Rect x={0} y={0} width={width} height={bandHeight} color={band} />
-
-        {/* sparkline */}
-        <Path
-          path={sparkPath}
-          strokeWidth={3}
-          style="stroke"
-          color="#e5e7eb"
-          strokeJoin="round"
-          strokeCap="round"
+        {/* the glider */}
+        <AnimatedSprite
+          Skia={Skia}
+          rig={rig}
+          x={pivotX}
+          y={groundY}
+          scale={3}
+          clipTopPx={1}              // trims top bleed
+          // Whole-loop blink: set to 1 temporarily to verify, then 4.
+          blinkTex={blinkSource}
+          blinkEvery={4}             // every 4th full loop uses the blink sheet
+          // Hat cosmetic (saved values you picked)
+          hatTex={hatSource}
+          hatPivot={{ x: 18, y: 20 }}
+          hatOffset={{ dx: -15, dy: 5 }}
         />
       </Canvas>
-
-      {/* HUD: big glucose + arrow */}
-      <View
-        pointerEvents="none"
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: bandHeight,
-          paddingHorizontal: pad,
-          paddingTop: 8,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <RNText
-          style={{
-            color: "white",
-            fontSize: Math.min(64, Math.max(36, Math.floor(width * 0.12))),
-            fontWeight: "800",
-          }}
-        >
-          {mgdl == null ? "--" : String(Math.round(mgdl))}
-        </RNText>
-        <RNText
-          style={{
-            color: "white",
-            fontSize: Math.min(48, Math.max(28, Math.floor(width * 0.08))),
-            fontWeight: "700",
-          }}
-        >
-          {trendGlyph(trendCode)}
-        </RNText>
-      </View>
-
-      {/* Toasts from store.ui.toasts */}
-      <View
-        pointerEvents="none"
-        style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          bottom: 24,
-          alignItems: "center",
-          gap: 8,
-        }}
-      >
-        {toasts.map((t: any) => (
-          <View
-            key={t.id}
-            style={{
-              backgroundColor: "rgba(17,24,39,0.9)",
-              borderRadius: 10,
-              paddingHorizontal: 12,
-              paddingVertical: 8,
-            }}
-          >
-            <RNText style={{ color: "white" }}>{t.text}</RNText>
-          </View>
-        ))}
-      </View>
     </View>
   );
 }

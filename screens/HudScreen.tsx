@@ -47,14 +47,21 @@ export default function HudScreen() {
   }, [ble.state]);
 
   const lastUpdated = useMemo(() => {
-    if (!history.length) return { label: "—", stale: true };
-    const ts = history[history.length - 1].ts;
-    const ageMs = Math.max(0, Date.now() - ts);
-    const min = Math.floor(ageMs / 60000);
-    const label =
-      min < 1 ? "Just now" : min === 1 ? "1 min ago" : `${min} min ago`;
-    return { label, stale: min >= 15 }; // mark stale if >= 15min
-  }, [history]);
+  if (!history.length) return { label: "—", stale: true };
+  const ts = history[history.length - 1].ts;
+  const ageMs = Math.max(0, Date.now() - ts);
+  const min = Math.floor(ageMs / 60000);
+  const label = min < 1 ? "Just now" : min === 1 ? "1 min ago" : `${min} min ago`;
+  return { label, stale: min >= 15 }; // mark stale at 15m+
+}, [history]);
+
+const delta = useMemo(() => {
+  if (history.length < 2) return null;
+  const d = Math.round(history[history.length - 1].mgdl - history[history.length - 2].mgdl);
+  return (d === 0 ? 0 : d);
+}, [history]);
+
+  
 
   return (
     <View style={styles.root}>
@@ -98,6 +105,22 @@ export default function HudScreen() {
           </Text>
           <Text style={styles.trendText}>{trendGlyph(currentTrendCode)}</Text>
         </View>
+
+        {/* stale banner */}
+{lastUpdated.stale && (
+  <View style={styles.banner}>
+    <Text style={styles.bannerText}>No new reading ≥ 15m — values may be stale</Text>
+  </View>
+)}
+
+<View style={styles.panel}>
+  
+
+  <Text style={styles.meta}>
+    Last update: {lastUpdated.label} • Points: {history.length}
+    {lastUpdated.stale ? " • STALE" : ""}
+  </Text>
+</View>
 
         {/* Meta row */}
         <Text style={[styles.meta, lastUpdated.stale && styles.metaStale]}>
@@ -190,4 +213,21 @@ const styles = StyleSheet.create({
   btnRow: { flexDirection: "row", gap: 10, justifyContent: "space-between" },
 
   subtle: { color: "#9ca3af" },
+
+  panel: {
+  backgroundColor: "#111827",
+  borderRadius: 12,
+  padding: 16,
+  gap: 10,
+},
+
+  banner: {
+  backgroundColor: "#78350f", // amber-900-ish
+  borderRadius: 10,
+  paddingHorizontal: 12,
+  paddingVertical: 8,
+  alignSelf: "stretch",
+},
+bannerText: { color: "#fde68a", fontWeight: "600" }, // amber-200-ish
+deltaText: { color: "#9ca3af", fontSize: 18, fontWeight: "700" },
 });

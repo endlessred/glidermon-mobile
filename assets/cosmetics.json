@@ -1,0 +1,13 @@
+{
+  "items": [
+    {
+      "id": "leaf_hat",
+      "name": "Leaf Cap",
+      "socket": "headTop",
+      "texKey": "leaf_hat",
+      "pivot": { "x": 18, "y": 20 },
+      "offset": { "dx": -15, "dy": 5 },
+      "zBias": 1
+    }
+  ]
+}
