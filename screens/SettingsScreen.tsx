@@ -1,87 +1,98 @@
-// screens/SettingsScreen.tsx
-import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, TextInput, Button, Alert } from "react-native";
+import React, { useEffect } from "react";
+import { View, Text, Switch, Pressable, Platform } from "react-native";
 import { useSettingsStore } from "../stores/settingsStore";
-
-function NumInput({
-  label,
-  value,
-  onChange,
-}: { label: string; value: number; onChange: (n: number) => void }) {
-  const [txt, setTxt] = useState(String(value));
-  useEffect(() => setTxt(String(value)), [value]);
-  return (
-    <View style={styles.inputRow}>
-      <Text style={styles.label}>{label}</Text>
-      <TextInput
-        style={styles.input}
-        keyboardType="numeric"
-        value={txt}
-        onChangeText={(t) => setTxt(t.replace(/[^\d]/g, ""))}
-        onBlur={() => onChange(Number(txt || 0))}
-        placeholder="0"
-        placeholderTextColor="#6b7280"
-      />
-    </View>
-  );
-}
+import { useProgressionStore } from "../stores/progressionStore";
+import { useGameStore } from "../stores/gameStore";
 
 export default function SettingsScreen() {
-  const loaded = useSettingsStore((s) => s.loaded);
-  const low = useSettingsStore((s) => s.low);
-  const high = useSettingsStore((s) => s.high);
-  const veryHigh = useSettingsStore((s) => s.veryHigh);
-  const load = useSettingsStore((s) => s.load);
-  const setThresholds = useSettingsStore((s) => s.setThresholds);
+  // load settings on first view
+  const loaded = useSettingsStore(s => s.loaded);
+  const load    = useSettingsStore(s => (s as any).load);
 
   useEffect(() => { if (!loaded) load(); }, [loaded, load]);
 
+  // simulator controls
+  const useSimulator    = useSettingsStore(s => s.useSimulator);
+  const setUseSimulator = useSettingsStore(s => (s as any).setUseSimulator);
+  const simSpeed        = useSettingsStore(s => s.simSpeed);
+  const setSimSpeed     = useSettingsStore(s => (s as any).setSimSpeed);
+
+  // progression readouts
+  const acorns    = useProgressionStore(s => s.acorns);
+  const level     = useProgressionStore(s => s.level);
+  const dailyEarn = useProgressionStore(s => s.dailyEarned);
+  const dailyCap  = useProgressionStore(s => s.dailyCap);
+  const rested    = useProgressionStore(s => s.restedBank);
+
+  // actions
+  const resetProgression     = useProgressionStore(s => s.resetProgression);
+  const syncProgressionToEngine = useGameStore(s => s.syncProgressionToEngine);
+
   return (
-    <View style={styles.root}>
-      <Text style={styles.title}>Settings</Text>
+    <View style={{ flex:1, backgroundColor:"#0e141b", padding:16, gap:16 }}>
+      <Text style={{ color:"#cfe6ff", fontWeight:"800", fontSize:18 }}>Settings</Text>
 
-      <View style={styles.card}>
-        <NumInput label="Low (mg/dL)" value={low} onChange={(n) => setThresholds({ low: n })} />
-        <NumInput label="High (mg/dL)" value={high} onChange={(n) => setThresholds({ high: n })} />
-        <NumInput
-          label="Very High (mg/dL)"
-          value={veryHigh}
-          onChange={(n) => setThresholds({ veryHigh: n })}
-        />
+      {/* Simulator card */}
+      <View style={{
+        backgroundColor:"#161b22", padding:12, borderRadius:12,
+        borderWidth:1, borderColor:"#233043", gap:12
+      }}>
+        <Text style={{ color:"#cfe6ff", fontWeight:"700" }}>CGM Simulator</Text>
 
-        <View style={{ height: 8 }} />
+        <View style={{ flexDirection:"row", alignItems:"center", justifyContent:"space-between" }}>
+          <Text style={{ color:"#9aa6b2" }}>
+            Use Simulator {Platform.OS === "web" ? "(web default)" : ""}
+          </Text>
+          <Switch value={!!useSimulator} onValueChange={(v)=>setUseSimulator(v)} />
+        </View>
 
-        <Button
-          title="Reset to defaults"
-          onPress={() => {
-            setThresholds({ low: 80, high: 180, veryHigh: 250 });
-            Alert.alert("Reset", "Thresholds reset to defaults.");
-          }}
-          color="#10b981"
-        />
+        <View style={{ flexDirection:"row", alignItems:"center", justifyContent:"space-between" }}>
+          <Text style={{ color:"#9aa6b2" }}>Speed</Text>
+          <View style={{ flexDirection:"row", alignItems:"center", gap:8 }}>
+            <Pressable onPress={()=>setSimSpeed(simSpeed - 0.25)}>
+              <Text style={{ color:"#60a5fa", fontSize:18 }}>–</Text>
+            </Pressable>
+            <Text style={{ color:"#cfe6ff", width:64, textAlign:"center" }}>
+              {simSpeed.toFixed(2)}×
+            </Text>
+            <Pressable onPress={()=>setSimSpeed(simSpeed + 0.25)}>
+              <Text style={{ color:"#60a5fa", fontSize:18 }}>+</Text>
+            </Pressable>
+          </View>
+        </View>
+
+        <Text style={{ color:"#768390", fontSize:12 }}>
+          Emits a time-compressed "5-minute" reading every ~{Math.round(1500 / Math.max(0.25, simSpeed))}ms.
+        </Text>
       </View>
 
-      <Text style={styles.subtle}>
-        These thresholds affect phone UI. The device uses its own settings file; we can add a BLE write later to sync them.
-      </Text>
+      {/* Progression overview */}
+      <View style={{
+        backgroundColor:"#161b22", padding:12, borderRadius:12,
+        borderWidth:1, borderColor:"#233043", gap:8
+      }}>
+        <Text style={{ color:"#cfe6ff", fontWeight:"700" }}>Progression</Text>
+        <Text style={{ color:"#9aa6b2" }}>Acorns: <Text style={{ color:"#cfe6ff" }}>{acorns.toLocaleString()}</Text></Text>
+        <Text style={{ color:"#9aa6b2" }}>Level: <Text style={{ color:"#cfe6ff" }}>{level}</Text></Text>
+        <Text style={{ color:"#9aa6b2" }}>
+          Today: <Text style={{ color:"#cfe6ff" }}>{Math.min(dailyEarn, dailyCap).toLocaleString()}</Text> / {dailyCap.toLocaleString()}  ·  Rested: <Text style={{ color:"#cfe6ff" }}>{rested.toLocaleString()}</Text>
+        </Text>
+
+        <Pressable
+          onPress={() => { resetProgression(); syncProgressionToEngine(); }}
+          style={{
+            marginTop:8, alignSelf:"flex-start",
+            backgroundColor:"#2a3a4b", paddingVertical:8, paddingHorizontal:12,
+            borderRadius:10, borderWidth:1, borderColor:"#3b556e"
+          }}
+        >
+          <Text style={{ color:"#ffecd1", fontWeight:"700" }}>Reset to Beginning</Text>
+        </Pressable>
+
+        <Text style={{ color:"#8aa1b1", fontSize:12, marginTop:6 }}>
+          Resets Acorns, XP, and Level to 1. Daily counters are cleared. Use for demos or testing.
+        </Text>
+      </View>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#0d1117", padding: 16, gap: 12 },
-  title: { color: "white", fontSize: 18, fontWeight: "700" },
-  subtle: { color: "#9ca3af" },
-  card: { backgroundColor: "#111827", borderRadius: 12, padding: 16, gap: 12 },
-  inputRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  label: { color: "#e5e7eb", fontSize: 16 },
-  input: {
-    color: "white",
-    backgroundColor: "#1f2937",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    minWidth: 100,
-    textAlign: "right",
-  },
-});

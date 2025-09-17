@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 import { View, Text, FlatList, Image, TouchableOpacity } from "react-native";
 import { useCosmeticsStore } from "../stores/cosmeticsStore";
+import { useProgressionStore } from "../stores/progressionStore";
 
 export default function ShopScreen() {
   const catalog = useCosmeticsStore(s => s.catalog);
@@ -10,13 +11,15 @@ export default function ShopScreen() {
   const buy = useCosmeticsStore(s => s.buy);
   const equip = useCosmeticsStore(s => s.equip);
   const equippedHead = useCosmeticsStore(s => s.equipped.headTop);
+  const acorns = useProgressionStore(s => s.acorns);
+const spend  = useProgressionStore(s => s.spend);
 
   useEffect(() => { loadCatalog(); }, [loadCatalog]);
 
   return (
     <View style={{ flex: 1, backgroundColor: "#0d1117", padding: 16, gap: 12 }}>
       <Text style={{ color: "#9cc4e4", fontSize: 18, marginBottom: 8 }}>
-        Points: {points}
+        Acorns: {points}
       </Text>
       <FlatList
         data={catalog}
@@ -54,7 +57,10 @@ export default function ShopScreen() {
               </View>
 
               {!isOwned ? (
-                <TouchableOpacity onPress={() => buy(item.id)}>
+                <TouchableOpacity onPress={() => {
+                    if (!spend(item.cost)) return;
+                    buy(item.id);
+                    }}>
                   <Text style={{ color: "#10b981", fontWeight: "600" }}>Buy</Text>
                 </TouchableOpacity>
               ) : !isEquipped ? (

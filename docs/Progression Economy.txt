@@ -1,0 +1,194 @@
+Progression Economy
+
+Currencies
+
+Points (soft): Earned from TIR, trend stability, and quests. Spent on upgrades, cosmetics.
+
+Gems (premium): Purchasable or rewarded; used for cosmetics bundles and accelerants (no pay-to-win health mechanics).
+
+Tickets (event): Temporary currency for limited-time shops.
+
+Primary earn (per minute tick)
+
+Base/minute = f(TIR state, trend):
+
+In-range & flat/slight = 1.0× baseline.
+
+In-range & gentle up/down = 0.7×.
+
+Out-of-range = 0.2× floor (never zero to avoid punishment).
+
+Daily bounties: e.g., 3× 20‑min stable windows, 1× recovery-from-high, 1× recovery-from-low (safety-first messaging).
+
+Sinks & pacing
+
+NPC upgrades: linear→sublinear costs; add production multipliers and automation (e.g., passive chest spawns).
+
+Nest upgrades: unlock slots (props, decorations, pets), background scenes.
+
+Cosmetics: hats/props/skins/backgrounds; recolors and seasonal variants.
+
+Prestige (Molting): soft reset NPC levels → permanent multiplier + rare skin.
+
+Caps & anti-burnout
+
+Daily soft cap with overflow into rested bonus; weekly pity timers for rare drops.
+
+
+Analytics & XP Math (Initial)
+
+Track: session count, TIR minutes, trend distribution, quest completion, chest opens, cosmetic acquisition.
+
+Health KPI (player): daily TIR delta, recovery count/time.
+
+Economy KPI: points earned/spent, upgrade velocity, cosmetic attach rate, sub conversion.
+
+A/B: chest cadence (30/45 min), daily cap sizes, starter cosmetic appeal.
+
+Baseline XP/Points (tunable)
+
+Stable minute: 10 pts; gentle trend: 7 pts; out-of-range: 2 pts.
+
+Daily bounties: 250–500 pts each.
+
+NPC L1→L2 cost: 500 pts; grows ~1.35× per level.
+
+🎯 Two Tracks for Points
+
+When the player earns points (from staying in range, completing bounties, etc.):
+
+XP Track (total points)
+
+Every point earned contributes to an XP pool.
+
+XP is what levels up the player account (and potentially NPCs when upgraded).
+
+XP is cumulative — never spent.
+
+Currency Track (spendable points)
+
+At the same time, those points also enter the spendable currency balance.
+
+Currency is what players use in the shop for cosmetics, upgrades, etc.
+
+Currency is consumed when spent.
+
+
+Leveling System (Baseline Math)
+
+We want progression to feel smooth early, then stretch out to allow months/years of play. The classic shape is exponential or quadratic growth of XP requirements.
+
+Formula (candidate)
+XP required for Level N = Base * (N ^ Growth)
+
+Levels 1–5: Easy to hit in the first week, keeps players motivated.
+
+Levels 6–15: Slower stretch (~2–3 weeks each), aligns with NPC upgrades and shop unlocks.
+
+Beyond 20: Long-haul grind, meant for prestige/molting resets.
+
+🪙 Example Player Flow
+
+Day 1: Earn ~2,000 points (≈200 minutes in-range + bounties).
+
+XP track → Level 5 by end of Day 1.
+
+Currency track → 2,000 points spendable in shop.
+
+Day 7: Earn ~12,000 total points.
+
+XP track → Level 10.
+
+Currency track → 12,000 cumulative currency earned, though maybe 6–8k spent on cosmetics.
+
+🎨 Why Two Tracks?
+
+XP (progression): Provides long-term sense of growth — can’t be undone by spending.
+
+Currency (spend): Gives immediate choice and agency — cosmetics, NPC upgrades, etc.
+
+Splitting them prevents the “I spent all my points so now I can’t level up” frustration that some incremental games fall into.
+
+⚖️ Next Step: We’ll want to tune Base and Growth around average daily earn. If we expect ~2,000 points/day steady play, then hitting Level 10 in the first week feels good, with diminishing returns after.
+
+How leveling works (clear rules)
+
+Every time you earn points, you get:
+
+XP (cumulative, never spent) → gates player level.
+
+Currency (spendable) → shop/NPC upgrades/cosmetics.
+
+Level-up trigger: when your lifetime XP ≥ the required XP for the next level.
+
+XP requirement curve (baseline):
+XP to go from level N → N+1 = Base * N^Growth
+With Base = 100, Growth = 1.5 (tunable).
+
+XP thresholds (cumulative to reach level L)
+
+L2: 100
+
+L3: 383
+
+L4: 902
+
+L5: 1,702
+
+L6: 2,820
+
+L7: 4,290
+
+L8: 6,142
+
+L9: 8,405
+
+L10: 11,105
+
+L15: 31,998
+
+L20: 67,135
+
+L25: 118,810
+
+L30: 189,030
+
+Pace at different daily earn rates
+
+(How many days it takes to hit the level, assuming XP/day equals your points/day.)
+
+Level	1k/day	2k/day	3k/day
+2	0.10 d	0.05 d	0.03 d
+5	1.70 d	0.85 d	0.57 d
+10	11.11 d	5.55 d	3.70 d
+15	32.00 d	16.00 d	10.67 d
+20	67.14 d	33.57 d	22.38 d
+25	118.81 d	59.41 d	39.60 d
+30	189.03 d	94.52 d	63.01 d
+
+Quick read:
+
+Week 1: casual (1–2k/day) lands around L5–10.
+
+Month 1: steady 2k/day reaches L15–16.
+
+Long tail: levels stretch nicely toward prestige/molting territory.
+
+Sanity with your minute-tick earnings
+
+If you keep the earlier baseline (e.g., 10 pts/min when in-range & stable):
+
+2 hours stable ≈ 1,200 pts (and 1,200 XP).
+
+A day with ~3 hours good stability + bounties easily hits ~2k.
+
+Tuning knobs (simple, powerful)
+
+Base (100): makes early levels faster/slower.
+
+Growth (1.5): controls late-game stretch.
+
+1.4 → faster; 1.6 → slower.
+
+You can also add level-up rewards (cosmetics shards, chest) to make milestones feel chunky without changing the curve.
+

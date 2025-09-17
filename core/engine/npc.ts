@@ -1,19 +1,15 @@
+// core/engine/npc.ts
 import { GameState } from './state';
 import { NPC_UNLOCKS } from './economy';
 
-export function updateNpcUnlocks(g: GameState){
-  if (g.level >= NPC_UNLOCKS.vendor) g.npc.vendorUnlocked = true;
-  if (g.level >= NPC_UNLOCKS.healer) g.npc.healerUnlocked = true;
-  if (g.level >= NPC_UNLOCKS.builder) g.npc.builderUnlocked = true;
-  if (g.level >= NPC_UNLOCKS.travelers) g.npc.travelersUnlocked = true;
+export function updateNpcUnlocksByLevel(g: GameState, level: number){
+  g.npc.vendorUnlocked     = level >= NPC_UNLOCKS.vendor  || g.npc.vendorUnlocked;
+  g.npc.healerUnlocked     = level >= NPC_UNLOCKS.healer  || g.npc.healerUnlocked;
+  g.npc.builderUnlocked    = level >= NPC_UNLOCKS.builder || g.npc.builderUnlocked;
+  g.npc.travelersUnlocked  = level >= NPC_UNLOCKS.travelers || g.npc.travelersUnlocked;
 }
 
-export type StoryAdvance =
-  | { npc: 'vendor', flag: 'vendor_supplyRun_done', unlockedCosmetic?: string }
-  | { npc: 'healer', flag: 'healer_trial_done', unlockedCosmetic?: string }
-  | { npc: 'builder', flag: 'builder_sky_done', unlockedCosmetic?: string };
-
-export function completeStoryFlag(g: GameState, adv: StoryAdvance){
-  g.npc[adv.flag] = true as any;
-  if (adv.unlockedCosmetic) g.inventory.cosmeticsOwned[adv.unlockedCosmetic] = true;
+// (optional) keep a backward-compatible wrapper using g.level
+export function updateNpcUnlocks(g: GameState){
+  return updateNpcUnlocksByLevel(g, g.level);
 }

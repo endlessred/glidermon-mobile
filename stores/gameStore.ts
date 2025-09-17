@@ -2,86 +2,83 @@
 import { create } from "zustand";
 import {
   defaultState, type GameState,
-  applyEgvsTick, updateNpcUnlocks, checkStale
+  applyEgvsTick, updateNpcUnlocks, checkStale, updateNpcUnlocksByLevel, needsDailyReset, applyDailyReset, needsWeeklyReset, applyWeeklyReset
 } from "../core/engine";
-
-type TrendCode = 0 | 1 | 2 | 3;
-type HudPoint = { ts: number; mgdl: number };
+import { useProgressionStore } from "./progressionStore"; // ← add
 
 type UIState = {
   focusedNpc?: "vendor" | "healer" | "builder";
   toasts: { id: string; text: string; ts: number }[];
 };
 
-type HudState = {
-  currentMgdl: number | null;
-  currentTrendCode: TrendCode | null;
-  history: HudPoint[]; // oldest-first
-};
-
 type GameStore = {
   engine: GameState;
   ui: UIState;
-  hud: HudState;
   enqueueToast: (text: string) => void;
   clearOldToasts: () => void;
   onEgvs: (mgdl: number, trendCode: number, epochSec: number) => void;
+  syncProgressionToEngine: () => void;
 };
 
 export const useGameStore = create<GameStore>((set, get) => ({
   engine: defaultState,
   ui: { toasts: [] },
-  hud: { currentMgdl: null, currentTrendCode: null, history: [] },
+
+  syncProgressionToEngine: () => {
+  const s = get().engine;
+  const prog = require("./progressionStore").useProgressionStore.getState();
+  s.points = prog.acorns;
+  s.level  = prog.level;
+  (s as any).xp = prog.lifetimeXp;
+  // keep NPC unlocks in sync with level
+  const { updateNpcUnlocksByLevel } = require("../core/engine/npc");
+  updateNpcUnlocksByLevel(s, prog.level);
+  set({ engine: { ...s } });
+},
 
   enqueueToast: (text) =>
     set((s) => ({
-      ui: {
-        ...s.ui,
-        toasts: [
-          ...s.ui.toasts,
-          { id: Math.random().toString(36).slice(2), text, ts: Date.now() },
-        ],
-      },
-    })), // <-- RETURNS a partial state
+      ui: { ...s.ui, toasts: [...s.ui.toasts, { id: Math.random().toString(36).slice(2), text, ts: Date.now() }] }
+    })),
 
   clearOldToasts: () =>
-    set((s) => {
-      const filtered = s.ui.toasts.filter((t) => Date.now() - t.ts < 2500);
-      if (filtered.length === s.ui.toasts.length) {
-        return s; // <-- RETURNS (no change) OK to return the same state
-      }
-      return { ui: { ...s.ui, toasts: filtered } }; // <-- RETURNS partial
-    }),
+    set((s) => ({
+      ui: { ...s.ui, toasts: s.ui.toasts.filter(t => Date.now() - t.ts < 2500) }
+    })),
 
   onEgvs: (mgdl, trendCode, epochSec) => {
-    // Advance engine
-    const engine = get().engine;
-    const { event } = applyEgvsTick(engine, {
-      mgdl,
-      trendPer5Min: trendCode === 2 ? +2 : trendCode === 0 ? -2 : 0,
-      tsMs: epochSec * 1000,
-    });
-    updateNpcUnlocks(engine);
-    checkStale(engine, Date.now());
+  const s = get().engine;
+  
 
-    // Update HUD slice + engine
-    set((state) => {
-      const nextHist =
-        state.hud.history.length >= 360
-          ? [...state.hud.history.slice(1), { ts: epochSec * 1000, mgdl }]
-          : [...state.hud.history, { ts: epochSec * 1000, mgdl }];
+  // Engine tick without awarding
+  const { event } = applyEgvsTick(s, {
+    mgdl,
+    trendPer5Min: trendCode === 2 ? +2 : trendCode === 0 ? -2 : 0,
+    tsMs: epochSec * 1000,
+    award: false,
+  });
 
-      return {
-        engine: { ...engine }, // <-- RETURNS partial
-        hud: {
-          currentMgdl: mgdl,
-          currentTrendCode: (trendCode as TrendCode) ?? null,
-          history: nextHist,
-        },
-      };
-    });
+  // Progression earn (single source of truth)
+  useProgressionStore.getState().onEgvs(mgdl, (trendCode as any) ?? 1, epochSec * 1000);
 
-    if (event === "UNICORN") get().enqueueToast("🦄 Unicorn!");
-    if (event === "RECOVER") get().enqueueToast("✅ Recovered");
-  },
+  // Resets (engine keys)
+  const d = new Date(epochSec * 1000);
+  const dayKey  = d.toISOString().slice(0,10);
+  const weekKey = d.toISOString().slice(0,7) + "-W";
+  if (needsDailyReset(s, dayKey))  applyDailyReset(s, dayKey);
+  if (needsWeeklyReset(s, weekKey)) applyWeeklyReset(s, weekKey);
+
+  // Mirror progression → engine for legacy UI
+  const prog = useProgressionStore.getState();
+  s.points = prog.acorns;
+  s.level  = prog.level;
+  (s as any).xp = prog.lifetimeXp;
+
+  updateNpcUnlocksByLevel(s, prog.level);
+  checkStale(s, Date.now());
+  set({ engine: { ...s, /* maybe stash lastEvent if you want */ } });
+
+  if (event === "UNICORN") get().enqueueToast("🦄 Unicorn!");
+  if (event === "RECOVER") get().enqueueToast("✅ Recovered");
+},
 }));

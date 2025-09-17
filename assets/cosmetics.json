@@ -9,6 +9,16 @@
       "pivot": { "x": 18, "y": 20 },
       "offset": { "dx": -15, "dy": 5 },
       "zBias": 1
+    },
+    {
+      "id": "greater_hat",
+      "name": "Greater Hat",
+      "socket": "headTop",
+      "texKey": "greater_hat",
+      "cost": 350,
+      "pivot": { "x": 18, "y": 16 },
+      "offset": { "dx": -15, "dy": 5 },
+      "zBias": 1
     }
   ]
 }

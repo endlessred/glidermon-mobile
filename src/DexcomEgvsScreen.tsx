@@ -12,18 +12,19 @@ import {
 } from "./bleClient";
 import type { TrendCode } from "./bleClient";
 import { useGameStore } from "../stores/gameStore";
+import { Platform } from "react-native";
+
+
 
 WebBrowser.maybeCompleteAuthSession();
 
 const BACKEND_BASE = "http://localhost:8787";
 const CLIENT_ID = "Xn5y9VSU4kwDaBNK9PgB1UvRc1SEGkm3";
 
-const redirectUri = AuthSession.makeRedirectUri({
-  scheme: "glidermon",
-  path: "auth",
-  preferLocalhost: true,
-});
+const REDIRECT_WEB    = "http://localhost:8081/auth"; // dev web
+const REDIRECT_NATIVE = "glidermon://auth";           // native scheme
 
+const redirectUri = Platform.select({ web: REDIRECT_WEB, default: REDIRECT_NATIVE });
 const discovery = {
   authorizationEndpoint: "https://sandbox-api.dexcom.com/v2/oauth2/login",
   tokenEndpoint: "https://sandbox-api.dexcom.com/v2/oauth2/token",
@@ -83,6 +84,10 @@ export default function DexcomEgvsScreen() {
   useEffect(() => {
     console.log("Dexcom redirectUri =>", redirectUri);
   }, []);
+
+  useEffect(() => {
+  console.log("Dexcom OAuth →", { clientId: CLIENT_ID, redirectUri });
+}, []);
 
   // NOTE: removed "connect on mount" behavior. BLE is optional.
 
