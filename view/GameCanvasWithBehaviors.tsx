@@ -1,17 +1,20 @@
-// view/GameCanvas.tsx
+// Example of GameCanvas with new behavior system
+// This demonstrates how to use the new behavior system alongside the existing setup
 import React, { useEffect, useMemo, useState } from "react";
 import { Platform, Text, View, useWindowDimensions, LayoutChangeEvent } from "react-native";
-import AnimatedSprite from "./AnimatedSprite";
-import BehaviorSprite from "./BehaviorSprite";
+import AnimatedSprite from "./AnimatedSprite"; // Original sprite
+import BehaviorSprite from "./BehaviorSprite"; // New behavior-enabled sprite
 import { makeGridRig } from "../sprites/rig";
 import { useCosmeticsStore } from "../stores/cosmeticsStore";
 import TiltShiftEffect from "../components/TiltShiftEffect";
-import { useGliderBehaviorDefinition } from "./useGliderBehavior";
+import { useGliderBehaviorDefinition, useBehaviorByName } from "./useGliderBehavior";
+import { BehaviorLoader } from "../core/behaviorLoader";
+import type { AnimationState } from "../core/behaviors";
 
-// Assets (same ones you had)
-const idleSheet      = require("../assets/idle8.png");                    // 64x64 x8 (4x2)
-const idleBlinkSheet = require("../assets/idle8blink.png");              // full 8-frame blink
-const skyboxPng      = require("../assets/skybox/gliderNestSkybox.png"); // 3 frames (240x240 each)
+// Assets (same as original)
+const idleSheet      = require("../assets/idle8.png");
+const idleBlinkSheet = require("../assets/idle8blink.png");
+const skyboxPng      = require("../assets/skybox/gliderNestSkybox.png");
 const nestPng        = require("../assets/nest.png");
 const hatLeafPng     = require("../assets/GliderMonLeafHat.png");
 const hatGreaterPng  = require("../assets/GliderMonGreaterHat.png");
@@ -25,13 +28,25 @@ function resolveForSkia(mod: any): any {
 }
 
 type Props = {
-  /** "embedded" = square-only (HUD). "standalone" = old Game tab (centers vertically). */
   variant?: "embedded" | "standalone";
+  // New prop to control behavior mode
+  behaviorMode?: "legacy" | "enhanced" | "custom";
+  customBehaviorName?: string;
 };
 
-export default function GameCanvas({ variant = "standalone" }: Props) {
+export default function GameCanvasWithBehaviors({
+  variant = "standalone",
+  behaviorMode = "legacy",
+  customBehaviorName
+}: Props) {
   const [ckReady, setCkReady] = useState(Platform.OS !== "web");
   const [Skia, setSkia] = useState<any>(null);
+
+  // Load custom behaviors on mount (disabled for now)
+  useEffect(() => {
+    // Custom behavior file loading disabled for now
+    console.log("Custom behavior loading disabled");
+  }, []);
 
   // Web: wait for CanvasKit (safe bootstrap)
   useEffect(() => {
@@ -59,13 +74,12 @@ export default function GameCanvas({ variant = "standalone" }: Props) {
           Initializing Skia… {Platform.OS === "web" ? (ckReady ? "ckReady ✓" : "waiting for CanvasKit") : "native"}
         </Text>
       ) : (
-        <GameCanvasInner Skia={Skia} variant={variant} />
+        <GameCanvasInner Skia={Skia} variant={variant} behaviorMode={behaviorMode} customBehaviorName={customBehaviorName} />
       )}
     </SizedContainer>
   );
 }
 
-/** Squares itself to the parent width when embedded; otherwise fills like before. */
 function SizedContainer({
   children,
   variant,
@@ -86,13 +100,11 @@ function SizedContainer({
   if (variant === "embedded") {
     return (
       <View onLayout={onLayout} style={{ width: "100%", aspectRatio: 1, overflow: "hidden", alignSelf: "center", backgroundColor: "#0d1117" }}>
-        {/* children will render a Canvas sized to this exact square */}
         {children}
       </View>
     );
   }
 
-  // standalone = old Game tab behavior (flex fill)
   return (
     <View style={{ flex: 1, backgroundColor: "#0d1117", alignItems: "stretch", justifyContent: "center" }}>
       {children}
@@ -100,13 +112,21 @@ function SizedContainer({
   );
 }
 
-function GameCanvasInner({ Skia, variant }: { Skia: any; variant: "embedded" | "standalone" }) {
+function GameCanvasInner({
+  Skia,
+  variant,
+  behaviorMode,
+  customBehaviorName
+}: {
+  Skia: any;
+  variant: "embedded" | "standalone";
+  behaviorMode: "legacy" | "enhanced" | "custom";
+  customBehaviorName?: string;
+}) {
   const { width, height } = useWindowDimensions();
   const { Canvas, Image: SkImageNode, Rect, useImage, Group } = Skia;
 
-  // Figure out the square box and top-left origin:
-  // - embedded: square = parent width, origin at (0,0) -> no extra padding
-  // - standalone: square = screen width, centered vertically (old behavior)
+  // Figure out the square box and top-left origin
   const boxSize = Math.floor(width);
   const x0 = 0;
   const y0 = variant === "embedded" ? 0 : Math.floor((height - boxSize) / 2);
@@ -137,7 +157,7 @@ function GameCanvasInner({ Skia, variant }: { Skia: any; variant: "embedded" | "
     };
   }, [skyImg, frameIdx, boxSize, x0, y0]);
 
-  // Sprite rig + placement (same as your working file)
+  // Sprite rig + placement
   const rig = useMemo(
     () => makeGridRig(idleSheet, 4, 2, 64, 64, 32, 60, { x: 34, y: 12 }),
     []
@@ -152,21 +172,36 @@ function GameCanvasInner({ Skia, variant }: { Skia: any; variant: "embedded" | "
   const HAT_MODS: Record<string, any> = { leaf_hat: hatLeafPng, greater_hat: hatGreaterPng };
   const hatMod = equippedHatId ? HAT_MODS[equippedHatId] : null;
 
-  // New behavior system - automatically adjusts based on glucose levels
+  // Behavior system
   const gliderBehavior = useGliderBehaviorDefinition(idleBlinkSheet);
+  const customBehavior = useBehaviorByName(customBehaviorName || "");
 
-  // Canvas size:
+  // State for behavior feedback
+  const [currentBehaviorState, setCurrentBehaviorState] = useState<AnimationState | null>(null);
+
+  // Choose which behavior to use
+  const activeBehavior = useMemo(() => {
+    switch (behaviorMode) {
+      case "enhanced":
+        return gliderBehavior;
+      case "custom":
+        return customBehavior || gliderBehavior; // Fallback to enhanced if custom not found
+      default:
+        return null; // Legacy mode
+    }
+  }, [behaviorMode, gliderBehavior, customBehavior]);
+
+  // Canvas size
   const canvasW = variant === "embedded" ? boxSize : width;
   const canvasH = variant === "embedded" ? boxSize : height;
 
   return (
     <Canvas style={{ width: canvasW, height: canvasH }}>
-      {/* Backdrop: only useful for standalone/fullscreen; embedded is clipped by the parent square */}
+      {/* Backdrop */}
       {variant === "standalone" && (
         <Rect x={0} y={0} width={canvasW} height={canvasH} color="#0d1117" />
       )}
 
-      {/* STEP 1: Render all content normally */}
       {/* SKY - Background */}
       {skyImg && skyDraw && (
         <SkImageNode image={skyImg} x={skyDraw.drawX} y={skyDraw.drawY} width={skyDraw.drawW} height={skyDraw.drawH} fit="fill" />
@@ -177,42 +212,62 @@ function GameCanvasInner({ Skia, variant }: { Skia: any; variant: "embedded" | "
         <SkImageNode image={nestImg} x={x0} y={y0} width={boxSize} height={boxSize} fit="cover" />
       )}
 
-      {/* CHARACTER + BLINK + HAT - Foreground */}
-      <BehaviorSprite
-        Skia={Skia}
-        rig={rig}
-        behavior={gliderBehavior}
-        x={pivotX}
-        y={groundY}
-        scale={scaleUsed}
-        flipX={false}
-        blinkTex={idleBlinkSheet}
-        blinkEveryMin={4}
-        blinkEveryMax={7}
-        hatTex={hatMod ?? undefined}
-        hatPivot={{ x: 18, y: 20 }}
-        hatOffset={{ dx: -15, dy: 5 }}
-        anchorOverrides={[{ range: [3, 6], headTop: { dx: -1 } }]}
-      />
+      {/* CHARACTER - Choose between legacy and behavior-enabled sprite */}
+      {activeBehavior ? (
+        <BehaviorSprite
+          Skia={Skia}
+          rig={rig}
+          behavior={activeBehavior}
+          x={pivotX}
+          y={groundY}
+          scale={scaleUsed}
+          flipX={false}
+          hatTex={hatMod ?? undefined}
+          hatPivot={{ x: 18, y: 20 }}
+          hatOffset={{ dx: -15, dy: 5 }}
+          anchorOverrides={[{ range: [3, 6], headTop: { dx: -1 } }]}
+          onBehaviorStateChange={setCurrentBehaviorState}
+        />
+      ) : (
+        <AnimatedSprite
+          Skia={Skia}
+          rig={rig}
+          x={pivotX}
+          y={groundY}
+          scale={scaleUsed}
+          flipX={false}
+          blinkTex={idleBlinkSheet}
+          blinkEveryMin={4}
+          blinkEveryMax={7}
+          hatTex={hatMod ?? undefined}
+          hatPivot={{ x: 18, y: 20 }}
+          hatOffset={{ dx: -15, dy: 5 }}
+          anchorOverrides={[{ range: [3, 6], headTop: { dx: -1 } }]}
+        />
+      )}
 
-      {/* STEP 2: Apply tilt-shift effect as overlay */}
+      {/* Tilt-shift effect */}
       <TiltShiftEffect
         Skia={Skia}
         width={canvasW}
         height={canvasH}
-        focusCenter={0.6} // Focus around character center
-        focusWidth={0.4} // Medium focus area
-        blurIntensity={8}  // Reduced blur intensity
+        focusCenter={0.6}
+        focusWidth={0.4}
+        blurIntensity={8}
       >
-        {/* Only render background/midground content for blur - NOT the character */}
         {skyImg && skyDraw && (
           <SkImageNode image={skyImg} x={skyDraw.drawX} y={skyDraw.drawY} width={skyDraw.drawW} height={skyDraw.drawH} fit="fill" />
         )}
         {nestImg && (
           <SkImageNode image={nestImg} x={x0} y={y0} width={boxSize} height={boxSize} fit="cover" />
         )}
-        {/* Character NOT included in blur overlay - it stays sharp */}
       </TiltShiftEffect>
+
+      {/* Debug info for behavior state (remove in production) */}
+      {currentBehaviorState && behaviorMode !== "legacy" && (
+        <Rect x={10} y={10} width={200} height={60} color="rgba(0,0,0,0.7)" />
+        // Note: You'd need to add text rendering here for debug info
+      )}
     </Canvas>
   );
 }

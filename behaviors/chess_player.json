@@ -1,0 +1,96 @@
+{
+  "name": "chess_player",
+  "description": "Character playing chess against himself - moves between sides thinking and making moves",
+  "initialState": "thinking_left",
+  "defaultFps": 6,
+  "defaultBlinkSettings": {
+    "minLoops": 3,
+    "maxLoops": 6
+  },
+  "states": [
+    {
+      "name": "thinking_left",
+      "tag": "idle",
+      "fps": 4
+    },
+    {
+      "name": "reaching_for_piece",
+      "tag": "idle",
+      "loops": 2
+    },
+    {
+      "name": "walking_around",
+      "tag": "idle",
+      "fps": 8,
+      "loops": 3
+    },
+    {
+      "name": "thinking_right",
+      "tag": "idle",
+      "fps": 4
+    },
+    {
+      "name": "reaching_for_piece_right",
+      "tag": "idle",
+      "loops": 2
+    },
+    {
+      "name": "walking_back",
+      "tag": "idle",
+      "fps": 8,
+      "loops": 3
+    }
+  ],
+  "transitions": [
+    {
+      "from": "thinking_left",
+      "to": "reaching_for_piece",
+      "trigger": "timer",
+      "condition": {
+        "minTime": 3000,
+        "maxTime": 8000
+      }
+    },
+    {
+      "from": "reaching_for_piece",
+      "to": "walking_around",
+      "trigger": "loops",
+      "condition": {
+        "afterLoops": 2
+      }
+    },
+    {
+      "from": "walking_around",
+      "to": "thinking_right",
+      "trigger": "loops",
+      "condition": {
+        "afterLoops": 3
+      }
+    },
+    {
+      "from": "thinking_right",
+      "to": "reaching_for_piece_right",
+      "trigger": "timer",
+      "condition": {
+        "minTime": 2000,
+        "maxTime": 6000
+      }
+    },
+    {
+      "from": "reaching_for_piece_right",
+      "to": "walking_back",
+      "trigger": "loops",
+      "condition": {
+        "afterLoops": 2
+      }
+    },
+    {
+      "from": "walking_back",
+      "to": "thinking_left",
+      "trigger": "loops",
+      "condition": {
+        "afterLoops": 3
+      }
+    }
+  ]
+}

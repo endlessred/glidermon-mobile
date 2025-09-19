@@ -1,0 +1,64 @@
+{
+  "name": "restless_idle",
+  "description": "An idle behavior with occasional fidgeting and looking around",
+  "initialState": "idle",
+  "defaultFps": 8,
+  "defaultBlinkSettings": {
+    "tex": "idle8blink.png",
+    "minLoops": 4,
+    "maxLoops": 7
+  },
+  "states": [
+    {
+      "name": "idle",
+      "tag": "idle",
+      "fps": 8
+    },
+    {
+      "name": "fidget",
+      "tag": "idle",
+      "fps": 12,
+      "loops": 1
+    },
+    {
+      "name": "look_around",
+      "tag": "idle",
+      "fps": 6,
+      "loops": 2
+    }
+  ],
+  "transitions": [
+    {
+      "from": "idle",
+      "to": "fidget",
+      "trigger": "random",
+      "condition": {
+        "probability": 0.05
+      }
+    },
+    {
+      "from": "idle",
+      "to": "look_around",
+      "trigger": "random",
+      "condition": {
+        "probability": 0.03
+      }
+    },
+    {
+      "from": "fidget",
+      "to": "idle",
+      "trigger": "loops",
+      "condition": {
+        "afterLoops": 1
+      }
+    },
+    {
+      "from": "look_around",
+      "to": "idle",
+      "trigger": "loops",
+      "condition": {
+        "afterLoops": 2
+      }
+    }
+  ]
+}
