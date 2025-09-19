@@ -1,11 +1,17 @@
 // components/LevelUpOverlay.tsx
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, Animated, Easing } from "react-native";
 import { useLevelUpStore } from "../stores/levelUpStore";
+import UnlockDisplay from "./UnlockDisplay";
+import CutsceneDisplay from "./CutsceneDisplay";
+
+type LevelUpPhase = 'levelup' | 'unlock' | 'cutscene' | 'complete';
 
 export default function LevelUpOverlay() {
   const current = useLevelUpStore((s) => s.current());
   const dismiss = useLevelUpStore((s) => s.dismissCurrent);
+  const [phase, setPhase] = useState<LevelUpPhase>('levelup');
+  const [animationComplete, setAnimationComplete] = useState(false);
 
   // Anim states
   const bgA   = useRef(new Animated.Value(0)).current;     // backdrop fade
@@ -17,9 +23,11 @@ export default function LevelUpOverlay() {
 
   const visible = !!current;
 
-  // Reset anims whenever a new event becomes current
+  // Reset phase and anims whenever a new event becomes current
   useEffect(() => {
     if (!visible) return;
+    setPhase('levelup');
+    setAnimationComplete(false);
     bgA.setValue(0); oldS.setValue(1); oldA.setValue(1);
     newS.setValue(0.6); newA.setValue(0);
     burst.setValue(0);
@@ -35,7 +43,13 @@ export default function LevelUpOverlay() {
         Animated.timing(newA, { toValue: 1, duration: 220, easing: Easing.out(Easing.quad), useNativeDriver: true }),
       ]),
       Animated.timing(burst, { toValue: 1, duration: 400, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-    ]).start();
+      // Hold the burst for a moment, then fade out
+      Animated.delay(200),
+      Animated.timing(burst, { toValue: 0, duration: 300, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+    ]).start(() => {
+      // Animation complete, show continue button
+      setAnimationComplete(true);
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, current?.id]);
 
@@ -77,11 +91,39 @@ export default function LevelUpOverlay() {
     );
   });
 
+  const handleLevelUpContinue = () => {
+    if (current?.unlock) {
+      setPhase('unlock');
+    } else if (current?.cutscene) {
+      setPhase('cutscene');
+    } else {
+      setPhase('complete');
+    }
+  };
+
   const onDismiss = () => {
-    // Quick fade of backdrop for responsiveness
-    Animated.timing(bgA, { toValue: 0, duration: 120, useNativeDriver: true }).start(() => {
-      dismiss();
-    });
+    if (phase === 'complete') {
+      // Quick fade of backdrop for responsiveness
+      Animated.timing(bgA, { toValue: 0, duration: 120, useNativeDriver: true }).start(() => {
+        dismiss();
+      });
+    }
+  };
+
+  const handleUnlockComplete = () => {
+    if (current?.cutscene) {
+      setPhase('cutscene');
+    } else {
+      setPhase('complete');
+    }
+  };
+
+  const handleCutsceneComplete = () => {
+    setPhase('complete');
+  };
+
+  const handleCutsceneSkip = () => {
+    setPhase('complete');
   };
 
   return (
@@ -95,86 +137,191 @@ export default function LevelUpOverlay() {
         pointerEvents: "auto",
       }}
     >
-      {/* Backdrop */}
-      <Animated.View
-        style={{
-          position: "absolute",
-          inset: 0,
-          backgroundColor: "#000",
-          opacity: bgA.interpolate({ inputRange: [0, 1], outputRange: [0, 0.6] }),
-        }}
-      />
-
-      {/* Card */}
-      <Pressable onPress={onDismiss} style={{ alignItems: "center", justifyContent: "center" }}>
-        <View
-          style={{
-           width: 320,
-             paddingVertical: 18,
-             paddingHorizontal: 16,
-             backgroundColor: "#0b1220",
-             borderRadius: 16,
-             borderWidth: 1,
-             borderColor: "#233043",
-             alignItems: "center",
-             overflow: "hidden",
-            // nice soft shadow on web
-            boxShadow: "0 10px 24px rgba(0,0,0,0.35)",
-          }}
-        >
-          <Text style={{ color: "#cfe6ff", fontWeight: "800", fontSize: 18, marginBottom: 6 }}>
-            Level Up!
-          </Text>
-
-          {/* Old badge → out */}
+      {/* Level Up Animation Phase */}
+      {phase === 'levelup' && (
+        <>
+          {/* Backdrop */}
           <Animated.View
             style={{
               position: "absolute",
-              top: 54,
-              transform: [{ scale: oldS }],
-              opacity: oldA,
+              inset: 0,
+              backgroundColor: "#000",
+              opacity: bgA.interpolate({ inputRange: [0, 1], outputRange: [0, 0.6] }),
             }}
-          >
-            <Badge level={oldLv} dimmed />
-          </Animated.View>
+          />
 
-          {/* New badge → in */}
+          {/* Card */}
+          <View style={{ alignItems: "center", justifyContent: "center", padding: 20 }}>
+            <View
+              style={{
+               width: 360,
+                 paddingVertical: 24,
+                 paddingHorizontal: 20,
+                 backgroundColor: "#0b1220",
+                 borderRadius: 20,
+                 borderWidth: 2,
+                 borderColor: "#233043",
+                 alignItems: "center",
+                 overflow: "hidden",
+                // nice soft shadow on web
+                boxShadow: "0 15px 35px rgba(0,0,0,0.4)",
+              }}
+            >
+              <Text style={{ color: "#cfe6ff", fontWeight: "800", fontSize: 24, marginBottom: 8 }}>
+                Level Up!
+              </Text>
+
+              {/* Badge Animation Area */}
+              <View style={{ height: 140, justifyContent: "center", alignItems: "center", position: "relative" }}>
+                {/* Old badge → out */}
+                <Animated.View
+                  style={{
+                    position: "absolute",
+                    transform: [{ scale: oldS }],
+                    opacity: oldA,
+                  }}
+                >
+                  <Badge level={oldLv} dimmed />
+                </Animated.View>
+
+                {/* New badge → in */}
+                <Animated.View
+                  style={{
+                    transform: [{ scale: newS }],
+                    opacity: newA,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    position: "relative",
+                  }}
+                >
+                  <Badge level={newLv} />
+                  <View style={{
+                    position: "absolute",
+                    top: 55, // Center of the 110px badge
+                    left: 55,
+                    width: 0,
+                    height: 0,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}>
+                    {burstNodes}
+                  </View>
+                </Animated.View>
+              </View>
+
+              {/* Rewards */}
+              {!!rewardsLine && (
+                <View style={{
+                  backgroundColor: "#1a2a3d",
+                  paddingHorizontal: 16,
+                  paddingVertical: 8,
+                  borderRadius: 12,
+                  marginTop: 8,
+                  borderWidth: 1,
+                  borderColor: "#2d4356",
+                }}>
+                  <Text style={{ color: "#9cc4e4", fontSize: 14, fontWeight: "600", textAlign: "center" }}>
+                    {rewardsLine}
+                  </Text>
+                </View>
+              )}
+
+              {/* Continue Button */}
+              {animationComplete && (
+                <Pressable
+                  onPress={handleLevelUpContinue}
+                  style={{
+                    marginTop: 20,
+                    paddingVertical: 12,
+                    paddingHorizontal: 24,
+                    backgroundColor: "#4a90e2",
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: "#5ba3f5",
+                  }}
+                >
+                  <Text style={{ color: "#ffffff", fontWeight: "700", fontSize: 16 }}>
+                    Continue
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+          </View>
+        </>
+      )}
+
+      {/* Unlock Display Phase */}
+      {phase === 'unlock' && current?.unlock && (
+        <UnlockDisplay
+          unlock={current.unlock}
+          onComplete={handleUnlockComplete}
+        />
+      )}
+
+      {/* Cutscene Phase */}
+      {phase === 'cutscene' && current?.cutscene && (
+        <CutsceneDisplay
+          frames={current.cutscene.frames}
+          onComplete={handleCutsceneComplete}
+          onSkip={handleCutsceneSkip}
+        />
+      )}
+
+      {/* Complete Phase - Allow dismissal */}
+      {phase === 'complete' && (
+        <>
+          {/* Backdrop */}
           <Animated.View
             style={{
-              marginTop: 36,
-              transform: [{ scale: newS }],
-              opacity: newA,
-              alignItems: "center",
-              justifyContent: "center",
+              position: "absolute",
+              inset: 0,
+              backgroundColor: "#000",
+              opacity: bgA.interpolate({ inputRange: [0, 1], outputRange: [0, 0.6] }),
             }}
-          >
-            <View style={{ position: "absolute" }}>{burstNodes}</View>
-            <Badge level={newLv} />
-          </Animated.View>
+          />
 
-          {!!rewardsLine && (
-            <Text style={{ color: "#9cc4e4", marginTop: 10, fontWeight: "600" }}>{rewardsLine}</Text>
-          )}
+          {/* Final dismissal card */}
+          <Pressable onPress={onDismiss} style={{ alignItems: "center", justifyContent: "center" }}>
+            <View
+              style={{
+               width: 320,
+                 paddingVertical: 18,
+                 paddingHorizontal: 16,
+                 backgroundColor: "#0b1220",
+                 borderRadius: 16,
+                 borderWidth: 1,
+                 borderColor: "#233043",
+                 alignItems: "center",
+                 overflow: "hidden",
+                // nice soft shadow on web
+                boxShadow: "0 10px 24px rgba(0,0,0,0.35)",
+              }}
+            >
+              <Text style={{ color: "#cfe6ff", fontWeight: "800", fontSize: 18, marginBottom: 6 }}>
+                Ready to Continue!
+              </Text>
 
-          <View
-            style={{
-              marginTop: 14,
-              paddingVertical: 8,
-              paddingHorizontal: 14,
-              backgroundColor: "#233043",
-              borderRadius: 10,
-              borderWidth: 1,
-              borderColor: "#2f4661",
-            }}
-          >
-            <Text style={{ color: "#ffecd1", fontWeight: "800" }}>Continue</Text>
-          </View>
+              <View
+                style={{
+                  marginTop: 14,
+                  paddingVertical: 8,
+                  paddingHorizontal: 14,
+                  backgroundColor: "#233043",
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: "#2f4661",
+                }}
+              >
+                <Text style={{ color: "#ffecd1", fontWeight: "800" }}>Continue</Text>
+              </View>
 
-          <Text style={{ color: "#7f93a8", fontSize: 12, marginTop: 6 }}>
-            Tap anywhere to continue
-          </Text>
-        </View>
-      </Pressable>
+              <Text style={{ color: "#7f93a8", fontSize: 12, marginTop: 6 }}>
+                Tap anywhere to continue
+              </Text>
+            </View>
+          </Pressable>
+        </>
+      )}
     </View>
   );
 }

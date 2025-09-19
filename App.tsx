@@ -14,6 +14,7 @@ import { useSettingsStore } from "./stores/settingsStore";
 import { startEgvsSimulator, stopEgvsSimulator } from "./src/simCgms";
 import ToastHost from "./components/ToastHost";
 import LevelUpOverlay from "./components/LevelUpOverlay";
+import LevelUpTestButton from "./components/LevelUpTestButton";
 
 const TABS = ["HUD", "DEXCOM", "GAME", "SHOP", "EQUIP", "SETTINGS"] as const;
 type Tab = typeof TABS[number];
@@ -139,6 +140,7 @@ export default function App() {
       {/* global overlays */}
       <ToastHost />
       <LevelUpOverlay />
+      <LevelUpTestButton />
     </SafeAreaView>
   );
 }

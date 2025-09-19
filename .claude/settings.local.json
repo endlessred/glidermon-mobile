@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(pnpm expo start:*)"
+      "Bash(pnpm expo start:*)",
+      "Bash(pnpm tsc:*)"
     ],
     "deny": [],
     "ask": []
