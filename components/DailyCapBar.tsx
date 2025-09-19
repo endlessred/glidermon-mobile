@@ -2,51 +2,32 @@ import React, { useMemo } from "react";
 import { View, Text } from "react-native";
 
 type Props = {
-  earned: number;  // dailyEarned
-  cap: number;     // dailyCap
-  rested?: number; // restedBank (optional)
-  style?: any;
+  value: number;  // earned today that counts toward cap
+  cap: number;    // daily cap
+  rested: number; // overflow bucket (not in bar, just shown)
 };
 
-export default function DailyCapBar({ earned, cap, rested = 0, style }: Props) {
+export default function DailyCapBar({ value, cap, rested }: Props) {
   const pct = useMemo(() => {
-    if (!cap || cap <= 0) return 0;
-    return Math.max(0, Math.min(1, earned / cap));
-  }, [earned, cap]);
+    const denom = Math.max(1, cap);
+    const p = Math.max(0, Math.min(1, value / denom));
+    return p;
+  }, [value, cap]);
 
   return (
-    <View
-      style={[
-        {
-          backgroundColor: "#161b22",
-          padding: 12,
-          borderRadius: 12,
-          borderWidth: 1,
-          borderColor: "#233043",
-          gap: 8,
-        },
-        style,
-      ]}
-    >
-      <View style={{ flexDirection: "row", alignItems: "center" }}>
-        <Text style={{ color: "#cfe6ff", fontWeight: "700", marginRight: 8 }}>
-          Daily Cap
-        </Text>
+    <View style={{ gap: 6 }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+        <Text style={{ color: "#cfe6ff", fontWeight: "700" }}>Daily Acorns</Text>
         <Text style={{ color: "#9aa6b2" }}>
-          {Math.min(earned, cap).toLocaleString()} / {cap.toLocaleString()}
+          {value.toLocaleString()} / {cap.toLocaleString()}
         </Text>
-        <View style={{ flex: 1 }} />
-        {rested > 0 && (
-          <Text style={{ color: "#9cc4e4" }}>+ Rested {rested.toLocaleString()}</Text>
-        )}
       </View>
 
-      {/* thin progress bar */}
       <View
         style={{
           height: 8,
-          backgroundColor: "#0e141b",
-          borderRadius: 6,
+          backgroundColor: "#0f1720",
+          borderRadius: 8,
           overflow: "hidden",
           borderWidth: 1,
           borderColor: "#233043",
@@ -54,12 +35,16 @@ export default function DailyCapBar({ earned, cap, rested = 0, style }: Props) {
       >
         <View
           style={{
-            height: "100%",
             width: `${pct * 100}%`,
-            backgroundColor: "#2563eb", // blue accent
+            height: "100%",
+            backgroundColor: "#10b981",
           }}
         />
       </View>
+
+      <Text style={{ color: "#7f93a8", fontSize: 12 }}>
+        Rested bonus bank: {rested.toLocaleString()} 🌰
+      </Text>
     </View>
   );
 }

@@ -1,93 +1,84 @@
-// screens/HudScreen.tsx
-import React, { useMemo } from "react";
-import { View, Text } from "react-native";
-
-import { useHudVM } from "../hooks/useHudVM";
+import React from "react";
+import { View, Text, ScrollView, useWindowDimensions } from "react-native";
 import { useProgressionStore } from "../stores/progressionStore";
-import { useSettingsStore } from "../stores/settingsStore";
-
 import AcornBadge from "../components/AcornBadge";
 import LevelBar from "../components/LevelBar";
 import DailyCapBar from "../components/DailyCapBar";
+import { useHudVM } from "../hooks/useHudVM";
+import GameCanvas from "../view/GameCanvas";
 
 export default function HudScreen() {
-  // --- progression (currency + leveling) ---
-  const acorns   = useProgressionStore((s) => s.acorns);
-  const level    = useProgressionStore((s) => s.level);
-  const xpNow    = useProgressionStore((s) => s.xpIntoCurrent);
-  const xpNext   = useProgressionStore((s) => s.nextXp);
-  const daily    = useProgressionStore((s) => s.dailyEarned);
-  const cap      = useProgressionStore((s) => s.dailyCap);
-  const rested   = useProgressionStore((s) => s.restedBank);
+  const { width } = useWindowDimensions();
 
-  // --- current glucose (same pipeline as simulator / Dexcom) ---
+  // Progression (live)
+  const acorns     = useProgressionStore(s => s.acorns);
+  const level      = useProgressionStore(s => s.level);
+  const xpInto     = useProgressionStore(s => s.xpIntoCurrent);
+  const nextXp     = useProgressionStore(s => s.nextXp);
+  const dailyEarn  = useProgressionStore(s => s.dailyEarned);
+  const dailyCap   = useProgressionStore(s => s.dailyCap);
+  const restedBank = useProgressionStore(s => s.restedBank);
+
+  // Glucose VM (null-safe)
   const { mgdl, trendCode, minutesAgo } = useHudVM();
 
-  // --- user thresholds + sim badge ---
-  const lowThr   = useSettingsStore((s) => s.low);
-  const highThr  = useSettingsStore((s) => s.high);
-  const simOn    = useSettingsStore((s) => s.useSimulator);
-
-  const status = useMemo(() => {
-    if (mgdl == null) return { text: "—", color: "#9aa6b2", state: "NO DATA" as const };
-    if (mgdl < lowThr)  return { text: "LOW",  color: "#ef4444", state: "LOW" as const };
-    if (mgdl > highThr) return { text: "HIGH", color: "#f59e0b", state: "HIGH" as const };
-    return { text: "IN RANGE", color: "#22c55e", state: "IN" as const };
-  }, [mgdl, lowThr, highThr]);
-
-  const trendText = trendCode === 2 ? "↑ rising"
-                   : trendCode === 0 ? "↓ falling"
-                   : trendCode === 1 ? "→ flat"
-                   : "·";
+  // Optional: slightly smaller canvas on tiny screens
+  const canvasScale = width < 380 ? 0.9 : 1;
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#0e141b" }}>
-      {/* Header panel: currency + level */}
-      <View style={{ padding: 12, gap: 12 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-          <AcornBadge acorns={acorns} />
-          {simOn && (
-            <View style={{
-              paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999,
-              backgroundColor: "#1f2937", borderWidth: 1, borderColor: "#334155"
-            }}>
-              <Text style={{ color: "#93c5fd", fontWeight: "700" }}>SIM</Text>
-            </View>
-          )}
+    <ScrollView
+      style={{ flex: 1, backgroundColor: "#0d1117" }}
+      contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: 24 }}
+    >
+      {/* ===== Progress Section ===== */}
+      <View style={{ gap: 10 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <AcornBadge count={acorns} />
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <LevelBar level={level} current={xpInto} next={nextXp} />
+          </View>
         </View>
-
-        <LevelBar level={level} xpNow={xpNow} xpNext={xpNext} />
-        <DailyCapBar earned={daily} cap={cap} rested={rested} />
+        <DailyCapBar value={dailyEarn} cap={dailyCap} rested={restedBank} />
       </View>
 
-      {/* Glucose card */}
-      <View style={{
-        marginHorizontal: 12, marginBottom: 12,
-        backgroundColor: "#161b22", padding: 16, borderRadius: 12,
-        borderWidth: 1, borderColor: "#233043", gap: 8
-      }}>
-        <Text style={{ color: "#cfe6ff", fontWeight: "700", marginBottom: 6 }}>
-          Current Glucose
+      {/* ===== Game Canvas (moved here) ===== */}
+      <View style={{ alignItems: "center", justifyContent: "center", transform: [{ scale: canvasScale }] }}>
+        <GameCanvas variant="embedded" />
+      </View>
+
+      {/* ===== Glucose Section ===== */}
+      <View style={{ gap: 6, marginTop: 4 }}>
+        <Text style={{ color: "#cfe6ff", fontWeight: "700", fontSize: 16 }}>
+          Glucose
         </Text>
 
-        <View style={{ flexDirection: "row", alignItems: "baseline", gap: 10 }}>
-          <Text style={{ color: "#cfe6ff", fontSize: 28, fontWeight: "800" }}>
-            {mgdl != null ? `${mgdl}` : "—"}
+        <View
+          style={{
+            backgroundColor: "#161b22",
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: "#233043",
+            paddingVertical: 10,
+            paddingHorizontal: 12,
+          }}
+        >
+          <Text style={{ color: "white", fontSize: 28, fontWeight: "800" }}>
+            {mgdl != null ? `${mgdl} mg/dL` : "—"}
           </Text>
-          <Text style={{ color: "#9aa6b2" }}>mg/dL</Text>
-          <View style={{ flex: 1 }} />
-          <Text style={{ color: status.color, fontWeight: "700" }}>{status.text}</Text>
+          <Text style={{ color: "#9aa6b2", marginTop: 2 }}>
+            Trend: {renderTrend(trendCode)} · {minutesAgo != null ? `${minutesAgo}m ago` : "no data"}
+          </Text>
         </View>
-
-        <Text style={{ color: "#9aa6b2" }}>
-          {trendText}
-          {minutesAgo != null ? ` • ${minutesAgo}m ago` : ""}
-        </Text>
-
-        <Text style={{ color: "#718096", fontSize: 12 }}>
-          Thresholds: {lowThr}–{highThr} mg/dL
-        </Text>
       </View>
-    </View>
+    </ScrollView>
   );
+}
+
+function renderTrend(t: 0 | 1 | 2 | 3) {
+  switch (t) {
+    case 0: return "↓";
+    case 1: return "→";
+    case 2: return "↑";
+    default: return "—";
+  }
 }

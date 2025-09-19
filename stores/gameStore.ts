@@ -1,84 +1,112 @@
 // stores/gameStore.ts
 import { create } from "zustand";
-import {
-  defaultState, type GameState,
-  applyEgvsTick, updateNpcUnlocks, checkStale, updateNpcUnlocksByLevel, needsDailyReset, applyDailyReset, needsWeeklyReset, applyWeeklyReset
-} from "../core/engine";
-import { useProgressionStore } from "./progressionStore"; // ← add
+import { useProgressionStore, TrendCode } from "./progressionStore";
+import { applyEgvsTick } from "../core/engine/scoring";
 
-type UIState = {
-  focusedNpc?: "vendor" | "healer" | "builder";
-  toasts: { id: string; text: string; ts: number }[];
+// Minimal engine shape that satisfies scoring.ts reads
+type Engine = {
+  stale: boolean;
+  staleSinceMs?: number;
+  lastTickMs?: number;
+  glucoseState: "IN_RANGE" | "LOW" | "HIGH";
+  trail: Array<{ ts: number; mgdl: number }>;
+  lastBg?: number;
+
+  // scoring.ts reads these:
+  points: number;
+  xp: number;
+  level: number;
+  streak: number;
+  buffs: { focusUntil: number | null };
+  tirSamplesToday: { inRange: number; total: number };
+  unicornsToday: number;
+
+  // optional last event bookkeeping
+  lastEvent?: string;
+  lastDelta?: number;
 };
 
+const makeDefaultEngine = (): Engine => ({
+  stale: false,
+  staleSinceMs: undefined,
+  lastTickMs: undefined,
+  glucoseState: "IN_RANGE",
+  trail: [],
+  lastBg: undefined,
+
+  points: 0,
+  xp: 0,
+  level: 1,
+  streak: 0,
+  buffs: { focusUntil: null },
+  tirSamplesToday: { inRange: 0, total: 0 },
+  unicornsToday: 0,
+});
+
 type GameStore = {
-  engine: GameState;
-  ui: UIState;
-  enqueueToast: (text: string) => void;
-  clearOldToasts: () => void;
-  onEgvs: (mgdl: number, trendCode: number, epochSec: number) => void;
+  engine: Engine;
+  setEngine: (g: Partial<Engine> | Engine) => void;
+
+  /** Primary entrypoint for ticks from simulator/Dexcom. */
+  onEgvs: (mgdl: number, trendCode: TrendCode, epochSec: number) => void;
+
+  /** Re-sync engine’s level/xp/points to match progression store. */
   syncProgressionToEngine: () => void;
+
+  lastDelta?: number;
+  lastEvent?: string;
 };
 
 export const useGameStore = create<GameStore>((set, get) => ({
-  engine: defaultState,
-  ui: { toasts: [] },
+  engine: makeDefaultEngine(),
 
-  syncProgressionToEngine: () => {
-  const s = get().engine;
-  const prog = require("./progressionStore").useProgressionStore.getState();
-  s.points = prog.acorns;
-  s.level  = prog.level;
-  (s as any).xp = prog.lifetimeXp;
-  // keep NPC unlocks in sync with level
-  const { updateNpcUnlocksByLevel } = require("../core/engine/npc");
-  updateNpcUnlocksByLevel(s, prog.level);
-  set({ engine: { ...s } });
-},
-
-  enqueueToast: (text) =>
-    set((s) => ({
-      ui: { ...s.ui, toasts: [...s.ui.toasts, { id: Math.random().toString(36).slice(2), text, ts: Date.now() }] }
-    })),
-
-  clearOldToasts: () =>
-    set((s) => ({
-      ui: { ...s.ui, toasts: s.ui.toasts.filter(t => Date.now() - t.ts < 2500) }
-    })),
+  setEngine: (g) => {
+    const cur = get().engine ?? makeDefaultEngine();
+    const next = ("trail" in g || "points" in g || "xp" in g || "level" in g)
+      ? { ...cur, ...(g as Engine) }
+      : { ...cur, ...(g as Partial<Engine>) };
+    set({ engine: next });
+  },
 
   onEgvs: (mgdl, trendCode, epochSec) => {
-  const s = get().engine;
-  
+    // 1) Award via progression (currency/xp/levels + overlays)
+    useProgressionStore.getState().onEgvsTick(mgdl, trendCode, epochSec);
 
-  // Engine tick without awarding
-  const { event } = applyEgvsTick(s, {
-    mgdl,
-    trendPer5Min: trendCode === 2 ? +2 : trendCode === 0 ? -2 : 0,
-    tsMs: epochSec * 1000,
-    award: false,
-  });
+    // 2) Maintain engine state for HUD/FX (no double awards)
+    const eng = get().engine ?? makeDefaultEngine();
 
-  // Progression earn (single source of truth)
-  useProgressionStore.getState().onEgvs(mgdl, (trendCode as any) ?? 1, epochSec * 1000);
+    const { delta, event } = applyEgvsTick(eng as any, {
+      mgdl,
+      trendPer5Min: trendCode,
+      tsMs: epochSec * 1000,
+      award: false, // <<< critical
+    });
 
-  // Resets (engine keys)
-  const d = new Date(epochSec * 1000);
-  const dayKey  = d.toISOString().slice(0,10);
-  const weekKey = d.toISOString().slice(0,7) + "-W";
-  if (needsDailyReset(s, dayKey))  applyDailyReset(s, dayKey);
-  if (needsWeeklyReset(s, weekKey)) applyWeeklyReset(s, weekKey);
+    // scoring mutates eng internally; we also ensure a short trail
+    if (!Array.isArray(eng.trail)) eng.trail = [];
+    eng.trail = [...eng.trail, { ts: epochSec * 1000, mgdl }].slice(-12);
 
-  // Mirror progression → engine for legacy UI
-  const prog = useProgressionStore.getState();
-  s.points = prog.acorns;
-  s.level  = prog.level;
-  (s as any).xp = prog.lifetimeXp;
+    set({ engine: eng, lastDelta: delta, lastEvent: event });
+  },
 
-  updateNpcUnlocksByLevel(s, prog.level);
-  checkStale(s, Date.now());
-  set({ engine: { ...s, /* maybe stash lastEvent if you want */ } });
+  /** Map progression → engine so HUD/scoring have consistent numbers. */
+  syncProgressionToEngine: () => {
+    const p = useProgressionStore.getState();
+    const eng = get().engine ?? makeDefaultEngine();
 
-  if (event === "UNICORN") get().enqueueToast("🦄 Unicorn!");
-  if (event === "RECOVER") get().enqueueToast("✅ Recovered");
-},
+    // scoring’s xp/points relation: in scoring, xp = floor(points/100).
+    // We’ll mirror progression.xpTotal to engine.xp, and pick a points that matches.
+    const xp = Math.max(0, Math.floor(p.xpTotal));
+    const points = xp * 100;
+
+    const patched: Engine = {
+      ...eng,
+      level: p.level,
+      xp,
+      points,
+      // keep trail and other runtime fields as-is
+    };
+
+    set({ engine: patched });
+  },
 }));

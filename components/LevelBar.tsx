@@ -3,51 +3,31 @@ import { View, Text } from "react-native";
 
 type Props = {
   level: number;
-  xpNow: number;   // xp toward next level
-  xpNext: number;  // xp required to reach next
-  style?: any;
-  showNumbers?: boolean; // default true
+  current: number; // xp into current level
+  next: number;    // xp needed to reach next level
 };
 
-export default function LevelBar({ level, xpNow, xpNext, style, showNumbers = true }: Props) {
+export default function LevelBar({ level, current, next }: Props) {
   const pct = useMemo(() => {
-    if (!xpNext || xpNext <= 0) return 0;
-    return Math.max(0, Math.min(1, xpNow / xpNext));
-  }, [xpNow, xpNext]);
-
-  const pctText = Math.round(pct * 100) + "%";
+    const denom = Math.max(1, next);
+    const p = Math.max(0, Math.min(1, current / denom));
+    return p;
+  }, [current, next]);
 
   return (
-    <View
-      style={[
-        {
-          backgroundColor: "#161b22",
-          padding: 12,
-          borderRadius: 12,
-          borderWidth: 1,
-          borderColor: "#233043",
-        },
-        style,
-      ]}
-    >
-      <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
-        <Text style={{ color: "#cfe6ff", fontWeight: "800", fontSize: 16, marginRight: 8 }}>
-          Lv {level}
+    <View style={{ gap: 4 }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+        <Text style={{ color: "#cfe6ff", fontWeight: "800" }}>Level {level}</Text>
+        <Text style={{ color: "#9aa6b2" }}>
+          {Math.floor(current)}/{next} XP
         </Text>
-        {showNumbers && (
-          <Text style={{ color: "#9aa6b2" }}>
-            {xpNow.toLocaleString()} / {xpNext.toLocaleString()}
-          </Text>
-        )}
-        <View style={{ flex: 1 }} />
-        <Text style={{ color: "#9cc4e4" }}>{pctText}</Text>
       </View>
 
       <View
         style={{
           height: 10,
-          backgroundColor: "#0e141b",
-          borderRadius: 6,
+          backgroundColor: "#0f1720",
+          borderRadius: 8,
           overflow: "hidden",
           borderWidth: 1,
           borderColor: "#233043",
@@ -55,9 +35,9 @@ export default function LevelBar({ level, xpNow, xpNext, style, showNumbers = tr
       >
         <View
           style={{
-            height: "100%",
             width: `${pct * 100}%`,
-            backgroundColor: "#2ea043", // cozy green
+            height: "100%",
+            backgroundColor: "#60a5fa",
           }}
         />
       </View>

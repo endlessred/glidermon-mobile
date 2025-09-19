@@ -1,11 +1,11 @@
-// stores/useAutoPruneToasts.ts
 import { useEffect } from "react";
-import { useGameStore } from "../stores/gameStore";
+import { useToastStore } from "./toastStore";
 
-export function useAutoPruneToasts(intervalMs = 600) {
-  const clearOldToasts = useGameStore((s) => s.clearOldToasts);
+/** Auto-prunes toasts older than ttlMs at a small interval. */
+export default function useAutoPruneToasts(ttlMs = 1600, intervalMs = 200) {
+  const clearExpired = useToastStore(s => s.clearExpired);
   useEffect(() => {
-    const id = setInterval(() => clearOldToasts(), intervalMs);
+    const id = setInterval(() => clearExpired(ttlMs), intervalMs);
     return () => clearInterval(id);
-  }, [clearOldToasts, intervalMs]);
+  }, [ttlMs, intervalMs, clearExpired]);
 }

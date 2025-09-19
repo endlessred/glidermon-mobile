@@ -1,282 +1,229 @@
+// stores/progressionStore.ts
+import { Platform } from "react-native";
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useLevelUpStore } from "./levelUpStore";
 
-// ---- Tunables (safe to tweak) ----
-const CFG = {
-  perMin: {
-    inFlat: 10,    // in-range & flat/slight
-    inGentle: 7,   // in-range & gentle up/down
-    out: 2,        // out-of-range floor (never 0)
-  },
-  dailyCap: 3000,            // max Acorns to wallet per day (XP ignores the cap)
-  stableWindowMin: 20,       // minutes needed for "stable" bounty
-  stableWindowsPerDay: 3,    // max times per day you can claim that bounty
-  bounty: {
-    stable20: 300,
-    recoverHigh: 350,
-    recoverLow: 400,
-  },
-  level: {
-    base: 100,    // XP to go 1->2
-    growth: 1.5,  // XP_N = base * N^growth
-  }
-};
+/** Trend codes aligned with your pipeline (0=down,1=flat,2=up,3=uncertain) */
+export type TrendCode = 0 | 1 | 2 | 3;
 
-// Bounds helper: use settings if present, else defaults.
-function getBounds(): { low: number; high: number } {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const st = require("./settingsStore").useSettingsStore;
-    const low = st.getState()?.bounds?.low ?? st.getState()?.lowBound ?? st.getState()?.low ?? 70;
-    const high = st.getState()?.bounds?.high ?? st.getState()?.highBound ?? st.getState()?.high ?? 180;
-    return { low, high };
-  } catch {
-    return { low: 70, high: 180 };
-  }
-}
-
-// Trend mapping (Dexcom-ish): 0 down, 1 flat, 2 up, 3 unknown
-type TrendCode = 0 | 1 | 2 | 3;
-type Bucket = "LOW" | "IN" | "HIGH";
-
-function bucketOf(mgdl: number | null, low: number, high: number): Bucket {
-  if (mgdl == null) return "IN";
-  if (mgdl < low) return "LOW";
-  if (mgdl > high) return "HIGH";
-  return "IN";
-}
-function isFlat(trend: TrendCode) { return trend === 1; }
-function isGentle(trend: TrendCode) { return trend === 0 || trend === 2 || trend === 3; }
-
-// XP math
-function xpForLevelUp(level: number) {
-  // XP needed to go level -> level+1
-  return Math.round(CFG.level.base * Math.pow(level, CFG.level.growth));
-}
-function applyLeveling(lifetimeXp: number, startLevel: number) {
-  let lvl = Math.max(1, startLevel);
-  let xpLeft = lifetimeXp;
-  // compute cumulative threshold by subtracting step costs downward
-  let needed = xpForLevelUp(lvl);
-  // If you want large XP, this loop is fine (levels are small numbers)
-  while (xpLeft >= needed) {
-    xpLeft -= needed;
-    lvl += 1;
-    needed = xpForLevelUp(lvl);
-  }
-  // xpIntoCurrent = what's left toward the next level
-  const xpIntoCurrent = xpForLevelUp(lvl) - needed + xpLeft; // normalize
-  const nextReq = needed;
-  return { level: lvl, nextReq, xpIntoCurrent };
-}
-
-export type ProgressionState = {
-  // Wallet & XP
-  acorns: number;          // spendable
-  lifetimeXp: number;      // never spent
+type ProgressionState = {
+  // currency & leveling
+  acorns: number;
   level: number;
-  nextXp: number;          // XP needed to reach next level from current
-  xpIntoCurrent: number;   // progress bar helper
+  xpIntoCurrent: number; // progress within current level
+  nextXp: number;        // XP needed to go to next level
+  xpTotal: number;       // lifetime XP (canonical)
+  /** Back-compat for older code */
+  lifetimeXp: number;
 
-  // Day & caps
-  dailyEarned: number;     // acorns earned today (subject to cap)
-  dailyCap: number;        // exposed so UI can show it
-  restedBank: number;      // overflow saved for future days
-  lastResetDay: string;    // YYYY-MM-DD local
+  // daily economy
+  dailyEarned: number;
+  dailyCap: number;
+  restedBank: number;
+  lastResetDay: string; // YYYY-MM-DD
 
-  // Bounties & streaks
-  stableStreakMin: number;
-  stableWindowsAwarded: number; // today
-  inHighEpisode: boolean;
-  inLowEpisode: boolean;
+  // hydration status
+  _rehydrated: boolean;
 
-  // Tick bookkeeping
-  lastTickMs: number | null; // for elapsed minutes scaling
-  lastBucket: Bucket | null;
+  // actions
+  spend: (cost: number) => boolean;
+  grantAcorns: (n: number) => void; // not capped
+  resetDailyIfNeeded: () => void;
+  resetProgression: () => void;
 
-  // API
-  onEgvs: (mgdl: number, trend: TrendCode, tsMs: number) => void;
-  spend: (amount: number) => boolean;
-  addAcorns: (amount: number, reason?: string) => void; // admin/additive
-  resetDailyIfNeeded: (now: Date) => void;
-  resetProgression: () => void; 
+  // core tick
+  onEgvsTick: (mgdl: number, trend: TrendCode, epochSec: number) => void;
 };
 
-function todayKey(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${dd}`;
+// -------------------- Tunables --------------------
+const DAILY_CAP_DEFAULT = 2400;
+const BASE_ACORNS_IN_RANGE = 10;
+const BASE_ACORNS_GENTLE   = 7;
+const BASE_ACORNS_FLOOR    = 2;
+const XP_PER_ACORN_TICK = 1;
+const ACORNS_PER_LEVEL = 50;
+const LOW_MGDL = 70;
+const HIGH_MGDL = 180;
+
+// Persisted schema version — bump if you change shapes
+const STORE_VERSION = 1;
+
+const xpNeededForLevel = (lvl: number) => {
+  if (lvl <= 1) return 100;
+  return Math.round(100 + (lvl - 1) * 55 * 1.0);
+};
+const ymd = (d = new Date()) => {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
+
+function consumeXpIntoLevels(startLevel: number, startCarryXp: number) {
+  let lvl = startLevel, carry = startCarryXp, leveled = 0;
+  while (carry >= xpNeededForLevel(lvl)) {
+    carry -= xpNeededForLevel(lvl);
+    lvl += 1;
+    leveled += 1;
+  }
+  return { level: lvl, xpOverflow: carry, leveled };
+}
+function calcTickAcorns(mgdl: number, trend: TrendCode): number {
+  const inRange = mgdl >= LOW_MGDL && mgdl <= HIGH_MGDL;
+  if (!inRange) return BASE_ACORNS_FLOOR;
+  if (trend === 1) return BASE_ACORNS_IN_RANGE;               // flat
+  if (trend === 0 || trend === 2) return BASE_ACORNS_GENTLE;  // gentle down/up
+  return BASE_ACORNS_GENTLE;
 }
 
-const capForLevel = (level: number) => {
-  if (level < 5) return 1500;
-  if (level < 10) return 2500;
-  return 3000;
-};
+// Choose platform storage
+const storage = createJSONStorage(() =>
+  Platform.OS === "web" ? localStorage : AsyncStorage
+);
 
 export const useProgressionStore = create<ProgressionState>()(
   persist(
     (set, get) => ({
+      // -------- initial --------
       acorns: 0,
-      lifetimeXp: 0,
       level: 1,
-      nextXp: xpForLevelUp(1),
       xpIntoCurrent: 0,
+      nextXp: xpNeededForLevel(1),
+      xpTotal: 0,
+      lifetimeXp: 0,
 
       dailyEarned: 0,
-      dailyCap: CFG.dailyCap,
+      dailyCap: DAILY_CAP_DEFAULT,
       restedBank: 0,
-      lastResetDay: todayKey(new Date()),
+      lastResetDay: ymd(),
 
-      stableStreakMin: 0,
-      stableWindowsAwarded: 0,
-      inHighEpisode: false,
-      inLowEpisode: false,
+      _rehydrated: false,
 
-      lastTickMs: null,
-      lastBucket: null,
-      resetProgression: () => {
-  const now = new Date();
-  const dayKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
-  set({
-    acorns: 0,
-    lifetimeXp: 0,
-    level: 1,
-    nextXp: xpForLevelUp(1),
-    xpIntoCurrent: 0,
-    dailyEarned: 0,
-    restedBank: 0,
-    lastResetDay: dayKey,
-    stableStreakMin: 0,
-    stableWindowsAwarded: 0,
-    inHighEpisode: false,
-    inLowEpisode: false,
-  });
-},
-
-      resetDailyIfNeeded: (now: Date) => {
-        const k = todayKey(now);
-        if (get().lastResetDay !== k) {
-          set({
-            dailyEarned: 0,
-            stableStreakMin: 0,
-            stableWindowsAwarded: 0,
-            lastResetDay: k,
-            dailyCap: capForLevel(get().level),
-            // drip a bit of rested into wallet at reset (optional)
-            // acorns: get().acorns + Math.min(500, get().restedBank),
-            // restedBank: Math.max(0, get().restedBank - Math.min(500, get().restedBank)),
-          });
-        }
-      },
-
-      onEgvs: (mgdl, trend, tsMs) => {
-        const now = new Date(tsMs);
-        get().resetDailyIfNeeded(now);
-
-        const { low, high } = getBounds();
-        const bucket = bucketOf(mgdl, low, high);
-
-        // elapsed minutes since last tick (scale awards)
-        const last = get().lastTickMs ?? tsMs;
-        const mins = Math.max(0, Math.min(10, Math.round((tsMs - last) / 60000))) || 1; // default 1
-
-        // per-minute earn
-        let perMin = CFG.perMin.out;
-        if (bucket === "IN") perMin = isFlat(trend) ? CFG.perMin.inFlat : CFG.perMin.inGentle;
-
-        const rawEarn = perMin * mins;
-
-        // wallet subject to daily cap; XP earns full amount
-        const left = Math.max(0, get().dailyCap - get().dailyEarned);
-        const toWallet = Math.min(rawEarn, left);
-        const overflow = rawEarn - toWallet;
-
-        // bounties
-        let bounty = 0;
-        // stable streak counting only when in-range & flat/gentle
-        if (bucket === "IN" && (isFlat(trend) || isGentle(trend))) {
-          const newStreak = get().stableStreakMin + mins;
-          if (newStreak >= CFG.stableWindowMin && get().stableWindowsAwarded < CFG.stableWindowsPerDay) {
-            bounty += CFG.bounty.stable20;
-            set({
-              stableStreakMin: 0,
-              stableWindowsAwarded: get().stableWindowsAwarded + 1,
-            });
-          } else {
-            set({ stableStreakMin: newStreak });
-          }
-        } else {
-          set({ stableStreakMin: 0 });
-        }
-
-        // recover from episodes
-        const wasHigh = get().inHighEpisode;
-        const wasLow = get().inLowEpisode;
-
-        if (bucket === "HIGH") set({ inHighEpisode: true });
-        if (bucket === "LOW") set({ inLowEpisode: true });
-
-        if (bucket === "IN") {
-          if (wasHigh) { bounty += CFG.bounty.recoverHigh; set({ inHighEpisode: false }); }
-          if (wasLow)  { bounty += CFG.bounty.recoverLow;  set({ inLowEpisode: false }); }
-        }
-
-        // final wallet increments
-        const walletGain = toWallet + bounty;
-        const restedGain = overflow; // overflow only, not bounties
-
-        const newAcorns = get().acorns + walletGain;
-        const newDaily = get().dailyEarned + toWallet;
-        const newRested = get().restedBank + restedGain;
-
-        // XP grows by full rawEarn + bounties (no cap)
-        const newXp = get().lifetimeXp + rawEarn + bounty;
-        const lvl = applyLeveling(newXp, get().level);
-
-        set({
-          acorns: newAcorns,
-          dailyEarned: Math.min(get().dailyCap, newDaily),
-          restedBank: newRested,
-          lifetimeXp: newXp,
-          level: lvl.level,
-          nextXp: lvl.nextReq,
-          xpIntoCurrent: lvl.xpIntoCurrent,
-          dailyCap: capForLevel(lvl.level),
-          lastTickMs: tsMs,
-          lastBucket: bucket,
-        });
-      },
-
-      spend: (amount) => {
-        if (amount <= 0) return true;
-        const have = get().acorns;
-        if (have < amount) return false;
-        set({ acorns: have - amount });
+      // -------- actions --------
+      spend: (cost: number) => {
+        const s = get();
+        if (cost <= 0) return true;
+        if (s.acorns < cost) return false;
+        set({ acorns: s.acorns - cost });
         return true;
       },
 
-      addAcorns: (amount) => {
-        if (!amount) return;
-        const newA = get().acorns + Math.max(0, amount);
-        set({ acorns: newA });
+      grantAcorns: (n: number) => {
+        if (!n) return;
+        set((s) => ({ acorns: s.acorns + Math.max(0, n) }));
+      },
+
+      resetDailyIfNeeded: () => {
+        const today = ymd();
+        const s = get();
+        if (s.lastResetDay !== today) {
+          set({ dailyEarned: 0, lastResetDay: today });
+        }
+      },
+
+      resetProgression: () => {
+        set({
+          acorns: 0,
+          level: 1,
+          xpIntoCurrent: 0,
+          nextXp: xpNeededForLevel(1),
+          xpTotal: 0,
+          lifetimeXp: 0,
+          dailyEarned: 0,
+          dailyCap: DAILY_CAP_DEFAULT,
+          restedBank: 0,
+          lastResetDay: ymd(),
+        });
+      },
+
+      onEgvsTick: (mgdl, trend, _epochSec) => {
+        get().resetDailyIfNeeded();
+
+        const s0 = get();
+        const tickAcorns = calcTickAcorns(mgdl, trend);
+
+        // daily cap application for CURRENCY
+        const remainingCap = Math.max(0, s0.dailyCap - s0.dailyEarned);
+        const earnNow = Math.min(remainingCap, tickAcorns);
+        const overflow = Math.max(0, tickAcorns - earnNow);
+
+        const newAcorns = s0.acorns + earnNow;
+        const newDaily  = s0.dailyEarned + earnNow;
+        const newRested = s0.restedBank + overflow;
+
+        // XP continues even when currency hits cap
+        const xpFromTick = tickAcorns * XP_PER_ACORN_TICK;
+        const prevLevel = s0.level;
+        const carry = s0.xpIntoCurrent + xpFromTick;
+        const rolled = consumeXpIntoLevels(prevLevel, carry);
+
+        const nextLevel = rolled.level;
+        const nextInto  = rolled.xpOverflow;
+        const leveledCount = rolled.leveled;
+
+        let acornsFromLevels = 0;
+        if (leveledCount > 0) {
+          useLevelUpStore.getState().enqueueRange(prevLevel, nextLevel, () => ({ acorns: ACORNS_PER_LEVEL }));
+          acornsFromLevels = leveledCount * ACORNS_PER_LEVEL; // immediate reward
+        }
+
+        const newTotalXp = s0.xpTotal + xpFromTick;
+
+        set({
+          acorns: newAcorns + acornsFromLevels,
+          level: nextLevel,
+          xpIntoCurrent: nextInto,
+          nextXp: xpNeededForLevel(nextLevel),
+          xpTotal: newTotalXp,
+          lifetimeXp: newTotalXp, // keep alias in sync
+          dailyEarned: newDaily,
+          restedBank: newRested,
+        });
       },
     }),
     {
-      name: "progression-v1",
-      // persist the important bits only
+      name: "glidermon/progression-v1",
+      version: STORE_VERSION,
+      storage,
+      // Only persist actual progression data; computed helpers can recompute
       partialize: (s) => ({
         acorns: s.acorns,
-        lifetimeXp: s.lifetimeXp,
         level: s.level,
-        nextXp: s.nextXp,
         xpIntoCurrent: s.xpIntoCurrent,
+        nextXp: s.nextXp,
+        xpTotal: s.xpTotal,
+        lifetimeXp: s.lifetimeXp,
         dailyEarned: s.dailyEarned,
+        dailyCap: s.dailyCap,
         restedBank: s.restedBank,
         lastResetDay: s.lastResetDay,
-        stableWindowsAwarded: s.stableWindowsAwarded,
       }),
+      // Example migration scaffold
+      migrate: (persisted: any, fromVersion) => {
+        let out = { ...persisted };
+        if (fromVersion < 1) {
+          // ensure lifetimeXp mirrors xpTotal
+          out.lifetimeXp = out.xpTotal ?? 0;
+        }
+        return out;
+      },
+      onRehydrateStorage: () => (_state, error) => {
+  if (error) {
+    console.warn("[progression] rehydrate error:", error);
+    return;
+  }
+  // Use the store's setter here (not the local `set` from the creator scope)
+  // This runs after storage has been read.
+  try {
+    useProgressionStore.setState((s) => ({
+      _rehydrated: true,
+      nextXp: xpNeededForLevel(s.level || 1),
+      lifetimeXp: s.xpTotal ?? 0,
+    }));
+  } catch (e) {
+    console.warn("[progression] post-rehydrate patch error:", e);
+  }
+},
     }
   )
 );

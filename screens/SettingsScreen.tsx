@@ -1,98 +1,94 @@
-import React, { useEffect } from "react";
-import { View, Text, Switch, Pressable, Platform } from "react-native";
+// screens/SettingsScreen.tsx
+import React from "react";
+import { View, Text, TouchableOpacity } from "react-native";
 import { useSettingsStore } from "../stores/settingsStore";
-import { useProgressionStore } from "../stores/progressionStore";
 import { useGameStore } from "../stores/gameStore";
+import { useProgressionStore } from "../stores/progressionStore";
+import { useToastStore } from "../stores/toastStore";
 
 export default function SettingsScreen() {
-  // load settings on first view
-  const loaded = useSettingsStore(s => s.loaded);
-  const load    = useSettingsStore(s => (s as any).load);
+  const useSimulator = useSettingsStore(s => s.useSimulator);
+  const setUseSimulator = useSettingsStore(s => s.setUseSimulator);
+  const simSpeed = useSettingsStore(s => s.simSpeed);
+  const setSimSpeed = useSettingsStore(s => s.setSimSpeed);
 
-  useEffect(() => { if (!loaded) load(); }, [loaded, load]);
-
-  // simulator controls
-  const useSimulator    = useSettingsStore(s => s.useSimulator);
-  const setUseSimulator = useSettingsStore(s => (s as any).setUseSimulator);
-  const simSpeed        = useSettingsStore(s => s.simSpeed);
-  const setSimSpeed     = useSettingsStore(s => (s as any).setSimSpeed);
-
-  // progression readouts
-  const acorns    = useProgressionStore(s => s.acorns);
-  const level     = useProgressionStore(s => s.level);
-  const dailyEarn = useProgressionStore(s => s.dailyEarned);
-  const dailyCap  = useProgressionStore(s => s.dailyCap);
-  const rested    = useProgressionStore(s => s.restedBank);
-
-  // actions
-  const resetProgression     = useProgressionStore(s => s.resetProgression);
+  const onEgvs = useGameStore(s => s.onEgvs);
   const syncProgressionToEngine = useGameStore(s => s.syncProgressionToEngine);
 
+  const resetProgression = useProgressionStore(s => s.resetProgression);
+  const addToast = useToastStore(s => s.addToast);
+
+  const section = (title: string, children: React.ReactNode) => (
+    <View style={{ marginBottom: 16 }}>
+      <Text style={{ color: "#cfe6ff", fontWeight: "700", marginBottom: 8 }}>{title}</Text>
+      <View style={{ gap: 8 }}>{children}</View>
+    </View>
+  );
+
+  const Button = ({ label, onPress }: { label: string; onPress: () => void }) => (
+    <TouchableOpacity
+      onPress={onPress}
+      style={{
+        backgroundColor: "#233043",
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: "#2f4661",
+      }}
+    >
+      <Text style={{ color: "#ffecd1", fontWeight: "700" }}>{label}</Text>
+    </TouchableOpacity>
+  );
+
+  // --- Smoke test: push a fake tick through the pipeline.
+  const fakeTick = () => {
+    const now = Math.floor(Date.now() / 1000);
+    // Generate a plausible mgdl near 110 ± 30
+    const mgdl = Math.max(55, Math.min(250, Math.round(110 + (Math.random() - 0.5) * 60)));
+    // Trend: 0=down, 1=flat, 2=up, 3=uncertain
+    const trend = (Math.random() < 0.33 ? 0 : Math.random() < 0.5 ? 1 : 2) as 0 | 1 | 2;
+    onEgvs(mgdl, trend, now);
+    addToast(`Smoke tick: ${mgdl} mg/dL`);
+  };
+
+  // --- Reset progression & re-sync engine
+  const doReset = () => {
+    resetProgression();
+    syncProgressionToEngine();
+    addToast("Progression reset");
+  };
+
   return (
-    <View style={{ flex:1, backgroundColor:"#0e141b", padding:16, gap:16 }}>
-      <Text style={{ color:"#cfe6ff", fontWeight:"800", fontSize:18 }}>Settings</Text>
+    <View style={{ flex: 1, backgroundColor: "#0d1117", padding: 16 }}>
+      <Text style={{ color: "white", fontSize: 18, fontWeight: "700", marginBottom: 12 }}>
+        Settings
+      </Text>
 
-      {/* Simulator card */}
-      <View style={{
-        backgroundColor:"#161b22", padding:12, borderRadius:12,
-        borderWidth:1, borderColor:"#233043", gap:12
-      }}>
-        <Text style={{ color:"#cfe6ff", fontWeight:"700" }}>CGM Simulator</Text>
-
-        <View style={{ flexDirection:"row", alignItems:"center", justifyContent:"space-between" }}>
-          <Text style={{ color:"#9aa6b2" }}>
-            Use Simulator {Platform.OS === "web" ? "(web default)" : ""}
+      {section("Data Source", (
+        <>
+          <Text style={{ color: "#9aa6b2" }}>
+            Simulator: {useSimulator ? "ON" : "OFF"} (speed {simSpeed}×)
           </Text>
-          <Switch value={!!useSimulator} onValueChange={(v)=>setUseSimulator(v)} />
-        </View>
-
-        <View style={{ flexDirection:"row", alignItems:"center", justifyContent:"space-between" }}>
-          <Text style={{ color:"#9aa6b2" }}>Speed</Text>
-          <View style={{ flexDirection:"row", alignItems:"center", gap:8 }}>
-            <Pressable onPress={()=>setSimSpeed(simSpeed - 0.25)}>
-              <Text style={{ color:"#60a5fa", fontSize:18 }}>–</Text>
-            </Pressable>
-            <Text style={{ color:"#cfe6ff", width:64, textAlign:"center" }}>
-              {simSpeed.toFixed(2)}×
-            </Text>
-            <Pressable onPress={()=>setSimSpeed(simSpeed + 0.25)}>
-              <Text style={{ color:"#60a5fa", fontSize:18 }}>+</Text>
-            </Pressable>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <Button label="Toggle Simulator" onPress={() => setUseSimulator(!useSimulator)} />
+            <Button label="Speed ×1" onPress={() => setSimSpeed(1)} />
+            <Button label="Speed ×6" onPress={() => setSimSpeed(6)} />
           </View>
-        </View>
+        </>
+      ))}
 
-        <Text style={{ color:"#768390", fontSize:12 }}>
-          Emits a time-compressed "5-minute" reading every ~{Math.round(1500 / Math.max(0.25, simSpeed))}ms.
-        </Text>
-      </View>
+      {section("Debug / Smoke Tests", (
+        <>
+          <Button label="Fake +5m Tick" onPress={fakeTick} />
+          <Button label="Reset Progression" onPress={doReset} />
+          <Button label="Sync Engine ⇄ Progression" onPress={() => { syncProgressionToEngine(); addToast("Engine synced"); }} />
+        </>
+      ))}
 
-      {/* Progression overview */}
-      <View style={{
-        backgroundColor:"#161b22", padding:12, borderRadius:12,
-        borderWidth:1, borderColor:"#233043", gap:8
-      }}>
-        <Text style={{ color:"#cfe6ff", fontWeight:"700" }}>Progression</Text>
-        <Text style={{ color:"#9aa6b2" }}>Acorns: <Text style={{ color:"#cfe6ff" }}>{acorns.toLocaleString()}</Text></Text>
-        <Text style={{ color:"#9aa6b2" }}>Level: <Text style={{ color:"#cfe6ff" }}>{level}</Text></Text>
-        <Text style={{ color:"#9aa6b2" }}>
-          Today: <Text style={{ color:"#cfe6ff" }}>{Math.min(dailyEarn, dailyCap).toLocaleString()}</Text> / {dailyCap.toLocaleString()}  ·  Rested: <Text style={{ color:"#cfe6ff" }}>{rested.toLocaleString()}</Text>
-        </Text>
-
-        <Pressable
-          onPress={() => { resetProgression(); syncProgressionToEngine(); }}
-          style={{
-            marginTop:8, alignSelf:"flex-start",
-            backgroundColor:"#2a3a4b", paddingVertical:8, paddingHorizontal:12,
-            borderRadius:10, borderWidth:1, borderColor:"#3b556e"
-          }}
-        >
-          <Text style={{ color:"#ffecd1", fontWeight:"700" }}>Reset to Beginning</Text>
-        </Pressable>
-
-        <Text style={{ color:"#8aa1b1", fontSize:12, marginTop:6 }}>
-          Resets Acorns, XP, and Level to 1. Daily counters are cleared. Use for demos or testing.
-        </Text>
-      </View>
+      <Text style={{ color: "#7f93a8", marginTop: 16 }}>
+        Dexcom sandbox auth remains blocked; simulator drives progression for now.
+      </Text>
     </View>
   );
 }

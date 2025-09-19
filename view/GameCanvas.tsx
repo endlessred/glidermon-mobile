@@ -1,11 +1,11 @@
 // view/GameCanvas.tsx
 import React, { useEffect, useMemo, useState } from "react";
-import { Platform, Text, View, useWindowDimensions } from "react-native";
+import { Platform, Text, View, useWindowDimensions, LayoutChangeEvent } from "react-native";
 import AnimatedSprite from "./AnimatedSprite";
 import { makeGridRig } from "../sprites/rig";
 import { useCosmeticsStore } from "../stores/cosmeticsStore";
 
-// Assets
+// Assets (same ones you had)
 const idleSheet      = require("../assets/idle8.png");                    // 64x64 x8 (4x2)
 const idleBlinkSheet = require("../assets/idle8blink.png");              // full 8-frame blink
 const skyboxPng      = require("../assets/skybox/gliderNestSkybox.png"); // 3 frames (240x240 each)
@@ -15,17 +15,22 @@ const hatGreaterPng  = require("../assets/GliderMonGreaterHat.png");
 
 function resolveForSkia(mod: any): any {
   if (Platform.OS === "web") {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { Asset } = require("expo-asset");
     return Asset.fromModule(mod).uri;
   }
   return mod;
 }
 
-export default function GameCanvas() {
+type Props = {
+  /** "embedded" = square-only (HUD). "standalone" = old Game tab (centers vertically). */
+  variant?: "embedded" | "standalone";
+};
+
+export default function GameCanvas({ variant = "standalone" }: Props) {
   const [ckReady, setCkReady] = useState(Platform.OS !== "web");
   const [Skia, setSkia] = useState<any>(null);
 
+  // Web: wait for CanvasKit (safe bootstrap)
   useEffect(() => {
     if (Platform.OS !== "web") return;
     const ready = () => {
@@ -39,40 +44,75 @@ export default function GameCanvas() {
 
   useEffect(() => {
     if (Platform.OS === "web" && !ckReady) return;
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const mod = require("@shopify/react-native-skia");
     setSkia(mod);
   }, [ckReady]);
 
-  if (!Skia) {
-    return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#0d1117" }}>
+  // While Skia loads, keep the container sized correctly
+  return (
+    <SizedContainer variant={variant}>
+      {!Skia ? (
         <Text style={{ color: "#9cc4e4" }}>
           Initializing Skia… {Platform.OS === "web" ? (ckReady ? "ckReady ✓" : "waiting for CanvasKit") : "native"}
         </Text>
+      ) : (
+        <GameCanvasInner Skia={Skia} variant={variant} />
+      )}
+    </SizedContainer>
+  );
+}
+
+/** Squares itself to the parent width when embedded; otherwise fills like before. */
+function SizedContainer({
+  children,
+  variant,
+}: {
+  children: React.ReactNode;
+  variant: "embedded" | "standalone";
+}) {
+  const { width, height } = useWindowDimensions();
+  const [w, setW] = useState<number>(Math.floor(width));
+
+  const onLayout = (e: LayoutChangeEvent) => {
+    if (variant === "embedded") {
+      const next = Math.max(1, Math.floor(e.nativeEvent.layout.width));
+      if (next !== w) setW(next);
+    }
+  };
+
+  if (variant === "embedded") {
+    return (
+      <View onLayout={onLayout} style={{ width: "100%", aspectRatio: 1, overflow: "hidden", alignSelf: "center", backgroundColor: "#0d1117" }}>
+        {/* children will render a Canvas sized to this exact square */}
+        {children}
       </View>
     );
   }
 
-  return <GameCanvasInner Skia={Skia} />;
+  // standalone = old Game tab behavior (flex fill)
+  return (
+    <View style={{ flex: 1, backgroundColor: "#0d1117", alignItems: "stretch", justifyContent: "center" }}>
+      {children}
+    </View>
+  );
 }
 
-function GameCanvasInner({ Skia }: { Skia: any }) {
+function GameCanvasInner({ Skia, variant }: { Skia: any; variant: "embedded" | "standalone" }) {
   const { width, height } = useWindowDimensions();
   const { Canvas, Image: SkImageNode, Rect, useImage } = Skia;
 
-  // Square game area
+  // Figure out the square box and top-left origin:
+  // - embedded: square = parent width, origin at (0,0) -> no extra padding
+  // - standalone: square = screen width, centered vertically (old behavior)
   const boxSize = Math.floor(width);
-  const x0 = Math.floor((width - boxSize) / 2);
-  const y0 = Math.floor((height - boxSize) / 2);
+  const x0 = 0;
+  const y0 = variant === "embedded" ? 0 : Math.floor((height - boxSize) / 2);
 
   // Load images
-  const skySrc  = resolveForSkia(skyboxPng);
-  const nestSrc = resolveForSkia(nestPng);
-  const skyImg  = useImage(skySrc);
-  const nestImg = useImage(nestSrc);
+  const skyImg  = useImage(resolveForSkia(skyboxPng));
+  const nestImg = useImage(resolveForSkia(nestPng));
 
-  // Animate sky (slide strip) — 1 fps
+  // Animate sky (slide strip) — like your original: 1 fps, 3 frames
   const [frameIdx, setFrameIdx] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setFrameIdx((f) => (f + 1) % 3), 1000);
@@ -94,7 +134,7 @@ function GameCanvasInner({ Skia }: { Skia: any }) {
     };
   }, [skyImg, frameIdx, boxSize, x0, y0]);
 
-  // Sprite rig + placement (compatible with our AnimatedSprite)
+  // Sprite rig + placement (same as your working file)
   const rig = useMemo(
     () => makeGridRig(idleSheet, 4, 2, 64, 64, 32, 60, { x: 34, y: 12 }),
     []
@@ -104,63 +144,48 @@ function GameCanvasInner({ Skia }: { Skia: any }) {
   const spriteScale = Math.max(2, Math.floor(boxSize / 96));
   const scaleUsed = spriteScale - 2;
 
-  // Equipped hat (store uses headTop)
+  // Equipped hat
   const equippedHatId = useCosmeticsStore((s) => s.equipped?.headTop) || null;
-  const HAT_MODS: Record<string, any> = {
-    leaf_hat: hatLeafPng,
-    greater_hat: hatGreaterPng,
-  };
+  const HAT_MODS: Record<string, any> = { leaf_hat: hatLeafPng, greater_hat: hatGreaterPng };
   const hatMod = equippedHatId ? HAT_MODS[equippedHatId] : null;
 
-  const ready = !!nestImg && !!skyImg;
+  // Canvas size:
+  const canvasW = variant === "embedded" ? boxSize : width;
+  const canvasH = variant === "embedded" ? boxSize : height;
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#0d1117" }}>
-      <Canvas style={{ width, height }}>
-        {/* Backdrop */}
-        <Rect x={0} y={0} width={width} height={height} color="#0d1117" />
+    <Canvas style={{ width: canvasW, height: canvasH }}>
+      {/* Backdrop: only useful for standalone/fullscreen; embedded is clipped by the parent square */}
+      {variant === "standalone" && (
+        <Rect x={0} y={0} width={canvasW} height={canvasH} color="#0d1117" />
+      )}
 
-        {/* SKY (back) */}
-        {ready && skyDraw && (
-          <SkImageNode
-            image={skyImg!}
-            x={skyDraw.drawX}
-            y={skyDraw.drawY}
-            width={skyDraw.drawW}
-            height={skyDraw.drawH}
-            fit="fill"
-          />
-        )}
+      {/* SKY */}
+      {skyImg && skyDraw && (
+        <SkImageNode image={skyImg} x={skyDraw.drawX} y={skyDraw.drawY} width={skyDraw.drawW} height={skyDraw.drawH} fit="fill" />
+      )}
 
-        {/* NEST (under character) */}
-        {ready && (
-          <SkImageNode image={nestImg!} x={x0} y={y0} width={boxSize} height={boxSize} fit="cover" />
-        )}
+      {/* NEST */}
+      {nestImg && (
+        <SkImageNode image={nestImg} x={x0} y={y0} width={boxSize} height={boxSize} fit="cover" />
+      )}
 
-        {/* CHARACTER + BLINK BEHAVIOR + HAT */}
-        <AnimatedSprite
-          Skia={Skia}
-          rig={rig}
-          x={pivotX}
-          y={groundY}
-          scale={scaleUsed}
-          flipX={false}
-          blinkTex={idleBlinkSheet}
-          blinkEveryMin={4}
-          blinkEveryMax={7}
-          hatTex={hatMod ?? undefined}
-          hatPivot={{ x: 18, y: 20 }}
-          hatOffset={{ dx: -15, dy: 5 }}
-          anchorOverrides={[{ range: [3, 6], headTop: { dx: -1 } }]}
-        />
-      </Canvas>
-
-      {/* debug footer */}
-      <View style={{ position: "absolute", bottom: 6, alignSelf: "center", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, backgroundColor: "#0008" }}>
-        <Text style={{ color: "#9cc4e4", fontSize: 12 }}>
-          sky: {skyImg ? "ok" : "…"} (sliding) • nest: {nestImg ? "ok" : "…"} • frame {frameIdx + 1}/3 • hat: {equippedHatId || "—"}
-        </Text>
-      </View>
-    </View>
+      {/* CHARACTER + BLINK + HAT (hat follows headTop) */}
+      <AnimatedSprite
+        Skia={Skia}
+        rig={rig}
+        x={pivotX}
+        y={groundY}
+        scale={scaleUsed}
+        flipX={false}
+        blinkTex={idleBlinkSheet}
+        blinkEveryMin={4}
+        blinkEveryMax={7}
+        hatTex={hatMod ?? undefined}
+        hatPivot={{ x: 18, y: 20 }}
+        hatOffset={{ dx: -15, dy: 5 }}
+        anchorOverrides={[{ range: [3, 6], headTop: { dx: -1 } }]}
+      />
+    </Canvas>
   );
 }
