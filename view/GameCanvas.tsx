@@ -4,6 +4,7 @@ import { Platform, Text, View, useWindowDimensions, LayoutChangeEvent } from "re
 import AnimatedSprite from "./AnimatedSprite";
 import { makeGridRig } from "../sprites/rig";
 import { useCosmeticsStore } from "../stores/cosmeticsStore";
+import TiltShiftEffect from "../components/TiltShiftEffect";
 
 // Assets (same ones you had)
 const idleSheet      = require("../assets/idle8.png");                    // 64x64 x8 (4x2)
@@ -99,7 +100,7 @@ function SizedContainer({
 
 function GameCanvasInner({ Skia, variant }: { Skia: any; variant: "embedded" | "standalone" }) {
   const { width, height } = useWindowDimensions();
-  const { Canvas, Image: SkImageNode, Rect, useImage } = Skia;
+  const { Canvas, Image: SkImageNode, Rect, useImage, Group } = Skia;
 
   // Figure out the square box and top-left origin:
   // - embedded: square = parent width, origin at (0,0) -> no extra padding
@@ -160,17 +161,18 @@ function GameCanvasInner({ Skia, variant }: { Skia: any; variant: "embedded" | "
         <Rect x={0} y={0} width={canvasW} height={canvasH} color="#0d1117" />
       )}
 
-      {/* SKY */}
+      {/* STEP 1: Render all content normally */}
+      {/* SKY - Background */}
       {skyImg && skyDraw && (
         <SkImageNode image={skyImg} x={skyDraw.drawX} y={skyDraw.drawY} width={skyDraw.drawW} height={skyDraw.drawH} fit="fill" />
       )}
 
-      {/* NEST */}
+      {/* NEST - Midground */}
       {nestImg && (
         <SkImageNode image={nestImg} x={x0} y={y0} width={boxSize} height={boxSize} fit="cover" />
       )}
 
-      {/* CHARACTER + BLINK + HAT (hat follows headTop) */}
+      {/* CHARACTER + BLINK + HAT - Foreground */}
       <AnimatedSprite
         Skia={Skia}
         rig={rig}
@@ -186,6 +188,25 @@ function GameCanvasInner({ Skia, variant }: { Skia: any; variant: "embedded" | "
         hatOffset={{ dx: -15, dy: 5 }}
         anchorOverrides={[{ range: [3, 6], headTop: { dx: -1 } }]}
       />
+
+      {/* STEP 2: Apply tilt-shift effect as overlay */}
+      <TiltShiftEffect
+        Skia={Skia}
+        width={canvasW}
+        height={canvasH}
+        focusCenter={0.6} // Focus around character center
+        focusWidth={0.4} // Medium focus area
+        blurIntensity={8}  // Reduced blur intensity
+      >
+        {/* Only render background/midground content for blur - NOT the character */}
+        {skyImg && skyDraw && (
+          <SkImageNode image={skyImg} x={skyDraw.drawX} y={skyDraw.drawY} width={skyDraw.drawW} height={skyDraw.drawH} fit="fill" />
+        )}
+        {nestImg && (
+          <SkImageNode image={nestImg} x={x0} y={y0} width={boxSize} height={boxSize} fit="cover" />
+        )}
+        {/* Character NOT included in blur overlay - it stays sharp */}
+      </TiltShiftEffect>
     </Canvas>
   );
 }

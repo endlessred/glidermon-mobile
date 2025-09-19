@@ -78,7 +78,11 @@ function calcTickAcorns(mgdl: number, trend: TrendCode): number {
 
 // Choose platform storage
 const storage = createJSONStorage(() =>
-  Platform.OS === "web" ? localStorage : AsyncStorage
+  Platform.OS === "web" ? {
+    getItem: (key: string) => Promise.resolve(localStorage.getItem(key)),
+    setItem: (key: string, value: string) => Promise.resolve(localStorage.setItem(key, value)),
+    removeItem: (key: string) => Promise.resolve(localStorage.removeItem(key))
+  } : AsyncStorage
 );
 
 export const useProgressionStore = create<ProgressionState>()(

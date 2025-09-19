@@ -8,7 +8,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "prebuild": "expo prebuild",
-    "lint": "echo 'add eslint if you want'"
+    "lint": "echo 'add eslint if you want'",
+    "claude": "claude"
   },
   "dependencies": {
     "@babel/runtime": "^7.28.3",
