@@ -2,19 +2,21 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { themeDisplayNames } from "../styles/themeVariations";
 
 // Assets for list thumbnails (RN <Image /> supports module ids or URIs)
 const leafPng = require("../assets/GliderMonLeafHat.png");
 const greaterPng = require("../assets/GliderMonGreaterHat.png");
 
-type Socket = "headTop";
+type Socket = "headTop" | "theme";
 
 export type CosmeticItem = {
   id: string;
   name: string;
   cost: number;           // price in your soft currency
   socket: Socket;
-  tex: any;               // module id or URI (screens already handle both)
+  tex?: any;              // module id or URI (screens already handle both) - optional for themes
+  themeId?: string;       // for theme cosmetics, the ThemeVariation id
 };
 
 type Equipped = {
@@ -22,6 +24,8 @@ type Equipped = {
   headTop?: string;
   // Also keep a modern alias in case other views read it:
   hat?: string;
+  // Theme selection:
+  theme?: string;
 };
 
 type CosmeticsState = {
@@ -36,6 +40,7 @@ type CosmeticsState = {
   loadCatalog: () => void;
   buy: (id: string) => boolean;   // mark as owned (you already deduct acorns in progression store)
   equip: (id: string) => void;
+  equipTheme: (id: string) => void;
   unequipHead: () => void;
 
   // extras/dev
@@ -44,8 +49,16 @@ type CosmeticsState = {
 };
 
 const DEFAULT_CATALOG: CosmeticItem[] = [
-  { id: "leaf_hat",    name: "Leaf Cap",     cost: 250, socket: "headTop", tex: leafPng },
+  // Hats
+  { id: "leaf_hat", name: "Leaf Cap", cost: 250, socket: "headTop", tex: leafPng },
   { id: "greater_hat", name: "Greater Leaf", cost: 600, socket: "headTop", tex: greaterPng },
+
+  // Theme cosmetics - unlockable color themes
+  { id: "theme_cute", name: themeDisplayNames.cute, cost: 500, socket: "theme", themeId: "cute" },
+  { id: "theme_cyberpunk", name: themeDisplayNames.cyberpunk, cost: 750, socket: "theme", themeId: "cyberpunk" },
+  { id: "theme_forest", name: themeDisplayNames.forest, cost: 400, socket: "theme", themeId: "forest" },
+  { id: "theme_ocean", name: themeDisplayNames.ocean, cost: 450, socket: "theme", themeId: "ocean" },
+  { id: "theme_sunset", name: themeDisplayNames.sunset, cost: 550, socket: "theme", themeId: "sunset" },
 ];
 
 export const useCosmeticsStore = create<CosmeticsState>()(
@@ -76,6 +89,21 @@ export const useCosmeticsStore = create<CosmeticsState>()(
         // Require ownership
         if (!get().owned[id]) return;
         set((s) => ({ equipped: { ...s.equipped, headTop: id, hat: id } }));
+      },
+
+      equipTheme: (id) => {
+        // Require ownership
+        if (!get().owned[id]) return;
+        const item = get().catalog.find(c => c.id === id);
+        if (!item || item.socket !== "theme" || !item.themeId) return;
+
+        // Update equipped theme in cosmetics store
+        set((s) => ({ equipped: { ...s.equipped, theme: id } }));
+
+        // Update theme in settings store
+        import("./settingsStore").then(({ useSettingsStore }) => {
+          useSettingsStore.getState().setThemeVariation(item.themeId as any);
+        });
       },
 
       unequipHead: () => set((s) => ({ equipped: { ...s.equipped, headTop: undefined, hat: undefined } })),

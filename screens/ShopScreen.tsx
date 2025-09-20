@@ -14,7 +14,8 @@ export default function ShopScreen() {
   const loadCatalog  = useCosmeticsStore(s => s.loadCatalog);
   const buy          = useCosmeticsStore(s => s.buy);
   const equip        = useCosmeticsStore(s => s.equip);
-  const equippedHead = useCosmeticsStore(s => s.equipped.headTop);
+  const equipTheme   = useCosmeticsStore(s => s.equipTheme);
+  const equipped     = useCosmeticsStore(s => s.equipped);
 
   // Progression
   const acorns = useProgressionStore(s => s.acorns);
@@ -77,9 +78,9 @@ export default function ShopScreen() {
         ItemSeparatorComponent={() => <View style={{ height: spacing.md }} />}
         renderItem={({ item }) => {
           const isOwned    = !!owned[item.id];
-          const isEquipped = equippedHead === item.id;
+          const isEquipped = item.socket === "theme" ? equipped.theme === item.id : equipped.headTop === item.id;
           const canAfford  = acorns >= item.cost;
-          const rnImageSource = typeof item.tex === "string" ? { uri: item.tex } : item.tex;
+          const rnImageSource = item.tex ? (typeof item.tex === "string" ? { uri: item.tex } : item.tex) : null;
 
           return (
             <View
@@ -111,8 +112,16 @@ export default function ShopScreen() {
                   padding: spacing.sm,
                   borderWidth: 1,
                   borderColor: colors.gray[200],
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}>
-                  <Image source={rnImageSource} style={{ width: 48, height: 48 }} resizeMode="contain" />
+                  {rnImageSource ? (
+                    <Image source={rnImageSource} style={{ width: 48, height: 48 }} resizeMode="contain" />
+                  ) : (
+                    <Text style={{ fontSize: 24 }}>
+                      {item.socket === "theme" ? "🎨" : "👑"}
+                    </Text>
+                  )}
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{
@@ -132,6 +141,16 @@ export default function ShopScreen() {
                       : `💰 ${item.cost.toLocaleString()} acorns`
                     }
                   </Text>
+                  {item.socket === "theme" && (
+                    <Text style={{
+                      color: colors.text.tertiary,
+                      fontSize: typography.size.xs,
+                      marginTop: spacing.xs,
+                      fontStyle: 'italic',
+                    }}>
+                      Color Theme
+                    </Text>
+                  )}
                 </View>
               </View>
 
@@ -162,7 +181,15 @@ export default function ShopScreen() {
                 </TouchableOpacity>
               ) : !isEquipped ? (
                 <TouchableOpacity
-                  onPress={() => { equip(item.id); addToast(`Equipped ${item.name}`); }}
+                  onPress={() => {
+                    if (item.socket === "theme") {
+                      equipTheme(item.id);
+                      addToast(`Equipped ${item.name} theme`);
+                    } else {
+                      equip(item.id);
+                      addToast(`Equipped ${item.name}`);
+                    }
+                  }}
                   style={{
                     backgroundColor: colors.primary[500],
                     borderRadius: borderRadius.md,

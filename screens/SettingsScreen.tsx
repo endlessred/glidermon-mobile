@@ -1,15 +1,17 @@
 // screens/SettingsScreen.tsx
-import React from "react";
-import { View, Text, TouchableOpacity, ScrollView } from "react-native";
+import React, { useState } from "react";
+import { View, Text, TouchableOpacity, ScrollView, Modal, Pressable } from "react-native";
 import { useSettingsStore } from "../stores/settingsStore";
 import { useGameStore } from "../stores/gameStore";
 import { useProgressionStore } from "../stores/progressionStore";
 import { useToastStore } from "../stores/toastStore";
 import { useTheme } from "../hooks/useTheme";
 import { useLevelUpStore } from "../stores/levelUpStore";
+import { ThemeVariation, themeDisplayNames } from "../styles/themeVariations";
 
 export default function SettingsScreen() {
   const { colors, spacing, borderRadius, typography } = useTheme();
+  const [showThemeModal, setShowThemeModal] = useState(false);
 
   const useSimulator = useSettingsStore(s => s.useSimulator);
   const setUseSimulator = useSettingsStore(s => s.setUseSimulator);
@@ -19,6 +21,8 @@ export default function SettingsScreen() {
   const setDarkMode = useSettingsStore(s => s.setDarkMode);
   const showLevelUpTest = useSettingsStore(s => s.showLevelUpTest);
   const setShowLevelUpTest = useSettingsStore(s => s.setShowLevelUpTest);
+  const themeVariation = useSettingsStore(s => s.themeVariation);
+  const setThemeVariation = useSettingsStore(s => s.setThemeVariation);
 
   // Visual Effects
   const enableAnimations = useSettingsStore(s => s.enableAnimations);
@@ -125,6 +129,124 @@ export default function SettingsScreen() {
     syncProgressionToEngine();
     addToast("Progression reset");
   };
+
+  const ThemeModal = () => (
+    <Modal
+      visible={showThemeModal}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => setShowThemeModal(false)}
+    >
+      <Pressable
+        style={{
+          flex: 1,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: spacing.lg,
+        }}
+        onPress={() => setShowThemeModal(false)}
+      >
+        <Pressable
+          style={{
+            backgroundColor: colors.background.card,
+            borderRadius: borderRadius.lg,
+            padding: spacing.lg,
+            width: '100%',
+            maxWidth: 400,
+            maxHeight: '80%',
+            shadowColor: colors.gray[900],
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.15,
+            shadowRadius: 8,
+            elevation: 5,
+          }}
+          onPress={(e) => e.stopPropagation()}
+        >
+          <Text style={{
+            color: colors.text.primary,
+            fontSize: typography.size.xl,
+            fontWeight: typography.weight.bold as any,
+            marginBottom: spacing.md,
+            textAlign: 'center',
+          }}>
+            🎨 Choose Theme
+          </Text>
+
+          <Text style={{
+            color: colors.text.secondary,
+            fontSize: typography.size.sm,
+            marginBottom: spacing.lg,
+            textAlign: 'center',
+          }}>
+            Development tool - instantly try any theme
+          </Text>
+
+          <ScrollView style={{ maxHeight: 300 }}>
+            {Object.entries(themeDisplayNames).map(([themeId, displayName]) => (
+              <TouchableOpacity
+                key={themeId}
+                onPress={() => {
+                  setThemeVariation(themeId as ThemeVariation);
+                  addToast(`Switched to ${displayName} theme`);
+                  setShowThemeModal(false);
+                }}
+                style={{
+                  backgroundColor: themeVariation === themeId ? colors.primary[100] : colors.background.secondary,
+                  borderRadius: borderRadius.md,
+                  padding: spacing.md,
+                  marginBottom: spacing.sm,
+                  borderWidth: themeVariation === themeId ? 2 : 1,
+                  borderColor: themeVariation === themeId ? colors.primary[500] : colors.gray[200],
+                }}
+              >
+                <Text style={{
+                  color: themeVariation === themeId ? colors.primary[700] : colors.text.primary,
+                  fontSize: typography.size.base,
+                  fontWeight: themeVariation === themeId ? typography.weight.semibold as any : typography.weight.medium as any,
+                }}>
+                  {themeVariation === themeId ? '✓ ' : ''}{displayName}
+                </Text>
+                {themeId !== 'default' && (
+                  <Text style={{
+                    color: colors.text.tertiary,
+                    fontSize: typography.size.xs,
+                    marginTop: spacing.xs,
+                  }}>
+                    {themeId === 'cute' && 'Soft pastels with pink & purple'}
+                    {themeId === 'cyberpunk' && 'Neon blues, purples & electric greens'}
+                    {themeId === 'forest' && 'Earth tones with greens & browns'}
+                    {themeId === 'ocean' && 'Blues and teals with aquatic feel'}
+                    {themeId === 'sunset' && 'Warm oranges, pinks & purples'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          <TouchableOpacity
+            onPress={() => setShowThemeModal(false)}
+            style={{
+              backgroundColor: colors.gray[200],
+              borderRadius: borderRadius.md,
+              paddingVertical: spacing.md,
+              paddingHorizontal: spacing.lg,
+              marginTop: spacing.lg,
+            }}
+          >
+            <Text style={{
+              color: colors.text.primary,
+              fontSize: typography.size.base,
+              fontWeight: typography.weight.medium as any,
+              textAlign: 'center',
+            }}>
+              Close
+            </Text>
+          </TouchableOpacity>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
 
   return (
     <ScrollView style={{
@@ -481,8 +603,11 @@ export default function SettingsScreen() {
               />
             </View>
 
-            <Button label="📊 Send Fake Glucose Reading" onPress={fakeTick} />
-            <Button label="🔄 Sync Game Engine" onPress={() => { syncProgressionToEngine(); addToast("Engine synced"); }} />
+            <View style={{ flexDirection: "row", gap: spacing.sm, flexWrap: "wrap", marginBottom: spacing.md }}>
+              <Button label="📊 Send Fake Glucose Reading" onPress={fakeTick} />
+              <Button label="🔄 Sync Game Engine" onPress={() => { syncProgressionToEngine(); addToast("Engine synced"); }} />
+              <Button label="🎨 Theme Picker" onPress={() => setShowThemeModal(true)} variant="secondary" />
+            </View>
             <Button label="🗑️ Reset All Progress" onPress={doReset} variant="danger" />
           </>
         ))}
@@ -513,6 +638,8 @@ export default function SettingsScreen() {
           </Text>
         </View>
       </View>
+
+      <ThemeModal />
     </ScrollView>
   );
 }

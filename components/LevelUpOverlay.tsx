@@ -6,7 +6,7 @@ import { useTheme } from "../hooks/useTheme";
 import UnlockDisplay from "./UnlockDisplay";
 import CutsceneDisplay from "./CutsceneDisplay";
 
-type LevelUpPhase = 'levelup' | 'unlock' | 'cutscene' | 'complete';
+type LevelUpPhase = 'levelup' | 'unlock' | 'cutscene';
 
 export default function LevelUpOverlay() {
   const current = useLevelUpStore((s) => s.current());
@@ -111,21 +111,8 @@ export default function LevelUpOverlay() {
     } else if (current?.cutscene) {
       setPhase('cutscene');
     } else {
-      setPhase('complete');
-    }
-  };
-
-  const onDismiss = () => {
-    if (phase === 'complete') {
-      if (reduceMotion) {
-        // Skip animation when reduce motion is enabled
-        dismiss();
-        return;
-      }
-      // Quick fade of backdrop for responsiveness
-      Animated.timing(bgA, { toValue: 0, duration: 120, useNativeDriver: true }).start(() => {
-        dismiss();
-      });
+      // No more phases, dismiss directly
+      dismiss();
     }
   };
 
@@ -133,16 +120,19 @@ export default function LevelUpOverlay() {
     if (current?.cutscene) {
       setPhase('cutscene');
     } else {
-      setPhase('complete');
+      // No more phases, dismiss directly
+      dismiss();
     }
   };
 
   const handleCutsceneComplete = () => {
-    setPhase('complete');
+    // Cutscene finished, dismiss directly
+    dismiss();
   };
 
   const handleCutsceneSkip = () => {
-    setPhase('complete');
+    // Cutscene skipped, dismiss directly
+    dismiss();
   };
 
   return (
@@ -286,61 +276,6 @@ export default function LevelUpOverlay() {
         />
       )}
 
-      {/* Complete Phase - Allow dismissal */}
-      {phase === 'complete' && (
-        <>
-          {/* Backdrop */}
-          <Animated.View
-            style={{
-              position: "absolute",
-              inset: 0,
-              backgroundColor: "#000",
-              opacity: bgA.interpolate({ inputRange: [0, 1], outputRange: [0, 0.6] }),
-            }}
-          />
-
-          {/* Final dismissal card */}
-          <Pressable onPress={onDismiss} style={{ alignItems: "center", justifyContent: "center" }}>
-            <View
-              style={{
-               width: 320,
-                 paddingVertical: 18,
-                 paddingHorizontal: 16,
-                 backgroundColor: "#0b1220",
-                 borderRadius: 16,
-                 borderWidth: 1,
-                 borderColor: "#233043",
-                 alignItems: "center",
-                 overflow: "hidden",
-                // nice soft shadow on web
-                boxShadow: "0 10px 24px rgba(0,0,0,0.35)",
-              }}
-            >
-              <Text style={{ color: "#cfe6ff", fontWeight: "800", fontSize: 18, marginBottom: 6 }}>
-                Ready to Continue!
-              </Text>
-
-              <View
-                style={{
-                  marginTop: 14,
-                  paddingVertical: 8,
-                  paddingHorizontal: 14,
-                  backgroundColor: "#233043",
-                  borderRadius: 10,
-                  borderWidth: 1,
-                  borderColor: "#2f4661",
-                }}
-              >
-                <Text style={{ color: "#ffecd1", fontWeight: "800" }}>Continue</Text>
-              </View>
-
-              <Text style={{ color: "#7f93a8", fontSize: 12, marginTop: 6 }}>
-                Tap anywhere to continue
-              </Text>
-            </View>
-          </Pressable>
-        </>
-      )}
     </View>
   );
 }

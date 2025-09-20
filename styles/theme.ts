@@ -141,8 +141,40 @@ const darkColors = {
   },
 };
 
-export const getTheme = (isDark: boolean) => {
-  return isDark ? darkColors : lightColors;
+export const getTheme = (isDark: boolean, themeVariation?: string) => {
+  // Import theme variations dynamically to avoid circular dependencies
+  const { themeVariations } = require('./themeVariations');
+
+  let baseTheme = isDark ? darkColors : lightColors;
+
+  // Apply theme variation if specified and not default
+  if (themeVariation && themeVariation !== 'default' && themeVariations[themeVariation]) {
+    const variation = themeVariations[themeVariation];
+    baseTheme = {
+      ...baseTheme,
+      primary: variation.primary,
+      health: variation.health,
+      accent: variation.accent,
+      // Add any additional variation-specific colors
+      ...(variation.cute && { cute: variation.cute }),
+      ...(variation.cyber && { cyber: variation.cyber }),
+      ...(variation.nature && { nature: variation.nature }),
+      ...(variation.ocean && { ocean: variation.ocean }),
+      ...(variation.sunset && { sunset: variation.sunset }),
+    };
+
+    // Special adjustments for dark mode + theme combinations
+    if (isDark && themeVariation === 'cute') {
+      // Kawaii theme in dark mode needs better contrast for certain elements
+      baseTheme.accent = {
+        ...baseTheme.accent,
+        cream: '#3d1a2e', // Much darker pink cream for better contrast with white text
+        butter: '#4a1f3a', // Darker pink butter
+      };
+    }
+  }
+
+  return baseTheme;
 };
 
 // Default to light theme for backward compatibility

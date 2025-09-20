@@ -1,6 +1,7 @@
 // stores/settingsStore.ts
 import { create } from "zustand";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { ThemeVariation } from "../styles/themeVariations";
 
 type Settings = {
   low: number;
@@ -10,6 +11,7 @@ type Settings = {
   simSpeed: number; // 1 = normal; higher = faster ticks
   isDarkMode: boolean; // Dark mode preference
   showLevelUpTest: boolean; // Show level up test button for debugging
+  themeVariation: ThemeVariation; // Unlockable color theme
 
   // Visual Effects
   enableAnimations: boolean; // Enable/disable animations and transitions
@@ -30,6 +32,7 @@ type SettingsStore = Settings & {
   setSimSpeed: (n: number) => Promise<void>;
   setDarkMode: (v: boolean) => Promise<void>;
   setShowLevelUpTest: (v: boolean) => Promise<void>;
+  setThemeVariation: (theme: ThemeVariation) => Promise<void>;
 
   // Visual Effects actions
   setEnableAnimations: (v: boolean) => Promise<void>;
@@ -57,6 +60,7 @@ async function persistSettings(get: () => Settings) {
     simSpeed: s.simSpeed,
     isDarkMode: s.isDarkMode,
     showLevelUpTest: s.showLevelUpTest,
+    themeVariation: s.themeVariation,
 
     // Visual Effects
     enableAnimations: s.enableAnimations,
@@ -79,6 +83,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   simSpeed: 1,
   isDarkMode: false,
   showLevelUpTest: false, // Default to hidden
+  themeVariation: 'default', // Default theme
 
   // Visual Effects defaults
   enableAnimations: true,
@@ -166,6 +171,11 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
 
   setHighContrast: async (v) => {
     set({ highContrast: v });
+    await persistSettings(() => get());
+  },
+
+  setThemeVariation: async (theme) => {
+    set({ themeVariation: theme });
     await persistSettings(() => get());
   },
 }));

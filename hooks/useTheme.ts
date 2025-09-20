@@ -6,8 +6,9 @@ export const useTheme = () => {
   const textScale = useSettingsStore((state) => state.textScale);
   const highContrast = useSettingsStore((state) => state.highContrast);
   const reduceMotion = useSettingsStore((state) => state.reduceMotion);
+  const themeVariation = useSettingsStore((state) => state.themeVariation);
 
-  const baseColors = getTheme(isDarkMode);
+  const baseColors = getTheme(isDarkMode, themeVariation);
 
   // Apply high contrast adjustments
   const colors = highContrast ? {
