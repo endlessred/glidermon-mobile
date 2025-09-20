@@ -4,7 +4,10 @@
       "Bash(pnpm expo start:*)",
       "Bash(pnpm tsc:*)",
       "Bash(pnpm add:*)",
-      "Bash(pnpm exec tsc:*)"
+      "Bash(pnpm exec tsc:*)",
+      "Bash(cat:*)",
+      "Bash(grep:*)",
+      "Bash(tree:*)"
     ],
     "deny": [],
     "ask": []

@@ -1,22 +1,22 @@
 // App.tsx
 import React, { useState, useEffect } from "react";
 import { Platform, SafeAreaView, View, Text, Pressable, AppState } from "react-native";
-import { useProgressionStore } from "./stores/progressionStore";
+import { useProgressionStore } from "./src/data/stores/progressionStore";
 import SkiaBootstrap from "./SkiaBootstrap";
-import HomeScreen from "./screens/HudScreen"; // HudScreen serves as HomeScreen
-// import DexcomEgvsScreen from "./src/DexcomEgvsScreen"; // Preserved for future Bluetooth device integration
-import GameCanvas from "./view/GameCanvas";
-import ShopScreen from "./screens/ShopScreen";
-import EquipScreen from "./screens/EquipScreen";
-import SettingsScreen from "./screens/SettingsScreen";
-import { useGameStore } from "./stores/gameStore";
-import { useSettingsStore } from "./stores/settingsStore";
-import { startEgvsSimulator, stopEgvsSimulator } from "./src/simCgms";
-import ToastHost from "./components/ToastHost";
-import LevelUpOverlay from "./components/LevelUpOverlay";
-import LevelUpTestButton from "./components/LevelUpTestButton";
-import DevDebugPanel from "./components/DevDebugPanel";
-import { useTheme } from "./hooks/useTheme";
+import HomeScreen from "./src/ui/screens/HudScreen"; // HudScreen serves as HomeScreen
+// import DexcomEgvsScreen from "./src/ui/screens/DexcomEgvsScreen"; // Preserved for future Bluetooth device integration
+import GameCanvas from "./src/game/view/GameCanvas";
+import ShopScreen from "./src/ui/screens/ShopScreen";
+import EquipScreen from "./src/ui/screens/EquipScreen";
+import SettingsScreen from "./src/ui/screens/SettingsScreen";
+import { useGameStore } from "./src/data/stores/gameStore";
+import { useSettingsStore } from "./src/data/stores/settingsStore";
+import { startEgvsSimulator, stopEgvsSimulator } from "./src/engine/simCgms";
+import ToastHost from "./src/ui/components/ToastHost";
+import LevelUpOverlay from "./src/ui/components/LevelUpOverlay";
+import LevelUpTestButton from "./src/ui/components/LevelUpTestButton";
+import DevDebugPanel from "./src/ui/components/DevDebugPanel";
+import { useTheme } from "./src/data/hooks/useTheme";
 
 const TABS = ["HOME", "SHOP", "EQUIP", "SETTINGS"] as const;
 type Tab = typeof TABS[number];
