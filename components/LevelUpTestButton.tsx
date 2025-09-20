@@ -1,9 +1,16 @@
 import React from "react";
 import { View, Text, Pressable } from "react-native";
 import { useLevelUpStore } from "../stores/levelUpStore";
+import { useSettingsStore } from "../stores/settingsStore";
 
 export default function LevelUpTestButton() {
   const enqueueTestLevelUp = useLevelUpStore((s) => s.enqueueTestLevelUp);
+  const showLevelUpTest = useSettingsStore((s) => s.showLevelUpTest);
+
+  // Don't render if setting is disabled
+  if (!showLevelUpTest) {
+    return null;
+  }
 
   return (
     <View style={{

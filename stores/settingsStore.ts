@@ -8,6 +8,8 @@ type Settings = {
   veryHigh: number;
   useSimulator: boolean;
   simSpeed: number; // 1 = normal; higher = faster ticks
+  isDarkMode: boolean; // Dark mode preference
+  showLevelUpTest: boolean; // Show level up test button for debugging
 };
 
 type SettingsStore = Settings & {
@@ -16,6 +18,8 @@ type SettingsStore = Settings & {
   setThresholds: (p: Partial<Pick<Settings, "low" | "high" | "veryHigh">>) => Promise<void>;
   setUseSimulator: (v: boolean) => Promise<void>;
   setSimSpeed: (n: number) => Promise<void>;
+  setDarkMode: (v: boolean) => Promise<void>;
+  setShowLevelUpTest: (v: boolean) => Promise<void>;
   load: () => Promise<void>;
 };
 
@@ -30,6 +34,8 @@ async function persistSettings(get: () => Settings) {
     veryHigh: s.veryHigh,
     useSimulator: s.useSimulator,
     simSpeed: s.simSpeed,
+    isDarkMode: s.isDarkMode,
+    showLevelUpTest: s.showLevelUpTest,
   };
   try { await AsyncStorage.setItem(KEY, JSON.stringify(toSave)); } catch {}
 }
@@ -40,6 +46,8 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   veryHigh: 250,
   useSimulator: false,
   simSpeed: 1,
+  isDarkMode: false,
+  showLevelUpTest: false, // Default to hidden
   loaded: false,
 
   load: async () => {
@@ -69,6 +77,16 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   setSimSpeed: async (n) => {
     const clamped = Math.max(0.25, Math.min(20, n));
     set({ simSpeed: clamped });
+    await persistSettings(() => get());
+  },
+
+  setDarkMode: async (v) => {
+    set({ isDarkMode: v });
+    await persistSettings(() => get());
+  },
+
+  setShowLevelUpTest: async (v) => {
+    set({ showLevelUpTest: v });
     await persistSettings(() => get());
   },
 }));

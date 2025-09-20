@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import { View, Text } from "react-native";
+import { useTheme } from "../hooks/useTheme";
 
 type Props = {
   level: number;
@@ -8,6 +9,7 @@ type Props = {
 };
 
 export default function LevelBar({ level, current, next }: Props) {
+  const { colors, spacing, borderRadius, typography } = useTheme();
   const pct = useMemo(() => {
     const denom = Math.max(1, next);
     const p = Math.max(0, Math.min(1, current / denom));
@@ -15,29 +17,40 @@ export default function LevelBar({ level, current, next }: Props) {
   }, [current, next]);
 
   return (
-    <View style={{ gap: 4 }}>
-      <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-        <Text style={{ color: "#cfe6ff", fontWeight: "800" }}>Level {level}</Text>
-        <Text style={{ color: "#9aa6b2" }}>
+    <View style={{ gap: spacing.xs }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+        <Text style={{
+          color: colors.text.primary,
+          fontWeight: typography.weight.extrabold,
+          fontSize: typography.size.base,
+        }}>
+          ⭐ Level {level}
+        </Text>
+        <Text style={{
+          color: colors.text.secondary,
+          fontSize: typography.size.sm,
+          fontWeight: typography.weight.medium,
+        }}>
           {Math.floor(current)}/{next} XP
         </Text>
       </View>
 
       <View
         style={{
-          height: 10,
-          backgroundColor: "#0f1720",
-          borderRadius: 8,
+          height: 12,
+          backgroundColor: colors.background.secondary,
+          borderRadius: borderRadius.full,
           overflow: "hidden",
           borderWidth: 1,
-          borderColor: "#233043",
+          borderColor: colors.gray[300],
         }}
       >
         <View
           style={{
             width: `${pct * 100}%`,
             height: "100%",
-            backgroundColor: "#60a5fa",
+            backgroundColor: colors.primary[500],
+            borderRadius: borderRadius.full,
           }}
         />
       </View>

@@ -15,11 +15,15 @@ import { startEgvsSimulator, stopEgvsSimulator } from "./src/simCgms";
 import ToastHost from "./components/ToastHost";
 import LevelUpOverlay from "./components/LevelUpOverlay";
 import LevelUpTestButton from "./components/LevelUpTestButton";
+import { useTheme } from "./hooks/useTheme";
 
 const TABS = ["HUD", "DEXCOM", "GAME", "SHOP", "EQUIP", "SETTINGS"] as const;
 type Tab = typeof TABS[number];
 
 export default function App() {
+  // ---- theme ----
+  const { colors, spacing, borderRadius, typography } = useTheme();
+
   // ---- persistence → engine sync ----
   const rehydrated = useProgressionStore((s) => s._rehydrated);
   const syncProgressionToEngine = useGameStore((s) => s.syncProgressionToEngine);
@@ -97,23 +101,41 @@ export default function App() {
   }, []);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#0e141b" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background.primary }}>
       {/* top tabs */}
-      <View style={{ flexDirection: "row", padding: 8, gap: 8, backgroundColor: "#111a23" }}>
+      <View style={{
+        flexDirection: "row",
+        padding: spacing.md,
+        gap: spacing.sm,
+        backgroundColor: colors.background.secondary,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.gray[200],
+      }}>
         {TABS.map((t) => (
           <Pressable
             key={t}
             onPress={() => setTab(t)}
             style={{
-              paddingVertical: 8,
-              paddingHorizontal: 12,
-              borderRadius: 10,
-              backgroundColor: tab === t ? "#1d2a36" : "#0e141b",
+              paddingVertical: spacing.sm,
+              paddingHorizontal: spacing.md,
+              borderRadius: borderRadius.md,
+              backgroundColor: tab === t ? colors.primary[500] : colors.background.card,
               borderWidth: 1,
-              borderColor: tab === t ? "#3b556e" : "#1d2a36",
+              borderColor: tab === t ? colors.primary[600] : colors.gray[300],
+              shadowColor: colors.gray[900],
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: tab === t ? 0.1 : 0.05,
+              shadowRadius: 2,
+              elevation: tab === t ? 2 : 1,
             }}
           >
-            <Text style={{ color: "#cfe6ff", fontWeight: "600" }}>{t}</Text>
+            <Text style={{
+              color: tab === t ? colors.text.inverse : colors.text.primary,
+              fontWeight: typography.weight.semibold,
+              fontSize: typography.size.sm,
+            }}>
+              {t}
+            </Text>
           </Pressable>
         ))}
       </View>
@@ -126,7 +148,11 @@ export default function App() {
 
           {/* GAME: eliminate top/bottom empties by using the "embedded" mode (see GameCanvas note below) */}
           {tab === "GAME" && (
-            <View style={{ alignItems: "center", paddingVertical: 8 }}>
+            <View style={{
+              alignItems: "center",
+              paddingVertical: spacing.md,
+              backgroundColor: colors.background.primary,
+            }}>
               <GameCanvas variant="embedded" />
             </View>
           )}

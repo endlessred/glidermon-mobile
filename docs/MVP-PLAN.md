@@ -1,68 +1,174 @@
-MVP (2-week) plan & progress
+Core Game Loop
 
-Goal: playable, cozy demo: animated companion, live(ish) BG feed, points, shop, hats.
+✅ EGV→Event pipeline: ingest (Dexcom/HealthKit/Simulator) → normalize → applyEgvsTick → compute rewards + events (in-range, recover, streaks, unicorns).
 
-Week 1 (Core Loop & Look)
+✅ Idle progression: award Acorns + XP on each 5-min sample (sim-speed aware), with daily cap and rested bonus overflow bucket.
 
-✅ Skia bootstrap (web + native).
+✅ Behavior switching: state machine mapping glucose state → animation set (in-range idle, low/high variants later), with ambience FX hooks.
 
-✅ Character idle loop + random blink.
+✅ Toasts & moment feedback: per-tick deltas, streaks, unicorns, cap reached; throttling + global host.
 
-✅ Hat system (anchors, per-frame nudge).
 
-✅ Scene: skybox + nest; simple “tilt-shift” overlay (box vignette); can be improved later.
+Progression & Economy
 
-✅ HUD wired to simulator (5-min cadence).
+✅ Currencies: Acorns (soft), XP (lifetime), Level (derived from XP).
 
-✅ Shop + Equip UIs (buy & equip hats; spend Acorns).
+✅ Level curve: XP/level table or function; pacing tuned to typical daily EGV counts.
 
-⏳ Progression math polish (see next).
+✅ Daily systems: daily reset, cap, rested bonus carryover; server-safe timestamps.
 
-Week 2 (Progression & Polish)
+✅ Purchasing: spend Acorns, inventory flags, ownership checks, UI error states (insufficient funds, already owned).
 
-⏳ Earning from readings (per 5-min sample):
-In-range flat = 1.0×, gentle = 0.7×, out-of-range floor = 0.2×; baseline ~10/7/2 Acorns (tunable).
+✅ Rewards design: per-event modifiers (in-range, soft window, deviation bonus, streak bonus, focus buff window).
 
-⏳ Daily cap: recommend 2,000–2,500 Acorns/day for demo; overflow → “Rested bonus”.
 
-⏳ Leveling (XP is lifetime, not spent), level bar on HUD.
+Content Systems
 
-⏳ “In-range idle” behavior wired from glucose state (happy idle while in range).
+✅ Cosmetics catalog: item defs (id, name, cost, socket, texKey, pivot/offset, zBias), versioned manifest + migration.
 
-⏳ Basic analytics (privacy-safe): session count, ticks, in-range %, purchases.
+✅ Sockets & anchors: headTop today; architecture ready for future sockets (back, foreground pet, etc.).
 
-⏳ Settings: toggle visual effects (vignette/blur), Reduce Motion, text scale.
+✅ Animation rigs: grid metadata, blink sheet support, anchor overrides per-frame; flipX, scale, subset fallback.
 
-⏳ Nice-to-have: device BLE toggle remains optional; focus on phone/web demo.
+✅ Scenes: skybox variants, optional backgrounds; safe web rendering (no SkSG).
 
-4) Next steps (priority order)
 
-Lock progression math
+Health Data & Integrations
 
-Implement per-tick earn → useProgressionStore.onEgvsTick(mgdl, trendCode, ts); award Acorns + XP simultaneously.
+❌ HealthKit (iOS): permission flow, background delivery
 
-Add daily cap (e.g., 2400) with simple clamp + “rested” bucket counter.
+❌ Health Connect (Android): permission flow, background delivery
 
-HUD: show Acorns and Level; toast on level-up.
+✅ Simulator: deterministic-ish curves, jitter, seeds, speed multiplier; dev/test hooks.
 
-Behavior system
 
-Add behavior registry: inRangeIdle = idle loop with random blink; later add outOfRangeIdle (sweaty/sad variants).
+Data Model & Persistence
 
-Switch behavior from glucose state in the render VM.
+✅ Stores (Zustand + persist): progression, cosmetics, settings, game/engine view model.
 
-Scene polish (low-risk)
+✅ Storage: platform-aware async storage wrapper (web/localStorage async + RN AsyncStorage).
 
-Keep current skybox sliding (stable). Add subtle stepped vignette (already scaffolded).
+✅ Schema versioning: migrations for store shape changes; integrity checks (e.g., non-negative balances).
 
-If you try blur, do it via extra <Rect> passes (no SkSG/recorders).
+✅ Cold start sync: syncProgressionToEngine() after rehydrate; daily reset on app foreground/interval.
 
-Content
 
-Add 1–2 more hats; price them; verify equip + anchor offsets.
+UI/UX & Accessibility
 
-Optional: simple “Backgrounds” category (not required for MVP).
+✅ HUD: Acorn badge, Level bar, daily cap bar, rested bank, glucose card with trend/last update, ❌ line chart of glucose readings for past hour, drawn to look like a wind trail behind a gliding sugar glider
 
-Auth & data
+✅ GameCanvas embedded: square, responsive, no blank bands; overflow-hidden clipping.
 
-When Dexcom sandbox unlocks, add a data source switcher (Simulator / Dexcom / HealthKit). For MVP demo, Simulator is enough.
+✅ Level-up overlay: animated bump out/in, queued if multiple, skippable; hooks for reward scenes.
+
+✅ Shop/Equip: price/owned/equipped states, confirmations, error toasts.
+
+✅ Settings: simulator toggle/speed, ❌ visual effects (vignette/blur off on web), ❌ reduce motion, ❌ text scale.
+
+❌ A11y: screen reader labels, dynamic type scaling, color-blind safe palette.
+
+
+Live-Ops & Content Delivery
+
+❌ Remote config: tweak cap, reward multipliers, feature flags without redeploy.
+
+❌ Catalog updates: manifest fetch with signature/version; graceful fallback to bundled assets.
+
+❌ Announcements: lightweight in-app message system (e.g., "new hat available").
+
+Analytics & Telemetry (privacy-safe)
+
+❌ Gameplay: sessions, ticks processed, in-range %, deltas awarded, levels gained, purchases.
+
+❌ UX: overlay views, shop open rate, equip events.
+
+❌ Health: only aggregate stats (no raw PHI in analytics), differential privacy where feasible.
+
+❌ Error reporting: boundary logs (Skia bootstrap, asset failures, token errors).
+
+
+Security, Privacy, Compliance
+
+❌ Consent & disclosures: clear in-app consent for data sources; privacy policy.
+
+❌ PHI handling: minimize/partition; secure storage; transport TLS; token encryption.
+
+❌ Data retention: only what's necessary for gameplay and aggregates; user reset/export.
+
+❌ HIPAA-readiness (if required): vendor/BAA considerations, audit trails, breach procedures.
+
+
+Testing & Quality
+
+❌ Smoke tests: startup, rehydrate, sync to engine, simulator tick loop, purchase/equip, level-up queue.
+
+❌ Deterministic sim seeds for CI.
+
+❌ Regression pack: web Skia bootstrap timing, hook order invariants, async storage persistence.
+
+❌ Performance: low-end devices (JS budget, canvas redraws), memory (image reuse), battery.
+
+
+Platform & Build
+
+✅ Bootstrap: CanvasKit wait-gate; module load after ready; expo-asset for URIs on web.
+
+❌ Asset pipeline: hashed assets, size checks, preloading.
+
+✅ Versioning: semantic app versions; store migrations; compat matrix for configs.
+
+
+Monetization (optional/future)
+
+❌ Cosmetics only: real-money packs → Acorns (no pay-to-win).
+
+❌ Offers: seasonal cosmetics, bundles; live-ops hooks to rotate catalog.
+
+❌ Ads: occasional banner ads, watch video ads for additional acorns
+
+
+Queues & Edge Cases to Handle
+
+✅ Multi-level queue: buffer consecutive level-ups on app open; drain with skip/next.
+
+❌ Offline/late data: process backfilled EGVs in order; prevent double awards (idempotency keys per tick).
+
+❌ Time changes: timezone/daylight shifts; daily reset based on user's local midnight with guard.
+
+❌ Duplicates: dedupe ticks by (source, timestamp); clamp negative or absurd values.
+
+
+"Definition of Done" per major system
+
+❌ EGV scoring: deterministic unit tests, idempotent, handles out-of-order and missing ticks.
+
+✅ Progression: persists across reloads, daily reset verified via AppState + interval, cap + rested bonus observed in UI.
+
+✅ Economy: purchase/equip guarded; ❌ analytics emitted; no negative balances; catalog migrations pass.
+
+✅ Canvas: web + native parity; no SkSG/recorders on web; frame rate steady; hats align across frames.
+
+✅ Level-up overlay: animated, queued, skippable; ❌ emits analytics; resilient to rapid state changes.
+
+❌ Integrations: Dexcom auth loop reliable; ✅ simulator selectable; clear source indicators in HUD.
+
+
+Minimal Launch Checklist
+
+✅ Scoring + cap + rested bonus tuned and locked.
+
+✅ Level curve set; level bar + overlay + queue implemented.
+
+❌ Shop/Equip stable with at least 3–5 hats; catalog manifest versioned. (only 2 hats currently)
+
+✅ HUD embeds canvas (no padding), glucose card accurate.
+
+✅ Persistence + daily reset verified; migration path tested.
+
+❌ Telemetry wired (privacy-safe); error reporting enabled.
+
+❌ A11y pass; reduce motion honored; text scale OK.
+
+✅ Crash-free boot with CanvasKit wait-gate on web.
+
+❌ Smoke tests green on web + iOS + Android.
