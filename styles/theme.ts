@@ -163,13 +163,22 @@ export const getTheme = (isDark: boolean, themeVariation?: string) => {
       ...(variation.sunset && { sunset: variation.sunset }),
     };
 
-    // Special adjustments for dark mode + theme combinations
+    // Special adjustments for theme + mode combinations to ensure proper contrast
     if (isDark && themeVariation === 'cute') {
       // Kawaii theme in dark mode needs better contrast for certain elements
       baseTheme.accent = {
         ...baseTheme.accent,
         cream: '#3d1a2e', // Much darker pink cream for better contrast with white text
         butter: '#4a1f3a', // Darker pink butter
+      };
+    }
+
+    if (!isDark && themeVariation === 'cyberpunk') {
+      // Cyberpunk theme in light mode needs lighter accent colors for contrast with dark text
+      baseTheme.accent = {
+        ...baseTheme.accent,
+        cream: '#e6e6ff', // Much lighter lavender cream for better contrast with dark text
+        butter: '#f0f0ff', // Lighter lavender butter
       };
     }
   }

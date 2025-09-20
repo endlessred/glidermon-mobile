@@ -3,8 +3,8 @@ import React, { useState, useEffect } from "react";
 import { Platform, SafeAreaView, View, Text, Pressable, AppState } from "react-native";
 import { useProgressionStore } from "./stores/progressionStore";
 import SkiaBootstrap from "./SkiaBootstrap";
-import HudScreen from "./screens/HudScreen";
-import DexcomEgvsScreen from "./src/DexcomEgvsScreen";
+import HomeScreen from "./screens/HudScreen"; // HudScreen serves as HomeScreen
+// import DexcomEgvsScreen from "./src/DexcomEgvsScreen"; // Preserved for future Bluetooth device integration
 import GameCanvas from "./view/GameCanvas";
 import ShopScreen from "./screens/ShopScreen";
 import EquipScreen from "./screens/EquipScreen";
@@ -18,7 +18,7 @@ import LevelUpTestButton from "./components/LevelUpTestButton";
 import DevDebugPanel from "./components/DevDebugPanel";
 import { useTheme } from "./hooks/useTheme";
 
-const TABS = ["HUD", "DEXCOM", "GAME", "SHOP", "EQUIP", "SETTINGS"] as const;
+const TABS = ["HOME", "SHOP", "EQUIP", "SETTINGS"] as const;
 type Tab = typeof TABS[number];
 
 export default function App() {
@@ -44,7 +44,7 @@ export default function App() {
   const syncProgressionToEngine = useGameStore((s) => s.syncProgressionToEngine);
 
   // ---- tabs ----
-  const [tab, setTab] = useState<Tab>("HUD");
+  const [tab, setTab] = useState<Tab>("HOME");
 
   // ---- sim wiring ----
   const onEgvs = useGameStore.getState().onEgvs; // stable reference is fine
@@ -154,19 +154,9 @@ export default function App() {
       {/* content */}
       <SkiaBootstrap>
         <View style={{ flex: 1 }}>
-          {tab === "HUD" && <HudScreen />}
-          {tab === "DEXCOM" && <DexcomEgvsScreen />}
-
-          {/* GAME: eliminate top/bottom empties by using the "embedded" mode (see GameCanvas note below) */}
-          {tab === "GAME" && (
-            <View style={{
-              alignItems: "center",
-              paddingVertical: spacing.md,
-              backgroundColor: colors.background.primary,
-            }}>
-              <GameCanvas variant="embedded" />
-            </View>
-          )}
+          {tab === "HOME" && <HomeScreen />}
+          {/* DEXCOM tab removed - component preserved for future Bluetooth device integration */}
+          {/* GAME tab removed - GameCanvas is now embedded in Home (formerly HUD) screen */}
 
           {tab === "SHOP" && <ShopScreen />}
           {tab === "EQUIP" && <EquipScreen />}

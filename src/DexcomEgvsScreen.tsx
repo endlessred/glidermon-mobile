@@ -1,4 +1,8 @@
 // DexcomEgvsScreen.tsx
+//
+// PRESERVED FOR FUTURE USE
+// This component is not currently in the navigation but is kept
+// for potential future Bluetooth device integration in settings
 import React, { useEffect, useRef, useState } from "react";
 import { Button, Text, View, Switch } from "react-native";
 import * as AuthSession from "expo-auth-session";
