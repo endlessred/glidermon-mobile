@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, Animated, Easing } from "react-native";
 import { useLevelUpStore } from "../stores/levelUpStore";
+import { useTheme } from "../hooks/useTheme";
 import UnlockDisplay from "./UnlockDisplay";
 import CutsceneDisplay from "./CutsceneDisplay";
 
@@ -10,6 +11,7 @@ type LevelUpPhase = 'levelup' | 'unlock' | 'cutscene' | 'complete';
 export default function LevelUpOverlay() {
   const current = useLevelUpStore((s) => s.current());
   const dismiss = useLevelUpStore((s) => s.dismissCurrent);
+  const { reduceMotion } = useTheme();
   const [phase, setPhase] = useState<LevelUpPhase>('levelup');
   const [animationComplete, setAnimationComplete] = useState(false);
 
@@ -32,6 +34,18 @@ export default function LevelUpOverlay() {
     newS.setValue(0.6); newA.setValue(0);
     burst.setValue(0);
 
+    if (reduceMotion) {
+      // Skip animations when reduce motion is enabled
+      bgA.setValue(1);
+      oldS.setValue(0.7);
+      oldA.setValue(0);
+      newS.setValue(1);
+      newA.setValue(1);
+      burst.setValue(1);
+      setAnimationComplete(true);
+      return;
+    }
+
     Animated.sequence([
       Animated.timing(bgA, { toValue: 1, duration: 160, easing: Easing.out(Easing.quad), useNativeDriver: true }),
       Animated.parallel([
@@ -51,7 +65,7 @@ export default function LevelUpOverlay() {
       setAnimationComplete(true);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, current?.id]);
+  }, [visible, current?.id, reduceMotion]);
 
   const rewardsLine = useMemo(() => {
     if (!current?.rewards) return null;
@@ -103,6 +117,11 @@ export default function LevelUpOverlay() {
 
   const onDismiss = () => {
     if (phase === 'complete') {
+      if (reduceMotion) {
+        // Skip animation when reduce motion is enabled
+        dismiss();
+        return;
+      }
       // Quick fade of backdrop for responsiveness
       Animated.timing(bgA, { toValue: 0, duration: 120, useNativeDriver: true }).start(() => {
         dismiss();

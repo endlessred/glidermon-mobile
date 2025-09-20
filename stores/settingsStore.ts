@@ -10,6 +10,16 @@ type Settings = {
   simSpeed: number; // 1 = normal; higher = faster ticks
   isDarkMode: boolean; // Dark mode preference
   showLevelUpTest: boolean; // Show level up test button for debugging
+
+  // Visual Effects
+  enableAnimations: boolean; // Enable/disable animations and transitions
+  enableParticleEffects: boolean; // Enable/disable particle effects (level up, etc.)
+  enableBlurEffects: boolean; // Enable/disable blur effects (especially for web)
+
+  // Accessibility
+  reduceMotion: boolean; // Reduce motion for accessibility
+  textScale: number; // Text scaling factor (0.8 - 1.5)
+  highContrast: boolean; // High contrast mode
 };
 
 type SettingsStore = Settings & {
@@ -20,6 +30,17 @@ type SettingsStore = Settings & {
   setSimSpeed: (n: number) => Promise<void>;
   setDarkMode: (v: boolean) => Promise<void>;
   setShowLevelUpTest: (v: boolean) => Promise<void>;
+
+  // Visual Effects actions
+  setEnableAnimations: (v: boolean) => Promise<void>;
+  setEnableParticleEffects: (v: boolean) => Promise<void>;
+  setEnableBlurEffects: (v: boolean) => Promise<void>;
+
+  // Accessibility actions
+  setReduceMotion: (v: boolean) => Promise<void>;
+  setTextScale: (scale: number) => Promise<void>;
+  setHighContrast: (v: boolean) => Promise<void>;
+
   load: () => Promise<void>;
 };
 
@@ -36,6 +57,16 @@ async function persistSettings(get: () => Settings) {
     simSpeed: s.simSpeed,
     isDarkMode: s.isDarkMode,
     showLevelUpTest: s.showLevelUpTest,
+
+    // Visual Effects
+    enableAnimations: s.enableAnimations,
+    enableParticleEffects: s.enableParticleEffects,
+    enableBlurEffects: s.enableBlurEffects,
+
+    // Accessibility
+    reduceMotion: s.reduceMotion,
+    textScale: s.textScale,
+    highContrast: s.highContrast,
   };
   try { await AsyncStorage.setItem(KEY, JSON.stringify(toSave)); } catch {}
 }
@@ -48,6 +79,17 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   simSpeed: 1,
   isDarkMode: false,
   showLevelUpTest: false, // Default to hidden
+
+  // Visual Effects defaults
+  enableAnimations: true,
+  enableParticleEffects: true,
+  enableBlurEffects: true,
+
+  // Accessibility defaults
+  reduceMotion: false,
+  textScale: 1.0,
+  highContrast: false,
+
   loaded: false,
 
   load: async () => {
@@ -87,6 +129,43 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
 
   setShowLevelUpTest: async (v) => {
     set({ showLevelUpTest: v });
+    await persistSettings(() => get());
+  },
+
+  // Visual Effects actions
+  setEnableAnimations: async (v) => {
+    set({ enableAnimations: v });
+    await persistSettings(() => get());
+  },
+
+  setEnableParticleEffects: async (v) => {
+    set({ enableParticleEffects: v });
+    await persistSettings(() => get());
+  },
+
+  setEnableBlurEffects: async (v) => {
+    set({ enableBlurEffects: v });
+    await persistSettings(() => get());
+  },
+
+  // Accessibility actions
+  setReduceMotion: async (v) => {
+    set({ reduceMotion: v });
+    // When reduce motion is enabled, also disable animations for accessibility
+    if (v) {
+      set({ enableAnimations: false, enableParticleEffects: false });
+    }
+    await persistSettings(() => get());
+  },
+
+  setTextScale: async (scale) => {
+    const clampedScale = Math.max(0.8, Math.min(1.5, scale));
+    set({ textScale: clampedScale });
+    await persistSettings(() => get());
+  },
+
+  setHighContrast: async (v) => {
+    set({ highContrast: v });
     await persistSettings(() => get());
   },
 }));

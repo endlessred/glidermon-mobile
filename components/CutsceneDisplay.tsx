@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { View, Text, Pressable, Animated, Easing, Dimensions } from "react-native";
 import { CutsceneFrame } from "../stores/levelUpStore";
+import { useTheme } from "../hooks/useTheme";
 
 interface CutsceneDisplayProps {
   frames: CutsceneFrame[];
@@ -9,6 +10,7 @@ interface CutsceneDisplayProps {
 }
 
 export default function CutsceneDisplay({ frames, onComplete, onSkip }: CutsceneDisplayProps) {
+  const { reduceMotion } = useTheme();
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
   const [dialogVisible, setDialogVisible] = useState(false);
   const [displayedText, setDisplayedText] = useState("");
@@ -29,6 +31,13 @@ export default function CutsceneDisplay({ frames, onComplete, onSkip }: Cutscene
     setDisplayedText("");
     setIsTyping(true);
     setDialogVisible(true);
+
+    if (reduceMotion) {
+      // Skip typewriter effect when reduce motion is enabled
+      setDisplayedText(text);
+      setIsTyping(false);
+      return;
+    }
 
     const words = text.split(" ").filter(word => word.length > 0); // Filter out empty strings
     let currentWordIndex = 0;
@@ -70,6 +79,15 @@ export default function CutsceneDisplay({ frames, onComplete, onSkip }: Cutscene
       portraitAnim.setValue(0);
       setDialogVisible(false);
 
+      if (reduceMotion) {
+        // Skip animations when reduce motion is enabled
+        fadeAnim.setValue(1);
+        portraitAnim.setValue(1);
+        dialogAnim.setValue(1);
+        startTyping(currentFrame.dialogText);
+        return;
+      }
+
       // Sequence: fade in background, show portrait, then show dialog
       Animated.sequence([
         Animated.timing(fadeAnim, {
@@ -97,7 +115,7 @@ export default function CutsceneDisplay({ frames, onComplete, onSkip }: Cutscene
       // Instant transition for subsequent frames
       startTyping(currentFrame.dialogText);
     }
-  }, [currentFrameIndex]);
+  }, [currentFrameIndex, reduceMotion]);
 
   const handleContinue = () => {
     // If still typing, complete the text immediately

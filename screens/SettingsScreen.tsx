@@ -20,6 +20,22 @@ export default function SettingsScreen() {
   const showLevelUpTest = useSettingsStore(s => s.showLevelUpTest);
   const setShowLevelUpTest = useSettingsStore(s => s.setShowLevelUpTest);
 
+  // Visual Effects
+  const enableAnimations = useSettingsStore(s => s.enableAnimations);
+  const setEnableAnimations = useSettingsStore(s => s.setEnableAnimations);
+  const enableParticleEffects = useSettingsStore(s => s.enableParticleEffects);
+  const setEnableParticleEffects = useSettingsStore(s => s.setEnableParticleEffects);
+  const enableBlurEffects = useSettingsStore(s => s.enableBlurEffects);
+  const setEnableBlurEffects = useSettingsStore(s => s.setEnableBlurEffects);
+
+  // Accessibility
+  const reduceMotion = useSettingsStore(s => s.reduceMotion);
+  const setReduceMotion = useSettingsStore(s => s.setReduceMotion);
+  const textScale = useSettingsStore(s => s.textScale);
+  const setTextScale = useSettingsStore(s => s.setTextScale);
+  const highContrast = useSettingsStore(s => s.highContrast);
+  const setHighContrast = useSettingsStore(s => s.setHighContrast);
+
   const clearLevelUpQueue = useLevelUpStore(s => s.clearAll);
 
   const onEgvs = useGameStore(s => s.onEgvs);
@@ -208,6 +224,212 @@ export default function SettingsScreen() {
               />
               <Button label="Speed ×1" onPress={() => setSimSpeed(1)} variant="secondary" />
               <Button label="Speed ×6" onPress={() => setSimSpeed(6)} variant="secondary" />
+            </View>
+          </>
+        ))}
+
+        {section("🎭 Visual Effects", "", (
+          <>
+            <Text style={{
+              color: colors.text.secondary,
+              fontSize: typography.size.sm,
+              marginBottom: spacing.sm,
+            }}>
+              Customize animations and visual effects
+            </Text>
+
+            <View style={{
+              backgroundColor: colors.background.secondary,
+              borderRadius: borderRadius.md,
+              padding: spacing.md,
+              borderWidth: 1,
+              borderColor: colors.gray[200],
+              marginBottom: spacing.sm,
+            }}>
+              <Text style={{
+                color: colors.text.primary,
+                fontSize: typography.size.base,
+                fontWeight: typography.weight.medium,
+              }}>
+                Animations: {enableAnimations ? "🟢 Enabled" : "🔴 Disabled"}
+              </Text>
+              <Text style={{
+                color: colors.text.secondary,
+                fontSize: typography.size.sm,
+                marginTop: spacing.xs,
+              }}>
+                Enable smooth transitions and animations
+              </Text>
+            </View>
+
+            <View style={{
+              backgroundColor: colors.background.secondary,
+              borderRadius: borderRadius.md,
+              padding: spacing.md,
+              borderWidth: 1,
+              borderColor: colors.gray[200],
+              marginBottom: spacing.sm,
+            }}>
+              <Text style={{
+                color: colors.text.primary,
+                fontSize: typography.size.base,
+                fontWeight: typography.weight.medium,
+              }}>
+                Particle Effects: {enableParticleEffects ? "🟢 Enabled" : "🔴 Disabled"}
+              </Text>
+              <Text style={{
+                color: colors.text.secondary,
+                fontSize: typography.size.sm,
+                marginTop: spacing.xs,
+              }}>
+                Level up celebrations and visual sparkles
+              </Text>
+            </View>
+
+            <View style={{
+              backgroundColor: colors.background.secondary,
+              borderRadius: borderRadius.md,
+              padding: spacing.md,
+              borderWidth: 1,
+              borderColor: colors.gray[200],
+              marginBottom: spacing.sm,
+            }}>
+              <Text style={{
+                color: colors.text.primary,
+                fontSize: typography.size.base,
+                fontWeight: typography.weight.medium,
+              }}>
+                Blur Effects: {enableBlurEffects ? "🟢 Enabled" : "🔴 Disabled"}
+              </Text>
+              <Text style={{
+                color: colors.text.secondary,
+                fontSize: typography.size.sm,
+                marginTop: spacing.xs,
+              }}>
+                Depth and focus effects (may impact performance)
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" }}>
+              <Button
+                label={enableAnimations ? "Disable Animations" : "Enable Animations"}
+                onPress={() => setEnableAnimations(!enableAnimations)}
+                variant="secondary"
+              />
+              <Button
+                label={enableParticleEffects ? "Disable Particles" : "Enable Particles"}
+                onPress={() => setEnableParticleEffects(!enableParticleEffects)}
+                variant="secondary"
+              />
+              <Button
+                label={enableBlurEffects ? "Disable Blur" : "Enable Blur"}
+                onPress={() => setEnableBlurEffects(!enableBlurEffects)}
+                variant="secondary"
+              />
+            </View>
+          </>
+        ))}
+
+        {section("♿ Accessibility", "", (
+          <>
+            <Text style={{
+              color: colors.text.secondary,
+              fontSize: typography.size.sm,
+              marginBottom: spacing.sm,
+            }}>
+              Customize accessibility and motion preferences
+            </Text>
+
+            <View style={{
+              backgroundColor: colors.background.secondary,
+              borderRadius: borderRadius.md,
+              padding: spacing.md,
+              borderWidth: 1,
+              borderColor: colors.gray[200],
+              marginBottom: spacing.sm,
+            }}>
+              <Text style={{
+                color: colors.text.primary,
+                fontSize: typography.size.base,
+                fontWeight: typography.weight.medium,
+              }}>
+                Reduce Motion: {reduceMotion ? "🟢 Enabled" : "🔴 Disabled"}
+              </Text>
+              <Text style={{
+                color: colors.text.secondary,
+                fontSize: typography.size.sm,
+                marginTop: spacing.xs,
+              }}>
+                Minimizes animations for better accessibility
+              </Text>
+            </View>
+
+            <View style={{
+              backgroundColor: colors.background.secondary,
+              borderRadius: borderRadius.md,
+              padding: spacing.md,
+              borderWidth: 1,
+              borderColor: colors.gray[200],
+              marginBottom: spacing.sm,
+            }}>
+              <Text style={{
+                color: colors.text.primary,
+                fontSize: typography.size.base,
+                fontWeight: typography.weight.medium,
+              }}>
+                Text Scale: {textScale.toFixed(1)}×
+              </Text>
+              <Text style={{
+                color: colors.text.secondary,
+                fontSize: typography.size.sm,
+                marginTop: spacing.xs,
+              }}>
+                Adjust text size for better readability
+              </Text>
+            </View>
+
+            <View style={{
+              backgroundColor: colors.background.secondary,
+              borderRadius: borderRadius.md,
+              padding: spacing.md,
+              borderWidth: 1,
+              borderColor: colors.gray[200],
+              marginBottom: spacing.sm,
+            }}>
+              <Text style={{
+                color: colors.text.primary,
+                fontSize: typography.size.base,
+                fontWeight: typography.weight.medium,
+              }}>
+                High Contrast: {highContrast ? "🟢 Enabled" : "🔴 Disabled"}
+              </Text>
+              <Text style={{
+                color: colors.text.secondary,
+                fontSize: typography.size.sm,
+                marginTop: spacing.xs,
+              }}>
+                Enhanced contrast for better visibility
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: "row", gap: spacing.sm, flexWrap: "wrap", marginBottom: spacing.md }}>
+              <Button
+                label={reduceMotion ? "Allow Motion" : "Reduce Motion"}
+                onPress={() => setReduceMotion(!reduceMotion)}
+                variant="secondary"
+              />
+              <Button
+                label={highContrast ? "Normal Contrast" : "High Contrast"}
+                onPress={() => setHighContrast(!highContrast)}
+                variant="secondary"
+              />
+            </View>
+
+            <View style={{ flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" }}>
+              <Button label="Text 0.8×" onPress={() => setTextScale(0.8)} variant="secondary" />
+              <Button label="Text 1.0×" onPress={() => setTextScale(1.0)} variant="secondary" />
+              <Button label="Text 1.2×" onPress={() => setTextScale(1.2)} variant="secondary" />
+              <Button label="Text 1.5×" onPress={() => setTextScale(1.5)} variant="secondary" />
             </View>
           </>
         ))}

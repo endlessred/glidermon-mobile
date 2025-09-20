@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import { View, Text, Animated, Easing } from "react-native";
 import { UnlockData } from "../stores/levelUpStore";
+import { useTheme } from "../hooks/useTheme";
 
 interface UnlockDisplayProps {
   unlock: UnlockData;
@@ -8,6 +9,7 @@ interface UnlockDisplayProps {
 }
 
 export default function UnlockDisplay({ unlock, onComplete }: UnlockDisplayProps) {
+  const { reduceMotion } = useTheme();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.5)).current;
   const iconBounceAnim = useRef(new Animated.Value(0)).current;
@@ -17,6 +19,18 @@ export default function UnlockDisplay({ unlock, onComplete }: UnlockDisplayProps
     fadeAnim.setValue(0);
     scaleAnim.setValue(0.5);
     iconBounceAnim.setValue(0);
+
+    if (reduceMotion) {
+      // Skip animations when reduce motion is enabled
+      fadeAnim.setValue(1);
+      scaleAnim.setValue(1);
+      iconBounceAnim.setValue(1);
+      // Still show for 2 seconds but without animation
+      setTimeout(() => {
+        onComplete();
+      }, 2000);
+      return;
+    }
 
     // Sequence: fade in, scale up, icon bounce, then auto-complete after a delay
     Animated.sequence([
@@ -44,7 +58,7 @@ export default function UnlockDisplay({ unlock, onComplete }: UnlockDisplayProps
     ]).start(() => {
       onComplete();
     });
-  }, [unlock.name]);
+  }, [unlock.name, reduceMotion]);
 
   const getUnlockIcon = (type: UnlockData['type']) => {
     switch (type) {
