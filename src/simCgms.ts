@@ -109,7 +109,32 @@ export function startEgvsSimulator({
     }
   };
 
-  // Generate the first data point immediately
+  // Generate some historical data for the past hour to seed the chart
+  const generateHistoricalData = () => {
+    // Generate 12 historical readings (1 hour of 5-minute intervals)
+    let historicalMgdl = startMgdl;
+    for (let i = 12; i >= 1; i--) {
+      const historicalEpochSec = epochSec - (i * virtualStepSec);
+
+      // Create realistic historical fluctuations
+      const historicalDrift = driftFor("stable") * 0.5; // Smaller changes for history
+      const noise = (rng() - 0.5) * 2; // Small noise
+      historicalMgdl = clamp(Math.round(historicalMgdl + historicalDrift + noise), 40, 350);
+
+      // Simple trend for historical data
+      const historicalTrend = historicalDrift > 2 ? 2 as TrendCode : historicalDrift < -2 ? 0 as TrendCode : 1 as TrendCode;
+
+      onEgvs(historicalMgdl, historicalTrend, historicalEpochSec);
+    }
+
+    // Update mgdl to the last historical value for continuity
+    mgdl = historicalMgdl;
+  };
+
+  // Generate historical data first
+  generateHistoricalData();
+
+  // Generate the first current data point immediately
   generateTick();
 
   // Then continue with regular interval

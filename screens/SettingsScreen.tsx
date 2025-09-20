@@ -8,6 +8,8 @@ import { useToastStore } from "../stores/toastStore";
 import { useTheme } from "../hooks/useTheme";
 import { useLevelUpStore } from "../stores/levelUpStore";
 import { ThemeVariation, themeDisplayNames } from "../styles/themeVariations";
+import { useHealthKit } from "../hooks/useHealthKit";
+import { unifiedHealthService } from "../src/healthService";
 
 export default function SettingsScreen() {
   const { colors, spacing, borderRadius, typography } = useTheme();
@@ -39,6 +41,10 @@ export default function SettingsScreen() {
   const setTextScale = useSettingsStore(s => s.setTextScale);
   const highContrast = useSettingsStore(s => s.highContrast);
   const setHighContrast = useSettingsStore(s => s.setHighContrast);
+
+  // Health monitoring integration (HealthKit on iOS, Health Connect on Android)
+  const healthKit = useHealthKit();
+  const serviceName = unifiedHealthService.getServiceName();
 
   const clearLevelUpQueue = useLevelUpStore(s => s.clearAll);
 
@@ -316,6 +322,72 @@ export default function SettingsScreen() {
 
         {section("🩺 Data Source", "", (
           <>
+            {/* HealthKit Section */}
+            {healthKit.isAvailable && (
+              <>
+                <View style={{
+                  backgroundColor: colors.background.secondary,
+                  borderRadius: borderRadius.md,
+                  padding: spacing.md,
+                  borderWidth: 1,
+                  borderColor: colors.gray[200],
+                  marginBottom: spacing.sm,
+                }}>
+                  <Text style={{
+                    color: colors.text.primary,
+                    fontSize: typography.size.base,
+                    fontWeight: typography.weight.medium,
+                  }}>
+                    {serviceName}: {healthKit.status === 'authorized' ? '🟢 Connected' :
+                                   healthKit.status === 'available' ? '🟡 Available' :
+                                   healthKit.status === 'denied' ? '🔴 Denied' : '⚪ Checking...'}
+                  </Text>
+                  <Text style={{
+                    color: colors.text.secondary,
+                    fontSize: typography.size.sm,
+                    marginTop: spacing.xs,
+                  }}>
+                    {healthKit.isObserving ? 'Monitoring live blood glucose data' :
+                     healthKit.isAuthorized ? 'Ready to monitor blood glucose' :
+                     'Connect to use real health data from iPhone'}
+                  </Text>
+                  {healthKit.lastReading && (
+                    <Text style={{
+                      color: colors.text.tertiary,
+                      fontSize: typography.size.xs,
+                      marginTop: spacing.xs,
+                    }}>
+                      Last reading: {healthKit.lastReading.value} mg/dL at {healthKit.lastReading.date.toLocaleTimeString()}
+                    </Text>
+                  )}
+                </View>
+
+                <View style={{ flexDirection: "row", gap: spacing.sm, flexWrap: "wrap", marginBottom: spacing.md }}>
+                  {!healthKit.isAuthorized ? (
+                    <Button
+                      label={`Connect ${serviceName}`}
+                      onPress={() => healthKit.requestPermissions()}
+                      variant="primary"
+                    />
+                  ) : (
+                    <>
+                      <Button
+                        label={healthKit.isObserving ? "Stop Monitoring" : "Start Monitoring"}
+                        onPress={() => healthKit.isObserving ? healthKit.stopObserving() : healthKit.startObserving()}
+                        variant={healthKit.isObserving ? "secondary" : "primary"}
+                      />
+                      <Button
+                        label="Fetch Latest"
+                        onPress={() => healthKit.fetchLatest()}
+                        variant="secondary"
+                      />
+                    </>
+                  )}
+                </View>
+              </>
+            )}
+
+            {/* Simulator Section */}
             <View style={{
               backgroundColor: colors.background.secondary,
               borderRadius: borderRadius.md,
@@ -337,6 +409,16 @@ export default function SettingsScreen() {
               }}>
                 Speed: {simSpeed}× normal rate
               </Text>
+              {healthKit.isAvailable && !healthKit.isObserving && (
+                <Text style={{
+                  color: colors.text.tertiary,
+                  fontSize: typography.size.xs,
+                  marginTop: spacing.xs,
+                  fontStyle: 'italic',
+                }}>
+                  Use for testing when {serviceName} is not monitoring
+                </Text>
+              )}
             </View>
             <View style={{ flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" }}>
               <Button

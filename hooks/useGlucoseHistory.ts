@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { useHudVM } from './useHudVM';
+import { useGameStore } from '../stores/gameStore';
 
 type GlucoseReading = {
   timestamp: number;
@@ -7,7 +7,7 @@ type GlucoseReading = {
 };
 
 export const useGlucoseHistory = (): GlucoseReading[] => {
-  const { mgdl: currentMgdl } = useHudVM();
+  const engine = useGameStore(s => s.engine);
   const [showData, setShowData] = React.useState(false);
 
   // Show empty state for first 1 second to demonstrate the empty state
@@ -25,40 +25,31 @@ export const useGlucoseHistory = (): GlucoseReading[] => {
       return [];
     }
 
+    // Use live data from engine trail if available
+    const trail = engine?.trail || [];
+
+    if (trail.length > 0) {
+      // Convert engine trail format to chart format
+      return trail.map(reading => ({
+        timestamp: reading.ts,
+        mgdl: reading.mgdl,
+      }));
+    }
+
+    // If no live data yet, generate some initial seed data for demonstration
+    // This will be replaced by live data as the simulator runs
     const now = Date.now();
     const readings: GlucoseReading[] = [];
 
-    // Generate 12 readings over the past hour (5-minute intervals)
-    // Include some out-of-range values to test coloring
-    const baseGlucose = currentMgdl || 120;
-    let lastValue = Math.max(80, Math.min(200, baseGlucose - 30 + Math.random() * 40));
+    // Generate fewer initial readings (just 6 over past 30 minutes) to be quickly replaced by live data
+    let lastValue = 100 + Math.random() * 40; // Start with a reasonable baseline
 
-    for (let i = 11; i >= 0; i--) {
+    for (let i = 5; i >= 0; i--) {
       const timestamp = now - (i * 5 * 60 * 1000); // 5 minutes ago for each reading
 
-      // Create realistic glucose fluctuations with some extreme values for testing
-      let change = (Math.random() - 0.5) * 20; // Random change of ±10 mg/dL
-      const trend = (Math.random() - 0.5) * 5; // Small trend bias
-
-      // Add some intentional out-of-range values for testing
-      if (i === 8) {
-        // Add a low value around 40 minutes ago
-        lastValue = 65; // Below low threshold (80)
-      } else if (i === 5) {
-        // Add a high value around 25 minutes ago
-        lastValue = 220; // Above high threshold (180)
-      } else if (i === 2) {
-        // Add a very high value around 10 minutes ago
-        lastValue = 280; // Above very high threshold (250)
-      } else {
-        lastValue = Math.max(40, Math.min(350, lastValue + change + trend));
-      }
-
-      // Recent readings trend toward current value
-      if (i < 3 && i !== 2) { // Don't override our test high value
-        const targetDiff = (currentMgdl || 120) - lastValue;
-        lastValue += targetDiff * 0.3;
-      }
+      // Create subtle realistic fluctuations for initial seed data
+      const change = (Math.random() - 0.5) * 10; // Smaller changes for seed data
+      lastValue = Math.max(80, Math.min(180, lastValue + change));
 
       readings.push({
         timestamp,
@@ -66,11 +57,6 @@ export const useGlucoseHistory = (): GlucoseReading[] => {
       });
     }
 
-    // Ensure the last reading matches current if available
-    if (currentMgdl && readings.length > 0) {
-      readings[readings.length - 1].mgdl = currentMgdl;
-    }
-
     return readings;
-  }, [currentMgdl, showData]);
+  }, [engine?.trail, showData]);
 };

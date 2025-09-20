@@ -10,7 +10,9 @@
     "ios": {
       "bundleIdentifier": "com.kevin.glidermon",
       "infoPlist": {
-        "NSBluetoothAlwaysUsageDescription": "GliderMon uses Bluetooth to send CGM readings to your device."
+        "NSBluetoothAlwaysUsageDescription": "GliderMon uses Bluetooth to send CGM readings to your device.",
+        "NSHealthShareUsageDescription": "This app reads blood glucose data to monitor your virtual pet's health.",
+        "NSHealthUpdateUsageDescription": "This app may write health data for tracking purposes."
       }
     },
     "android": {
@@ -20,7 +22,8 @@
         "android.permission.BLUETOOTH_ADMIN",
         "android.permission.BLUETOOTH_CONNECT",
         "android.permission.BLUETOOTH_SCAN",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.health.READ_BLOOD_GLUCOSE"
       ]
     }
   }

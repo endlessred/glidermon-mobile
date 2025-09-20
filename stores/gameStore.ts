@@ -82,9 +82,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
       award: false, // <<< critical
     });
 
-    // scoring mutates eng internally; we also ensure a short trail
+    // scoring mutates eng internally; we also ensure a trail with 1-hour rolling window
     if (!Array.isArray(eng.trail)) eng.trail = [];
-    eng.trail = [...eng.trail, { ts: epochSec * 1000, mgdl }].slice(-12);
+    const now = epochSec * 1000; // Current timestamp in milliseconds
+    const oneHourAgo = now - (60 * 60 * 1000); // 1 hour ago
+
+    // Add new reading and filter to keep only last hour of data
+    eng.trail = [...eng.trail, { ts: now, mgdl }]
+      .filter(reading => reading.ts > oneHourAgo);
 
     set({ engine: eng, lastDelta: delta, lastEvent: event });
   },
