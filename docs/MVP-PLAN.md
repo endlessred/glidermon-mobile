@@ -55,7 +55,7 @@ Data Model & Persistence
 
 UI/UX & Accessibility
 
-✅ HUD: Acorn badge, Level bar, daily cap bar, rested bank, glucose card with trend/last update, ❌ line chart of glucose readings for past hour, drawn to look like a wind trail behind a gliding sugar glider
+✅ HUD: Acorn badge, Level bar, daily cap bar, rested bank, glucose card with trend/last update, ✅ line chart of glucose readings for past hour, drawn to look like a wind trail behind a gliding sugar glider
 
 ✅ GameCanvas embedded: square, responsive, no blank bands; overflow-hidden clipping.
 

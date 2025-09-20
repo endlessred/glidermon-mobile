@@ -83,7 +83,8 @@ export function startEgvsSimulator({
 
   const clamp = (n: number, a: number, b: number) => Math.max(a, Math.min(b, n));
 
-  timer = setInterval(() => {
+  // Generate the tick data and emit it
+  const generateTick = () => {
     // time marches
     epochSec += virtualStepSec;
 
@@ -106,7 +107,13 @@ export function startEgvsSimulator({
       mode = pickNextMode(mode);
       ticksLeft = 6 + Math.floor(rng() * 8); // 30–70 min
     }
-  }, realTickMs);
+  };
+
+  // Generate the first data point immediately
+  generateTick();
+
+  // Then continue with regular interval
+  timer = setInterval(generateTick, realTickMs);
 
   return { stop: stopEgvsSimulator };
 }

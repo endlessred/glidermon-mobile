@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, ScrollView, useWindowDimensions } from "react-native";
+import { View, Text, ScrollView, useWindowDimensions, Platform } from "react-native";
 import { useProgressionStore } from "../stores/progressionStore";
 import AcornBadge from "../components/AcornBadge";
 import LevelBar from "../components/LevelBar";
@@ -8,6 +8,8 @@ import { useHudVM } from "../hooks/useHudVM";
 import GameCanvas from "../view/GameCanvas";
 import { useTheme } from "../hooks/useTheme";
 import { getGlucoseColor, getTrendIcon } from "../styles/theme";
+import GlucoseWindTrail from "../components/GlucoseWindTrail";
+import { useGlucoseHistory } from "../hooks/useGlucoseHistory";
 
 export default function HudScreen() {
   const { width } = useWindowDimensions();
@@ -24,9 +26,24 @@ export default function HudScreen() {
 
   // Glucose VM (null-safe)
   const { mgdl, trendCode, minutesAgo } = useHudVM();
+  const glucoseHistory = useGlucoseHistory();
 
   // Optional: slightly smaller canvas on tiny screens
   const canvasScale = width < 380 ? 0.9 : 1;
+
+  // Cross-platform shadow styles
+  const cardShadow = Platform.select({
+    web: {
+      boxShadow: `0 2px 4px rgba(0, 0, 0, 0.05)`,
+    },
+    default: {
+      shadowColor: colors.gray[900],
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+  });
 
   return (
     <ScrollView
@@ -43,11 +60,7 @@ export default function HudScreen() {
         borderRadius: borderRadius.lg,
         padding: spacing.lg,
         gap: spacing.md,
-        shadowColor: colors.gray[900],
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 2,
+        ...cardShadow,
       }}>
         <View style={{
           flexDirection: "row",
@@ -71,11 +84,7 @@ export default function HudScreen() {
         borderRadius: borderRadius.lg,
         padding: spacing.lg,
         transform: [{ scale: canvasScale }],
-        shadowColor: colors.gray[900],
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 2,
+        ...cardShadow,
       }}>
         <GameCanvas variant="embedded" />
       </View>
@@ -86,11 +95,7 @@ export default function HudScreen() {
         borderRadius: borderRadius.lg,
         padding: spacing.lg,
         gap: spacing.md,
-        shadowColor: colors.gray[900],
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 2,
+        ...cardShadow,
       }}>
         <Text style={{
           color: colors.text.primary,
@@ -133,6 +138,9 @@ export default function HudScreen() {
               {minutesAgo != null ? `${minutesAgo}m ago` : "no data"}
             </Text>
           </View>
+
+          {/* Wind Trail Chart */}
+          <GlucoseWindTrail readings={glucoseHistory} height={100} />
         </View>
       </View>
     </ScrollView>

@@ -15,6 +15,7 @@ import { startEgvsSimulator, stopEgvsSimulator } from "./src/simCgms";
 import ToastHost from "./components/ToastHost";
 import LevelUpOverlay from "./components/LevelUpOverlay";
 import LevelUpTestButton from "./components/LevelUpTestButton";
+import DevDebugPanel from "./components/DevDebugPanel";
 import { useTheme } from "./hooks/useTheme";
 
 const TABS = ["HUD", "DEXCOM", "GAME", "SHOP", "EQUIP", "SETTINGS"] as const;
@@ -23,6 +24,20 @@ type Tab = typeof TABS[number];
 export default function App() {
   // ---- theme ----
   const { colors, spacing, borderRadius, typography } = useTheme();
+
+  // Cross-platform shadow styles for tabs
+  const getTabShadow = (isActive: boolean) => Platform.select({
+    web: {
+      boxShadow: isActive ? `0 1px 2px rgba(0, 0, 0, 0.1)` : `0 1px 2px rgba(0, 0, 0, 0.05)`,
+    },
+    default: {
+      shadowColor: colors.gray[900],
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: isActive ? 0.1 : 0.05,
+      shadowRadius: 2,
+      elevation: isActive ? 2 : 1,
+    },
+  });
 
   // ---- persistence → engine sync ----
   const rehydrated = useProgressionStore((s) => s._rehydrated);
@@ -122,16 +137,12 @@ export default function App() {
               backgroundColor: tab === t ? colors.primary[500] : colors.background.card,
               borderWidth: 1,
               borderColor: tab === t ? colors.primary[600] : colors.gray[300],
-              shadowColor: colors.gray[900],
-              shadowOffset: { width: 0, height: 1 },
-              shadowOpacity: tab === t ? 0.1 : 0.05,
-              shadowRadius: 2,
-              elevation: tab === t ? 2 : 1,
+              ...getTabShadow(tab === t),
             }}
           >
             <Text style={{
               color: tab === t ? colors.text.inverse : colors.text.primary,
-              fontWeight: typography.weight.semibold,
+              fontWeight: typography.weight.semibold as any,
               fontSize: typography.size.sm,
             }}>
               {t}
@@ -167,6 +178,7 @@ export default function App() {
       <ToastHost />
       <LevelUpOverlay />
       <LevelUpTestButton />
+      <DevDebugPanel />
     </SafeAreaView>
   );
 }
