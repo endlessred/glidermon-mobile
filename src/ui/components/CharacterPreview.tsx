@@ -50,9 +50,11 @@ export default function CharacterPreview({
     const scale = customization?.adjustments.scale || 1;
     const layer = customization?.adjustments.layer || 0;
 
+    // Character scale factor - all measurements should scale with this
+    const characterScale = config.charWidth / 64; // Scale factor relative to original 64px sprite
+
     // Base position using actual glidermon anchor positions
     const getSocketPosition = (socket: CosmeticSocket) => {
-      const scale = config.charWidth / 64; // Scale factor relative to original 64px sprite
       const anchor = glidermonIdleAnchors.anchors[socket];
 
       if (!anchor) {
@@ -61,8 +63,8 @@ export default function CharacterPreview({
 
       // Convert from sprite coordinates (32,32 center) to our coordinate system
       const spriteCenter = 32;
-      const scaledX = (anchor.x - spriteCenter) * scale;
-      const scaledY = (anchor.y - spriteCenter) * scale;
+      const scaledX = (anchor.x - spriteCenter) * characterScale;
+      const scaledY = (anchor.y - spriteCenter) * characterScale;
 
       return { x: scaledX, y: scaledY };
     };
@@ -76,6 +78,20 @@ export default function CharacterPreview({
       // Hide placeholder for now - no cosmetic definition found
       return null;
     }
+
+    // Check if this is a hat_pack_1 item that needs sprite sheet cropping
+    const HAT_PACK_CONFIGS: Record<string, { frameIndex: number }> = {
+      frog_hat: { frameIndex: 0 },
+      black_headphones: { frameIndex: 1 },
+      white_headphones: { frameIndex: 2 },
+      pink_headphones: { frameIndex: 3 },
+      pink_aniphones: { frameIndex: 4 },
+      feather_cap: { frameIndex: 5 },
+      viking_hat: { frameIndex: 6 },
+      adventurer_fedora: { frameIndex: 7 },
+    };
+
+    const isHatPackItem = HAT_PACK_CONFIGS[equippedItem.itemId];
 
     // Adjusted offsets for our anchor-based positioning system
     const getGameCanvasOffset = (itemId: string) => {
@@ -98,24 +114,30 @@ export default function CharacterPreview({
 
     const gameCanvasOffset = getGameCanvasOffset(equippedItem.itemId);
 
-    // Apply idle animation offset - sync with character bouncing
+    // Apply idle animation offset - sync with character bouncing, scaled with character size
     const idleOffset = {
-      x: Math.sin(animationFrame * 0.4) * 1, // Match character sway
-      y: Math.sin(animationFrame * 0.8) * 2 // Match character bounce
+      x: Math.sin(animationFrame * 0.4) * (1 * characterScale), // Match character sway, scaled
+      y: Math.sin(animationFrame * 0.8) * (2 * characterScale) // Match character bounce, scaled
     };
 
     // Apply GameCanvas hatOffset scaled to our character size
-    const gameCanvasScale = config.charWidth / 64; // Our scale factor relative to 64px sprite
     const scaledHatOffset = {
-      x: (gameCanvasOffset.dx || 0) * gameCanvasScale,
-      y: (gameCanvasOffset.dy || 0) * gameCanvasScale
+      x: (gameCanvasOffset.dx || 0) * characterScale,
+      y: (gameCanvasOffset.dy || 0) * characterScale
     };
 
+    // Scale user adjustments with character size
+    const scaledUserOffset = {
+      x: offset.x * characterScale,
+      y: offset.y * characterScale
+    };
+
+    // Combine all transforms with proper scaling
     const transform = [
-      { translateX: basePos.x + offset.x + idleOffset.x + scaledHatOffset.x },
-      { translateY: basePos.y + offset.y + idleOffset.y + scaledHatOffset.y },
+      { translateX: basePos.x + scaledUserOffset.x + idleOffset.x + scaledHatOffset.x },
+      { translateY: basePos.y + scaledUserOffset.y + idleOffset.y + scaledHatOffset.y },
       { rotate: `${rotation}deg` },
-      { scale: scale }
+      { scale: scale } // User scale adjustment is independent of character scale
     ];
 
     // Match GameCanvas scaling - cosmetics should be same size as character sprite
@@ -127,6 +149,78 @@ export default function CharacterPreview({
       return null; // No asset available
     }
 
+    // For hat pack items, implement sprite sheet cropping using exact JSON coordinates
+    if (isHatPackItem) {
+      const frameIndex = isHatPackItem.frameIndex;
+
+      // From hat_pack_1.json: each frame is 64x64, positioned at frameIndex * 64 horizontally
+      const frameData = {
+        x: frameIndex * 64,  // Frame X position in sprite sheet
+        y: 0,                // All frames are on the same row (y=0)
+        w: 64,               // Frame width
+        h: 64                // Frame height
+      };
+
+      const spriteSheetWidth = 512;  // Total sprite sheet width
+      const spriteSheetHeight = 64;  // Total sprite sheet height
+
+      // Calculate scale to fit frame into our cosmetic size (already character-scaled)
+      const frameScale = cosmeticSize / frameData.w;
+
+      // Calculate position to show only the specific frame
+      const frameOffsetX = -frameData.x * frameScale;
+      const frameOffsetY = -frameData.y * frameScale;
+
+      return (
+        <View
+          key={socket}
+          style={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            marginTop: -cosmeticSize / 2,
+            marginLeft: -cosmeticSize / 2,
+            transform,
+            zIndex: 10 + layer,
+            opacity: socket === "background" ? 0.7 : 1
+          }}
+        >
+          <View style={{
+            width: cosmeticSize,
+            height: cosmeticSize,
+            overflow: "hidden",
+            borderRadius: borderRadius.sm
+          }}>
+            <Image
+              source={assetSource}
+              style={{
+                width: spriteSheetWidth * frameScale,
+                height: spriteSheetHeight * frameScale,
+                marginLeft: frameOffsetX,
+                marginTop: frameOffsetY,
+              }}
+              resizeMode="stretch"
+            />
+            {/* Highlight indicator overlay - doesn't affect cosmetic scaling */}
+            {isHighlighted && (
+              <View style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                borderWidth: 2,
+                borderColor: colors.primary[600],
+                borderRadius: borderRadius.sm,
+                backgroundColor: 'transparent'
+              }} />
+            )}
+          </View>
+        </View>
+      );
+    }
+
+    // For non-hat-pack items, render normally
     return (
       <View
         key={socket}
@@ -141,17 +235,35 @@ export default function CharacterPreview({
           opacity: socket === "background" ? 0.7 : 1
         }}
       >
-        <Image
-          source={assetSource}
-          style={{
-            width: cosmeticSize,
-            height: cosmeticSize,
-            borderWidth: isHighlighted ? 2 : 0,
-            borderColor: isHighlighted ? colors.primary[600] : "transparent",
-            borderRadius: borderRadius.sm
-          }}
-          resizeMode="contain"
-        />
+        <View style={{
+          width: cosmeticSize,
+          height: cosmeticSize,
+          borderRadius: borderRadius.sm,
+          overflow: "hidden"
+        }}>
+          <Image
+            source={assetSource}
+            style={{
+              width: cosmeticSize,
+              height: cosmeticSize,
+            }}
+            resizeMode="contain"
+          />
+          {/* Highlight indicator overlay - doesn't affect cosmetic scaling */}
+          {isHighlighted && (
+            <View style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              borderWidth: 2,
+              borderColor: colors.primary[600],
+              borderRadius: borderRadius.sm,
+              backgroundColor: 'transparent'
+            }} />
+          )}
+        </View>
       </View>
     );
   };
