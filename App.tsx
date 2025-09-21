@@ -2,13 +2,18 @@
 import React, { useState, useEffect } from "react";
 import { Platform, SafeAreaView, View, Text, Pressable, AppState } from "react-native";
 import { useProgressionStore } from "./src/data/stores/progressionStore";
+import { useUserStore } from "./src/data/stores/userStore";
 import SkiaBootstrap from "./SkiaBootstrap";
 import HomeScreen from "./src/ui/screens/HudScreen"; // HudScreen serves as HomeScreen
 // import DexcomEgvsScreen from "./src/ui/screens/DexcomEgvsScreen"; // Preserved for future Bluetooth device integration
 import GameCanvas from "./src/game/view/GameCanvas";
 import ShopScreen from "./src/ui/screens/ShopScreen";
 import EquipScreen from "./src/ui/screens/EquipScreen";
+import OutfitScreen from "./src/ui/screens/OutfitScreen";
 import SettingsScreen from "./src/ui/screens/SettingsScreen";
+import LeaderboardScreen from "./src/ui/screens/LeaderboardScreen";
+import GalleryScreen from "./src/ui/screens/GalleryScreen";
+import OnboardingScreen from "./src/ui/screens/OnboardingScreen";
 import { useGameStore } from "./src/data/stores/gameStore";
 import { useSettingsStore } from "./src/data/stores/settingsStore";
 import { startEgvsSimulator, stopEgvsSimulator } from "./src/engine/simCgms";
@@ -17,8 +22,12 @@ import LevelUpOverlay from "./src/ui/components/LevelUpOverlay";
 import LevelUpTestButton from "./src/ui/components/LevelUpTestButton";
 import DevDebugPanel from "./src/ui/components/DevDebugPanel";
 import { useTheme } from "./src/data/hooks/useTheme";
+import { initializeCosmeticSystem } from "./src/game/cosmetics/cosmeticDefinitions";
+import { useOutfitStore } from "./src/data/stores/outfitStore";
+import { POSE_DEFINITIONS } from "./src/data/poses/poseDefinitions";
+// import { migrateEquippedCosmeticsToOutfit, syncOutfitToCosmeticsStore } from "./src/data/utils/outfitMigration.ts";
 
-const TABS = ["HOME", "SHOP", "EQUIP", "SETTINGS"] as const;
+const TABS = ["HOME", "SHOP", "OUTFIT", "GALLERY", "SETTINGS"] as const;
 type Tab = typeof TABS[number];
 
 export default function App() {
@@ -41,6 +50,9 @@ export default function App() {
 
   // ---- persistence → engine sync ----
   const rehydrated = useProgressionStore((s) => s._rehydrated);
+  const userRehydrated = useUserStore((s) => s._rehydrated);
+  const outfitRehydrated = useOutfitStore((s) => s._rehydrated);
+  const hasCompletedOnboarding = useUserStore((s) => s.hasCompletedOnboarding);
   const syncProgressionToEngine = useGameStore((s) => s.syncProgressionToEngine);
 
   // ---- tabs ----
@@ -55,6 +67,37 @@ export default function App() {
   useEffect(() => {
     useSettingsStore.getState().load?.();
   }, []);
+
+  // Initialize cosmetic system once
+  useEffect(() => {
+    initializeCosmeticSystem();
+  }, []);
+
+  // Initialize outfit system with poses and migration
+  useEffect(() => {
+    if (outfitRehydrated && rehydrated) {
+      // Add poses to the outfit store if they're not already there
+      const currentPoses = useOutfitStore.getState().poses;
+      const missingPoses = POSE_DEFINITIONS.filter(
+        pose => !currentPoses.find(cp => cp.id === pose.id)
+      );
+
+      if (missingPoses.length > 0) {
+        useOutfitStore.setState(state => ({
+          poses: [...state.poses, ...missingPoses]
+        }));
+      }
+
+      // Migrate existing equipped cosmetics to outfit system
+      // migrateEquippedCosmeticsToOutfit();
+
+      // Set up sync to maintain backward compatibility
+      // syncOutfitToCosmeticsStore();
+    }
+  }, [outfitRehydrated, rehydrated]);
+
+  // Show onboarding if user hasn't completed it and stores are rehydrated
+  const showOnboarding = userRehydrated && !hasCompletedOnboarding;
 
   // After progression rehydrates, mirror into engine (keeps HUD consistent on reload)
   useEffect(() => {
@@ -115,6 +158,18 @@ export default function App() {
     };
   }, []);
 
+  // Show onboarding screen if user hasn't completed it
+  if (showOnboarding) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background.primary }}>
+        <OnboardingScreen onComplete={() => {
+          // Onboarding completion is handled by the OnboardingScreen component
+          // The state will update automatically via the store
+        }} />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background.primary }}>
       {/* top tabs */}
@@ -159,7 +214,8 @@ export default function App() {
           {/* GAME tab removed - GameCanvas is now embedded in Home (formerly HUD) screen */}
 
           {tab === "SHOP" && <ShopScreen />}
-          {tab === "EQUIP" && <EquipScreen />}
+          {tab === "OUTFIT" && <OutfitScreen />}
+          {tab === "GALLERY" && <GalleryScreen />}
           {tab === "SETTINGS" && <SettingsScreen />}
         </View>
       </SkiaBootstrap>

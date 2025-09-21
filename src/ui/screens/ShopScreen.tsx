@@ -4,6 +4,7 @@ import { useCosmeticsStore } from "../../data/stores/cosmeticsStore";
 import { useProgressionStore } from "../../data/stores/progressionStore";
 import { useToastStore } from "../../data/stores/toastStore";
 import { useTheme } from "../../data/hooks/useTheme";
+import HatPreview from "../components/HatPreview";
 
 export default function ShopScreen() {
   const { colors, spacing, borderRadius, typography } = useTheme();
@@ -106,23 +107,23 @@ export default function ShopScreen() {
                 gap: spacing.md,
                 flex: 1,
               }}>
-                <View style={{
-                  backgroundColor: colors.background.secondary,
-                  borderRadius: borderRadius.md,
-                  padding: spacing.sm,
-                  borderWidth: 1,
-                  borderColor: colors.gray[200],
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}>
-                  {rnImageSource ? (
-                    <Image source={rnImageSource} style={{ width: 48, height: 48 }} resizeMode="contain" />
-                  ) : (
-                    <Text style={{ fontSize: 24 }}>
-                      {item.socket === "theme" ? "🎨" : "👑"}
-                    </Text>
-                  )}
-                </View>
+                {item.socket === "headTop" ? (
+                  <HatPreview hatId={item.id} size={48} />
+                ) : (
+                  <View style={{
+                    backgroundColor: colors.background.secondary,
+                    borderRadius: borderRadius.md,
+                    padding: spacing.sm,
+                    borderWidth: 1,
+                    borderColor: colors.gray[200],
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: 48,
+                    height: 48,
+                  }}>
+                    <Text style={{ fontSize: 24 }}>🎨</Text>
+                  </View>
+                )}
                 <View style={{ flex: 1 }}>
                   <Text style={{
                     color: colors.text.primary,

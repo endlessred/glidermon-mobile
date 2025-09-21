@@ -7,6 +7,7 @@ import { themeDisplayNames } from "../../styles/themeVariations";
 // Assets for list thumbnails (RN <Image /> supports module ids or URIs)
 const leafPng = require("../../assets/GliderMonLeafHat.png");
 const greaterPng = require("../../assets/GliderMonGreaterHat.png");
+const hatPackPng = require("../../assets/hats/hat_pack_1.png");
 
 type Socket = "headTop" | "theme";
 
@@ -49,9 +50,19 @@ type CosmeticsState = {
 };
 
 const DEFAULT_CATALOG: CosmeticItem[] = [
-  // Hats
+  // Original Hats
   { id: "leaf_hat", name: "Leaf Cap", cost: 250, socket: "headTop", tex: leafPng },
   { id: "greater_hat", name: "Greater Leaf", cost: 600, socket: "headTop", tex: greaterPng },
+
+  // Hat Pack 1 - New Hats
+  { id: "frog_hat", name: "Green Frog Hat", cost: 300, socket: "headTop", tex: hatPackPng },
+  { id: "black_headphones", name: "Black Headphones", cost: 400, socket: "headTop", tex: hatPackPng },
+  { id: "white_headphones", name: "White Headphones", cost: 400, socket: "headTop", tex: hatPackPng },
+  { id: "pink_headphones", name: "Pink Headphones", cost: 400, socket: "headTop", tex: hatPackPng },
+  { id: "pink_aniphones", name: "Pink AniPhones", cost: 500, socket: "headTop", tex: hatPackPng },
+  { id: "feather_cap", name: "Feather Cap", cost: 450, socket: "headTop", tex: hatPackPng },
+  { id: "viking_hat", name: "Viking Hat", cost: 700, socket: "headTop", tex: hatPackPng },
+  { id: "adventurer_fedora", name: "Adventurer Fedora", cost: 550, socket: "headTop", tex: hatPackPng },
 
   // Theme cosmetics - unlockable color themes
   { id: "theme_cute", name: themeDisplayNames.cute, cost: 500, socket: "theme", themeId: "cute" },
@@ -72,10 +83,8 @@ export const useCosmeticsStore = create<CosmeticsState>()(
       equipped: { headTop: "leaf_hat", hat: "leaf_hat" },
 
       loadCatalog: () => {
-        // idempotent (kept for screens calling it on mount)
-        if (!get().catalog || get().catalog.length === 0) {
-          set({ catalog: DEFAULT_CATALOG });
-        }
+        // Always load the latest catalog to ensure new items are available
+        set({ catalog: DEFAULT_CATALOG });
       },
 
       buy: (id) => {
@@ -119,13 +128,13 @@ export const useCosmeticsStore = create<CosmeticsState>()(
         }),
     }),
     {
-      name: "cosmetics_store_v3",
+      name: "cosmetics_store_v4",
       storage: createJSONStorage(() => AsyncStorage),
-      version: 3,
+      version: 4,
       migrate: (state: any, from) => {
         const s = state ?? {};
-        // Ensure all keys exist
-        s.catalog ??= DEFAULT_CATALOG;
+        // Always update catalog to latest version to include new hats
+        s.catalog = DEFAULT_CATALOG;
         s.owned ??= { leaf_hat: true };
         s.points = typeof s.points === "number" ? s.points : 0;
         s.equipped ??= {};

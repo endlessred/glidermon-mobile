@@ -7,7 +7,9 @@
       "Bash(pnpm exec tsc:*)",
       "Bash(cat:*)",
       "Bash(grep:*)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(pnpm expo start:web:*)",
+      "Bash(pnpm exec expo start:*)"
     ],
     "deny": [],
     "ask": []

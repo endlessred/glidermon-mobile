@@ -1,6 +1,8 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { View, Text, ScrollView, useWindowDimensions, Platform } from "react-native";
 import { useProgressionStore } from "../../data/stores/progressionStore";
+import { useUserStore } from "../../data/stores/userStore";
+import { useGalleryStore } from "../../data/stores/galleryStore";
 import AcornBadge from "../components/AcornBadge";
 import LevelBar from "../components/LevelBar";
 import DailyCapBar from "../components/DailyCapBar";
@@ -10,6 +12,7 @@ import { useTheme } from "../../data/hooks/useTheme";
 import { getGlucoseColor, getTrendIcon } from "../../styles/theme";
 import GlucoseWindTrail from "../components/GlucoseWindTrail";
 import { useGlucoseHistory } from "../../data/hooks/useGlucoseHistory";
+import { useComplimentShower } from "../components/ComplimentShower";
 
 export default function HudScreen() {
   const { width } = useWindowDimensions();
@@ -24,12 +27,35 @@ export default function HudScreen() {
   const dailyCap   = useProgressionStore(s => s.dailyCap);
   const restedBank = useProgressionStore(s => s.restedBank);
 
+  // User data
+  const glidermonName = useUserStore(s => s.glidermonName);
+
+  // Gallery system for compliment shower
+  const { myEntry, getNewReactions, clearNewReactions } = useGalleryStore();
+  const { triggerShower, ComplimentShowerComponent } = useComplimentShower();
+
   // Glucose VM (null-safe)
   const { mgdl, trendCode, minutesAgo } = useHudVM();
   const glucoseHistory = useGlucoseHistory();
 
   // Optional: slightly smaller canvas on tiny screens
   const canvasScale = width < 380 ? 0.9 : 1;
+
+  // Check for new reactions and trigger compliment shower
+  useEffect(() => {
+    if (myEntry) {
+      const newReactions = getNewReactions(myEntry.id);
+      if (newReactions && newReactions.length > 0) {
+        // Trigger the compliment shower animation
+        triggerShower(newReactions);
+
+        // Clear the new reactions after triggering
+        setTimeout(() => {
+          clearNewReactions(myEntry.id);
+        }, 3000); // Clear after animation completes
+      }
+    }
+  }, [myEntry, getNewReactions, clearNewReactions, triggerShower]);
 
   // Cross-platform shadow styles
   const cardShadow = Platform.select({
@@ -86,6 +112,17 @@ export default function HudScreen() {
         transform: [{ scale: canvasScale }],
         ...cardShadow,
       }}>
+        {glidermonName && (
+          <Text style={{
+            fontSize: typography.size.lg,
+            fontWeight: typography.weight.semibold as any,
+            color: colors.text.primary,
+            marginBottom: spacing.md,
+            textAlign: "center",
+          }}>
+            {glidermonName}
+          </Text>
+        )}
         <GameCanvas variant="embedded" />
       </View>
 
@@ -143,6 +180,9 @@ export default function HudScreen() {
           <GlucoseWindTrail readings={glucoseHistory} height={100} />
         </View>
       </View>
+
+      {/* Compliment Shower Animation Overlay */}
+      {ComplimentShowerComponent}
     </ScrollView>
   );
 }

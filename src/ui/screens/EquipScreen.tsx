@@ -4,6 +4,7 @@ import { useCosmeticsStore } from "../../data/stores/cosmeticsStore";
 import { useProgressionStore } from "../../data/stores/progressionStore";
 import { useToastStore } from "../../data/stores/toastStore";
 import { useTheme } from "../../data/hooks/useTheme";
+import HatPreview from "../components/HatPreview";
 
 export default function EquipScreen() {
   const { colors, typography, spacing, borderRadius } = useTheme();
@@ -53,14 +54,9 @@ export default function EquipScreen() {
         alignItems: "center",
         gap: spacing.md
       }}>
-        {showImage && item.tex && (
-          <Image
-            source={typeof item.tex === "string" ? { uri: item.tex } : item.tex}
-            style={{ width: 48, height: 48 }}
-            resizeMode="contain"
-          />
-        )}
-        {!showImage && (
+        {item.socket === "headTop" ? (
+          <HatPreview hatId={item.id} size={48} />
+        ) : (
           <View style={{
             width: 48,
             height: 48,

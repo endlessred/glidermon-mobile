@@ -5,8 +5,16 @@ import AnimatedSprite from "./AnimatedSprite";
 import BehaviorSprite from "./BehaviorSprite";
 import { makeGridRig } from "../sprites/rig";
 import { useCosmeticsStore } from "../../data/stores/cosmeticsStore";
+import { shallow } from "zustand/shallow";
 import TiltShiftEffect from "../../ui/components/TiltShiftEffect";
 import { useGliderBehaviorDefinition } from "./useGliderBehavior";
+import { useCosmeticRenderer } from "./CosmeticSprite";
+
+// Stable selector to prevent infinite re-renders
+const selectEquippedCosmetics = (s: any) => {
+  const equipped = s.equipped || {};
+  return Object.values(equipped).filter(Boolean) as string[];
+};
 
 // Assets (same ones you had)
 const idleSheet      = require("../../assets/idle8.png");                    // 64x64 x8 (4x2)
@@ -15,6 +23,7 @@ const skyboxPng      = require("../../assets/skybox/gliderNestSkybox.png"); // 3
 const nestPng        = require("../../assets/nest.png");
 const hatLeafPng     = require("../../assets/GliderMonLeafHat.png");
 const hatGreaterPng  = require("../../assets/GliderMonGreaterHat.png");
+const hatPackPng     = require("../../assets/hats/hat_pack_1.png");
 
 function resolveForSkia(mod: any): any {
   if (Platform.OS === "web") {
@@ -147,10 +156,31 @@ function GameCanvasInner({ Skia, variant }: { Skia: any; variant: "embedded" | "
   const spriteScale = Math.max(2, Math.floor(boxSize / 96));
   const scaleUsed = spriteScale - 2;
 
-  // Equipped hat
+  // Equipped hat (keep the old system working for now)
   const equippedHatId = useCosmeticsStore((s) => s.equipped?.headTop) || null;
-  const HAT_MODS: Record<string, any> = { leaf_hat: hatLeafPng, greater_hat: hatGreaterPng };
-  const hatMod = equippedHatId ? HAT_MODS[equippedHatId] : null;
+
+  // Hat configurations: texture, frame info, and position adjustments
+  const HAT_CONFIGS: Record<string, {
+    tex: any;
+    frameIndex?: number;
+    offset?: { dx?: number; dy?: number };
+  }> = {
+    // Original full sprite sheet hats
+    leaf_hat: { tex: require("../../assets/GliderMonLeafHat.png") },
+    greater_hat: { tex: require("../../assets/GliderMonGreaterHat.png") },
+
+    // Hat pack hats - each uses a specific frame from the sprite sheet
+    frog_hat: { tex: require("../../assets/hats/hat_pack_1.png"), frameIndex: 0, offset: { dx: -15, dy: 8 } },
+    black_headphones: { tex: require("../../assets/hats/hat_pack_1.png"), frameIndex: 1 },
+    white_headphones: { tex: require("../../assets/hats/hat_pack_1.png"), frameIndex: 2 },
+    pink_headphones: { tex: require("../../assets/hats/hat_pack_1.png"), frameIndex: 3 },
+    pink_aniphones: { tex: require("../../assets/hats/hat_pack_1.png"), frameIndex: 4 },
+    feather_cap: { tex: require("../../assets/hats/hat_pack_1.png"), frameIndex: 5 },
+    viking_hat: { tex: require("../../assets/hats/hat_pack_1.png"), frameIndex: 6 },
+    adventurer_fedora: { tex: require("../../assets/hats/hat_pack_1.png"), frameIndex: 7 },
+  };
+
+  const hatConfig = equippedHatId ? HAT_CONFIGS[equippedHatId] : null;
 
   // New behavior system - automatically adjusts based on glucose levels
   const gliderBehavior = useGliderBehaviorDefinition(idleBlinkSheet);
@@ -177,7 +207,7 @@ function GameCanvasInner({ Skia, variant }: { Skia: any; variant: "embedded" | "
         <SkImageNode image={nestImg} x={x0} y={y0} width={boxSize} height={boxSize} fit="cover" />
       )}
 
-      {/* CHARACTER + BLINK + HAT - Foreground */}
+      {/* CHARACTER + BLINK + HAT - Back to working system */}
       <BehaviorSprite
         Skia={Skia}
         rig={rig}
@@ -189,9 +219,10 @@ function GameCanvasInner({ Skia, variant }: { Skia: any; variant: "embedded" | "
         blinkTex={idleBlinkSheet}
         blinkEveryMin={4}
         blinkEveryMax={7}
-        hatTex={hatMod ?? undefined}
+        hatTex={hatConfig?.tex ?? undefined}
+        hatFrameIndex={hatConfig?.frameIndex}
         hatPivot={{ x: 18, y: 20 }}
-        hatOffset={{ dx: -15, dy: 5 }}
+        hatOffset={hatConfig?.offset ?? { dx: -15, dy: 5 }}
         anchorOverrides={[{ range: [3, 6], headTop: { dx: -1 } }]}
       />
 

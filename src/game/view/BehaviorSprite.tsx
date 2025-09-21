@@ -37,11 +37,15 @@ type Props = {
   hatTex?: any;
   hatPivot?: { x: number; y: number };
   hatOffset?: { dx: number; dy: number };
+  hatFrameIndex?: number; // For sprite sheet hats - which frame to use
 
   anchorOverrides?: AnchorOverride[];
 
   // Callback for behavior state changes
   onBehaviorStateChange?: (state: AnimationState) => void;
+
+  // Callback for frame changes
+  onFrameChange?: (frameIndex: number) => void;
 };
 
 function resolveForSkia(mod: any): any {
@@ -66,8 +70,10 @@ export default function BehaviorSprite({
   hatTex,
   hatPivot = { x: 18, y: 20 },
   hatOffset = { dx: -15, dy: 5 },
+  hatFrameIndex,
   anchorOverrides = [],
   onBehaviorStateChange,
+  onFrameChange,
 }: Props) {
   const { Image: SkImageNode, useImage, Group } = Skia;
 
@@ -154,6 +160,11 @@ export default function BehaviorSprite({
   // Calculate frame timing based on fps
   const frameInterval = 1000 / fps;
 
+  // Emit initial frame on mount
+  useEffect(() => {
+    onFrameChange?.(frameIndex);
+  }, []); // Only on mount - empty dependency array
+
   useEffect(() => {
     const id = setInterval(() => {
       setFrameIndex(fi => {
@@ -177,14 +188,17 @@ export default function BehaviorSprite({
             return nlc;
           });
 
-          return frameStart; // Loop back to start
+          const newFrame = frameStart;
+          onFrameChange?.(newFrame);
+          return newFrame; // Loop back to start
         }
+        onFrameChange?.(next);
         return next;
       });
     }, frameInterval);
 
     return () => clearInterval(id);
-  }, [frameInterval, frameStart, frameEnd, effectiveBlinkMin, effectiveBlinkMax, effectiveBlinkTex, behaviorEngine]);
+  }, [frameInterval, frameStart, frameEnd, effectiveBlinkMin, effectiveBlinkMax, effectiveBlinkTex, behaviorEngine, onFrameChange]);
 
   // Clear blink after current loop
   useEffect(() => {
@@ -260,7 +274,17 @@ export default function BehaviorSprite({
   const hatCols = hatImg ? Math.max(1, Math.floor(hatImg.width()  / frameW)) : baseCols;
   const hatRows = hatImg ? Math.max(1, Math.floor(hatImg.height() / frameH)) : baseRows;
   const hatFrames = hatCols * hatRows;
-  const hatFi = hatFrames > 1 ? (frameIndex % hatFrames) : 0;
+
+  // Use hatFrameIndex if provided (for sprite sheet hats), otherwise follow character animation
+  let hatFi: number;
+  if (hatFrameIndex !== undefined) {
+    // For sprite sheet hats: use the specific frame index, but repeat it for all character frames
+    hatFi = hatFrameIndex;
+  } else {
+    // For animated hats: follow the character animation frame
+    hatFi = hatFrames > 1 ? (frameIndex % hatFrames) : 0;
+  }
+
   const hatCol = hatFi % hatCols;
   const hatRow = Math.floor(hatFi / hatCols);
   const hatSrcRect = { sx: hatCol * frameW, sy: hatRow * frameH, sw: frameW, sh: frameH };
