@@ -5,10 +5,13 @@ import AnimatedSprite from "./AnimatedSprite";
 import BehaviorSprite from "./BehaviorSprite";
 import { makeGridRig } from "../sprites/rig";
 import { useCosmeticsStore } from "../../data/stores/cosmeticsStore";
+import { useActiveLocalOutfit } from "../../data/stores/outfitStore";
 import { shallow } from "zustand/shallow";
 import TiltShiftEffect from "../../ui/components/TiltShiftEffect";
 import { useGliderBehaviorDefinition } from "./useGliderBehavior";
 import { useCosmeticRenderer } from "./CosmeticSprite";
+import PaletteSwappedBehaviorSprite from "./PaletteSwappedBehaviorSprite";
+import { AssetMap } from "../../assets/assetMap";
 
 // Stable selector to prevent infinite re-renders
 const selectEquippedCosmetics = (s: any) => {
@@ -16,9 +19,9 @@ const selectEquippedCosmetics = (s: any) => {
   return Object.values(equipped).filter(Boolean) as string[];
 };
 
-// Assets (same ones you had)
-const idleSheet      = require("../../assets/idle8.png");                    // 64x64 x8 (4x2)
-const idleBlinkSheet = require("../../assets/idle8blink.png");              // full 8-frame blink
+// Assets - updated for new palette-based sprites
+const idleSheet      = AssetMap.idle8;                                      // 64x64 x8 (1x8 layout)
+const idleBlinkSheet = AssetMap.idle8blink;                                 // full 8-frame blink
 const skyboxPng      = require("../../assets/skybox/gliderNestSkybox.png"); // 3 frames (240x240 each)
 const nestPng        = require("../../assets/nest.png");
 const hatLeafPng     = require("../../assets/GliderMonLeafHat.png");
@@ -113,6 +116,9 @@ function GameCanvasInner({ Skia, variant }: { Skia: any; variant: "embedded" | "
   const { width, height } = useWindowDimensions();
   const { Canvas, Image: SkImageNode, Rect, useImage, Group } = Skia;
 
+  // Get active outfit for palette settings
+  const activeOutfit = useActiveLocalOutfit();
+
   // Figure out the square box and top-left origin:
   // - embedded: square = parent width, origin at (0,0) -> no extra padding
   // - standalone: square = screen width, centered vertically (old behavior)
@@ -146,9 +152,9 @@ function GameCanvasInner({ Skia, variant }: { Skia: any; variant: "embedded" | "
     };
   }, [skyImg, frameIdx, boxSize, x0, y0]);
 
-  // Sprite rig + placement (same as your working file)
+  // Sprite rig + placement (updated for new 1x8 layout)
   const rig = useMemo(
-    () => makeGridRig(idleSheet, 4, 2, 64, 64, 32, 60, { x: 34, y: 12 }),
+    () => makeGridRig(idleSheet, 8, 1, 64, 64, 32, 60, { x: 34, y: 12 }),
     []
   );
   const pivotX  = x0 + Math.round(boxSize / 2);
@@ -207,8 +213,8 @@ function GameCanvasInner({ Skia, variant }: { Skia: any; variant: "embedded" | "
         <SkImageNode image={nestImg} x={x0} y={y0} width={boxSize} height={boxSize} fit="cover" />
       )}
 
-      {/* CHARACTER + BLINK + HAT - Back to working system */}
-      <BehaviorSprite
+      {/* CHARACTER + BLINK + HAT - Palette Swapped */}
+      <PaletteSwappedBehaviorSprite
         Skia={Skia}
         rig={rig}
         behavior={gliderBehavior}
@@ -216,6 +222,9 @@ function GameCanvasInner({ Skia, variant }: { Skia: any; variant: "embedded" | "
         y={groundY}
         scale={scaleUsed}
         flipX={false}
+        skinVariation={activeOutfit?.skinVariation || 'default'}
+        eyeColor={activeOutfit?.eyeColor || 'blue'}
+        shoeVariation={activeOutfit?.shoeVariation || 'brown'}
         blinkTex={idleBlinkSheet}
         blinkEveryMin={4}
         blinkEveryMax={7}

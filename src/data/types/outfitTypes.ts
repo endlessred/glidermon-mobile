@@ -27,7 +27,8 @@ export type CosmeticSocket =
   | "headTop" | "headFront" | "headBack" | "earL" | "earR"
   | "bodyFront" | "bodyBack" | "hand" | "waist"
   | "background" | "foreground" | "fullBody"
-  | "pose"; // Special socket for poses
+  | "pose" // Special socket for poses
+  | "skinVariation" | "eyeColor" | "shoeVariation"; // Palette-based cosmetics
 
 // Pose cosmetic definition
 export type PoseCosmetic = {
@@ -44,6 +45,11 @@ export type PoseCosmetic = {
   assetKey: AssetKey;                    // Sprite sheet reference
 };
 
+// Palette-based cosmetic categories
+export type SkinVariation = 'default' | 'fair' | 'tan' | 'dark';
+export type EyeColor = 'blue' | 'brown' | 'green' | 'hazel' | 'gray' | 'violet';
+export type ShoeVariation = 'brown' | 'black' | 'red' | 'blue' | 'white';
+
 // Individual outfit slot
 export type OutfitSlot = {
   id: string;                            // Unique outfit identifier
@@ -54,6 +60,10 @@ export type OutfitSlot = {
       customization?: UserCosmeticCustomization;
     }
   };
+  // New palette-based cosmetics
+  skinVariation: SkinVariation;          // Character skin color palette
+  eyeColor: EyeColor;                    // Eye color (freely selectable)
+  shoeVariation: ShoeVariation;          // Shoe color palette (unlockable)
   isDefault: boolean;                    // Is this the default local outfit?
   isPublic: boolean;                     // Is this the public gallery outfit?
   createdAt: Date;
@@ -102,6 +112,11 @@ export type OutfitActions = {
   equipCosmetic: (outfitId: string, socket: CosmeticSocket, itemId: string) => void;
   unequipCosmetic: (outfitId: string, socket: CosmeticSocket) => void;
   customizeCosmetic: (outfitId: string, socket: CosmeticSocket, customization: UserCosmeticCustomization) => void;
+
+  // Palette-based cosmetic management
+  setSkinVariation: (outfitId: string, skinVariation: SkinVariation) => void;
+  setEyeColor: (outfitId: string, eyeColor: EyeColor) => void;
+  setShoeVariation: (outfitId: string, shoeVariation: ShoeVariation) => void;
 
   // Pose management
   setPose: (outfitId: string, poseId: string) => void;

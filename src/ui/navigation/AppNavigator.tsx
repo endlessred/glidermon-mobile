@@ -8,6 +8,7 @@ import GameScreen from "../screens/GameScreen";
 import DexcomEgvsScreen from "../screens/DexcomEgvsScreen";
 import SettingsScreen from "../screens/SettingsScreen";
 import ShopScreen from "../screens/ShopScreen";
+import EquipScreen from "../screens/EquipScreen";
 
 const Tab = createBottomTabNavigator();
 

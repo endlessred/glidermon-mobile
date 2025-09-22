@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { View, Text, ScrollView, Pressable } from "react-native";
 import { useTheme } from "../../data/hooks/useTheme";
+import { usePaletteUnlocks } from "../../data/hooks/usePaletteUnlocks";
 import { useOutfitStore } from "../../data/stores/outfitStore";
 import { cosmeticSystem } from "../../game/cosmetics/cosmeticSystem";
 import { CosmeticSocket, UserCosmeticCustomization } from "../../data/types/outfitTypes";
@@ -69,7 +70,39 @@ export default function OutfitEditor({ outfitId, onClose }: OutfitEditorProps) {
     setPose(outfitId, poseId);
   };
 
-  const sockets: CosmeticSocket[] = ["headTop", "headFront", "headBack", "bodyFront", "bodyBack", "hand", "waist", "pose"];
+  // Initialize palette unlock system
+  usePaletteUnlocks();
+
+  const sockets: CosmeticSocket[] = [
+    "skinVariation", "eyeColor", "shoeVariation", // Palette-based cosmetics first
+    "headTop", "headFront", "headBack", "bodyFront", "bodyBack", "hand", "waist", "pose"
+  ];
+
+  // Helper functions for palette-based sockets
+  const getSocketDisplayName = (socket: CosmeticSocket): string => {
+    switch (socket) {
+      case "skinVariation": return "Skin Color";
+      case "eyeColor": return "Eye Color";
+      case "shoeVariation": return "Shoe Color";
+      default: return socket.charAt(0).toUpperCase() + socket.slice(1);
+    }
+  };
+
+  const getSocketStatus = (socket: CosmeticSocket): string => {
+    switch (socket) {
+      case "skinVariation": return outfit.skinVariation;
+      case "eyeColor": return outfit.eyeColor;
+      case "shoeVariation": return outfit.shoeVariation;
+      default: {
+        const equippedItem = outfit.cosmetics[socket];
+        return equippedItem?.itemId || "Empty";
+      }
+    }
+  };
+
+  const isPaletteSocket = (socket: CosmeticSocket): boolean => {
+    return ["skinVariation", "eyeColor", "shoeVariation"].includes(socket);
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background.primary }}>
@@ -131,8 +164,9 @@ export default function OutfitEditor({ outfitId, onClose }: OutfitEditorProps) {
 
               {sockets.map(socket => {
                 const isSelected = selectedSocket === socket;
-                const equippedItem = outfit.cosmetics[socket];
-                const hasItem = !!equippedItem?.itemId;
+                const isPalette = isPaletteSocket(socket);
+                const status = getSocketStatus(socket);
+                const hasItem = isPalette ? true : !!outfit.cosmetics[socket]?.itemId;
 
                 return (
                   <Pressable
@@ -153,14 +187,14 @@ export default function OutfitEditor({ outfitId, onClose }: OutfitEditorProps) {
                       color: colors.text.primary,
                       marginBottom: spacing.xs
                     }}>
-                      {socket.charAt(0).toUpperCase() + socket.slice(1)}
+                      {getSocketDisplayName(socket)}
                     </Text>
 
                     <Text style={{
                       fontSize: typography.size.sm,
                       color: hasItem ? colors.health[600] : colors.text.secondary
                     }}>
-                      {hasItem ? equippedItem.itemId : "Empty"}
+                      {status}
                     </Text>
                   </Pressable>
                 );

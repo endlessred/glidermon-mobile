@@ -10,11 +10,22 @@ import {
   CosmeticSocket,
   PoseCosmetic,
   DEFAULT_POSE,
-  validateAdjustment
+  validateAdjustment,
+  SkinVariation,
+  EyeColor,
+  ShoeVariation
 } from "../types/outfitTypes";
 
 type OutfitStore = OutfitStorage & OutfitActions & {
   _rehydrated: boolean;
+  // Palette unlock tracking
+  unlockedSkins: SkinVariation[];
+  unlockedShoes: ShoeVariation[];
+  // Methods for managing unlocks
+  unlockSkin: (skin: SkinVariation) => void;
+  unlockShoe: (shoe: ShoeVariation) => void;
+  isSkinUnlocked: (skin: SkinVariation) => boolean;
+  isShoeUnlocked: (shoe: ShoeVariation) => boolean;
 };
 
 // Generate unique ID
@@ -28,6 +39,9 @@ function createDefaultOutfit(): OutfitSlot {
     id: generateId(),
     name: "Default Outfit",
     cosmetics: {},
+    skinVariation: 'default',
+    eyeColor: 'blue',
+    shoeVariation: 'brown',
     isDefault: true,
     isPublic: false,
     createdAt: new Date(),
@@ -45,6 +59,9 @@ function createDefaultPublicOutfit(): OutfitSlot {
         itemId: DEFAULT_POSE.id
       }
     },
+    skinVariation: 'default',
+    eyeColor: 'blue',
+    shoeVariation: 'brown',
     isDefault: false,
     isPublic: true,
     createdAt: new Date(),
@@ -64,6 +81,10 @@ export const useOutfitStore = create<OutfitStore>()(
       poses: [DEFAULT_POSE],
       _rehydrated: false,
 
+      // Palette unlock state
+      unlockedSkins: ['default'], // Start with default skin unlocked
+      unlockedShoes: ['brown'], // Start with brown shoes unlocked
+
       // Slot management
       createOutfit: (name: string) => {
         const { slots, maxSlots } = get();
@@ -76,6 +97,9 @@ export const useOutfitStore = create<OutfitStore>()(
           id: generateId(),
           name,
           cosmetics: {},
+          skinVariation: 'default',
+          eyeColor: 'blue',
+          shoeVariation: 'brown',
           isDefault: false,
           isPublic: false,
           createdAt: new Date(),
@@ -217,6 +241,37 @@ export const useOutfitStore = create<OutfitStore>()(
         }));
       },
 
+      // Palette-based cosmetic management
+      setSkinVariation: (outfitId: string, skinVariation: SkinVariation) => {
+        set(state => ({
+          slots: state.slots.map(slot =>
+            slot.id === outfitId
+              ? { ...slot, skinVariation, lastModified: new Date() }
+              : slot
+          )
+        }));
+      },
+
+      setEyeColor: (outfitId: string, eyeColor: EyeColor) => {
+        set(state => ({
+          slots: state.slots.map(slot =>
+            slot.id === outfitId
+              ? { ...slot, eyeColor, lastModified: new Date() }
+              : slot
+          )
+        }));
+      },
+
+      setShoeVariation: (outfitId: string, shoeVariation: ShoeVariation) => {
+        set(state => ({
+          slots: state.slots.map(slot =>
+            slot.id === outfitId
+              ? { ...slot, shoeVariation, lastModified: new Date() }
+              : slot
+          )
+        }));
+      },
+
       // Pose management
       setPose: (outfitId: string, poseId: string) => {
         const { poses } = get();
@@ -239,6 +294,33 @@ export const useOutfitStore = create<OutfitStore>()(
               : slot
           )
         }));
+      },
+
+      // Palette unlock system
+      unlockSkin: (skin: SkinVariation) => {
+        set(state => ({
+          unlockedSkins: state.unlockedSkins.includes(skin)
+            ? state.unlockedSkins
+            : [...state.unlockedSkins, skin]
+        }));
+      },
+
+      unlockShoe: (shoe: ShoeVariation) => {
+        set(state => ({
+          unlockedShoes: state.unlockedShoes.includes(shoe)
+            ? state.unlockedShoes
+            : [...state.unlockedShoes, shoe]
+        }));
+      },
+
+      isSkinUnlocked: (skin: SkinVariation) => {
+        const { unlockedSkins } = get();
+        return unlockedSkins.includes(skin);
+      },
+
+      isShoeUnlocked: (shoe: ShoeVariation) => {
+        const { unlockedShoes } = get();
+        return unlockedShoes.includes(shoe);
       },
 
       // Utility
@@ -292,6 +374,9 @@ export const useOutfitStore = create<OutfitStore>()(
             id: generateId(),
             name: `${outfitData.name} (Imported)`,
             cosmetics: outfitData.cosmetics,
+            skinVariation: outfitData.skinVariation || 'default',
+            eyeColor: outfitData.eyeColor || 'blue',
+            shoeVariation: outfitData.shoeVariation || 'brown',
             isDefault: false,
             isPublic: false,
             createdAt: new Date(),

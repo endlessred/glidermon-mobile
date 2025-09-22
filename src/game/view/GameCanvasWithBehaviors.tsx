@@ -157,9 +157,9 @@ function GameCanvasInner({
     };
   }, [skyImg, frameIdx, boxSize, x0, y0]);
 
-  // Sprite rig + placement
+  // Sprite rig + placement (updated for new 1x8 layout)
   const rig = useMemo(
-    () => makeGridRig(idleSheet, 4, 2, 64, 64, 32, 60, { x: 34, y: 12 }),
+    () => makeGridRig(idleSheet, 8, 1, 64, 64, 32, 60, { x: 34, y: 12 }),
     []
   );
   const pivotX  = x0 + Math.round(boxSize / 2);

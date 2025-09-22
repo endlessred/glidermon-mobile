@@ -1,15 +1,30 @@
 // ui/components/CharacterPreview.tsx
 import React, { useEffect, useState } from "react";
-import { View, Text, Image } from "react-native";
+import { View, Text, Image, Platform } from "react-native";
 import { useTheme } from "../../data/hooks/useTheme";
 import { OutfitSlot, CosmeticSocket } from "../../data/types/outfitTypes";
 import { AssetMap } from "../../assets/assetMap";
 import { glidermonIdleAnchors, cosmeticDefinitions } from "../../game/cosmetics/cosmeticDefinitions";
+import PaletteSwappedSprite from "../../game/view/PaletteSwappedSprite";
+
+// Import the sprite frame data
+const idle8FrameData = require("../../assets/glidermonnew/idle8_new.json");
 
 interface CharacterPreviewProps {
   outfit: OutfitSlot;
   highlightSocket?: CosmeticSocket | null;
   size?: "small" | "medium" | "large";
+  // For now, we'll note that this uses the new palette-aware sprites
+  // but renders them without palette swapping (React Native Image limitation)
+  // Full palette swapping would require Skia integration
+}
+
+function resolveForSkia(mod: any): any {
+  if (Platform.OS === "web") {
+    const { Asset } = require("expo-asset");
+    return Asset.fromModule(mod).uri;
+  }
+  return mod;
 }
 
 export default function CharacterPreview({
@@ -19,6 +34,28 @@ export default function CharacterPreview({
 }: CharacterPreviewProps) {
   const { colors, spacing, borderRadius, typography } = useTheme();
   const [animationFrame, setAnimationFrame] = useState(0);
+
+  // Skia initialization (same pattern as GameCanvas)
+  const [ckReady, setCkReady] = useState(Platform.OS !== "web");
+  const [Skia, setSkia] = useState<any>(null);
+
+  // Web: wait for CanvasKit (safe bootstrap)
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const ready = () => {
+      const ck = (globalThis as any).CanvasKit;
+      return !!(ck && ck.MakeImageFromEncoded && ck.PictureRecorder);
+    };
+    if (ready()) { setCkReady(true); return; }
+    const id = setInterval(() => { if (ready()) { clearInterval(id); setCkReady(true); } }, 30);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS === "web" && !ckReady) return;
+    const mod = require("@shopify/react-native-skia");
+    setSkia(mod);
+  }, [ckReady]);
 
   // Simple idle animation - cycles through frames
   useEffect(() => {
@@ -55,6 +92,11 @@ export default function CharacterPreview({
 
     // Base position using actual glidermon anchor positions
     const getSocketPosition = (socket: CosmeticSocket) => {
+      // Skip palette and pose sockets - they don't have physical positions
+      if (["skinVariation", "eyeColor", "shoeVariation", "pose"].includes(socket)) {
+        return { x: 0, y: 0, rotation: 0 };
+      }
+
       const anchor = glidermonIdleAnchors.anchors[socket];
 
       if (!anchor) {
@@ -287,10 +329,29 @@ export default function CharacterPreview({
     return colorMap[socket] || colors.gray[500];
   };
 
-  // Character idle animation - simple bounce and sway
-  const characterTransform = [
+  // Get the current frame data from the JSON
+  const getCurrentFrameData = () => {
+    const frameIndex = animationFrame % 8;
+    const frameKeys = Object.keys(idle8FrameData.frames);
+    const frameKey = frameKeys[frameIndex];
+    if (frameKey && idle8FrameData.frames[frameKey]) {
+      return idle8FrameData.frames[frameKey].frame;
+    }
+    // Fallback to manual calculation if JSON is missing
+    return {
+      x: frameIndex * 64,
+      y: 0,
+      w: 64,
+      h: 64
+    };
+  };
+
+  const currentFrame = getCurrentFrameData();
+
+  // Character idle animation transforms for Skia
+  const characterSkiaTransform = [
     { translateY: Math.sin(animationFrame * 0.8) * 2 }, // Gentle bounce
-    { rotate: `${Math.sin(animationFrame * 0.4) * 1}deg` } // Slight sway
+    { rotate: Math.sin(animationFrame * 0.4) * 0.017453 } // Slight sway in radians
   ];
 
   return (
@@ -310,9 +371,12 @@ export default function CharacterPreview({
         .filter(socket => socket === "background")
         .map(socket => renderCosmeticLayer(socket as CosmeticSocket))}
 
-      {/* Character Sprite with idle animation */}
+      {/* Character Sprite - using React Native Image for now, Skia palette later */}
       <View style={{
-        transform: characterTransform,
+        transform: [
+          { translateY: Math.sin(animationFrame * 0.8) * 2 }, // Gentle bounce
+          { rotate: `${Math.sin(animationFrame * 0.4) * 1}deg` } // Slight sway
+        ],
         alignItems: "center",
         justifyContent: "center"
       }}>
@@ -324,11 +388,11 @@ export default function CharacterPreview({
           <Image
             source={AssetMap.idle8}
             style={{
-              width: (64 * 4) * (config.charWidth / 64), // Scale sprite sheet proportionally
-              height: (64 * 2) * (config.charHeight / 64), // Scale sprite sheet proportionally
+              width: (64 * 8) * (config.charWidth / 64), // Scale sprite sheet proportionally (1x8 layout)
+              height: (64 * 1) * (config.charHeight / 64), // Scale sprite sheet proportionally (1x8 layout)
               position: "absolute",
-              left: -(animationFrame % 4) * (config.charWidth), // Move based on scaled frame size
-              top: -Math.floor(animationFrame / 4) * (config.charHeight) // Move based on scaled frame size
+              left: -(animationFrame % 8) * (config.charWidth), // Move based on scaled frame size (8 frames in row)
+              top: 0 // No vertical movement needed for 1x8 layout
             }}
             resizeMode="stretch"
           />

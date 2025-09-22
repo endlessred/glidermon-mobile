@@ -1,9 +1,18 @@
 export const AssetMap = {
-  idle8: require("./idle8.png"),
-  idle8blink: require("./idle8blink.png"),
+  // Character sprites (new palette-based versions)
+  idle8: require("./glidermonnew/idle8_new.png"),
+  idle8blink: require("./glidermonnew/idle8_new_blink.png"),
+  glidermonpalette: require("./glidermonnew/glidermonpalette.png"),
+
+  // Legacy character sprites (keep for compatibility)
+  idle8_legacy: require("./idle8.png"),
+  idle8blink_legacy: require("./idle8blink.png"),
+
+  // Hat cosmetics
   leaf_hat: require("./GliderMonLeafHat.png"),
-  greater_hat: require("./GliderMonGreaterHat.png"), // ← NEW
+  greater_hat: require("./GliderMonGreaterHat.png"),
   hat_pack_1: require("./hats/hat_pack_1.png"),
+
   // Individual hat pack frames
   frog_hat: require("./hats/hat_pack_1.png"),
   black_headphones: require("./hats/hat_pack_1.png"),
