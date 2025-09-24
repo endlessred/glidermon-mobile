@@ -371,33 +371,78 @@ export default function CharacterPreview({
         .filter(socket => socket === "background")
         .map(socket => renderCosmeticLayer(socket as CosmeticSocket))}
 
-      {/* Character Sprite - using React Native Image for now, Skia palette later */}
-      <View style={{
-        transform: [
-          { translateY: Math.sin(animationFrame * 0.8) * 2 }, // Gentle bounce
-          { rotate: `${Math.sin(animationFrame * 0.4) * 1}deg` } // Slight sway
-        ],
-        alignItems: "center",
-        justifyContent: "center"
-      }}>
+      {/* Character Sprite with Skia palette swapping */}
+      {!Skia || Platform.OS === "web" ? (
+        // Fallback to React Native Image while Skia loads
         <View style={{
-          width: config.charWidth, // Scale to desired size
-          height: config.charHeight, // Scale to desired size
-          overflow: "hidden" // Clip to show only one frame
+          transform: [
+            { translateY: Math.sin(animationFrame * 0.8) * 2 }, // Gentle bounce
+            { rotate: `${Math.sin(animationFrame * 0.4) * 1}deg` } // Slight sway
+          ],
+          alignItems: "center",
+          justifyContent: "center"
         }}>
-          <Image
-            source={AssetMap.idle8}
-            style={{
-              width: (64 * 8) * (config.charWidth / 64), // Scale sprite sheet proportionally (1x8 layout)
-              height: (64 * 1) * (config.charHeight / 64), // Scale sprite sheet proportionally (1x8 layout)
-              position: "absolute",
-              left: -(animationFrame % 8) * (config.charWidth), // Move based on scaled frame size (8 frames in row)
-              top: 0 // No vertical movement needed for 1x8 layout
-            }}
-            resizeMode="stretch"
-          />
+          <View style={{
+            width: config.charWidth,
+            height: config.charHeight,
+            overflow: "hidden"
+          }}>
+            <Image
+              source={AssetMap.idle8}
+              style={{
+                width: (64 * 8) * (config.charWidth / 64),
+                height: (64 * 1) * (config.charHeight / 64),
+                position: "absolute",
+                left: -(animationFrame % 8) * (config.charWidth),
+                top: 0
+              }}
+              resizeMode="stretch"
+            />
+          </View>
         </View>
-      </View>
+      ) : (
+        // Skia Canvas with palette swapping
+        <View style={{
+          width: config.charWidth,
+          height: config.charHeight,
+          alignItems: "center",
+          justifyContent: "center",
+          transform: [
+            { translateY: Math.sin(animationFrame * 0.8) * 2 }, // Gentle bounce
+            { rotate: `${Math.sin(animationFrame * 0.4) * 1}deg` } // Slight sway
+          ]
+        }}>
+          {(() => {
+            const { Canvas } = Skia;
+
+            return (
+              <Canvas style={{
+                width: config.charWidth,
+                height: config.charHeight
+              }}>
+                <PaletteSwappedSprite
+                  Skia={Skia}
+                  imageSource={AssetMap.idle8}
+                  x={0}
+                  y={0}
+                  width={config.charWidth}
+                  height={config.charHeight}
+                  skinVariation={outfit.skinVariation}
+                  eyeColor={outfit.eyeColor}
+                  shoeVariation={outfit.shoeVariation}
+                  srcRect={{
+                    x: currentFrame.x,
+                    y: currentFrame.y,
+                    w: currentFrame.w,
+                    h: currentFrame.h
+                  }}
+                  fit="contain"
+                />
+              </Canvas>
+            );
+          })()}
+        </View>
+      )}
 
       {/* Body cosmetics */}
       {Object.keys(outfit.cosmetics)

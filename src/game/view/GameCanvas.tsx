@@ -10,7 +10,7 @@ import { shallow } from "zustand/shallow";
 import TiltShiftEffect from "../../ui/components/TiltShiftEffect";
 import { useGliderBehaviorDefinition } from "./useGliderBehavior";
 import { useCosmeticRenderer } from "./CosmeticSprite";
-import PaletteSwappedBehaviorSprite from "./PaletteSwappedBehaviorSprite";
+import UnifiedCharacterSprite from "./UnifiedCharacterSprite";
 import { AssetMap } from "../../assets/assetMap";
 
 // Stable selector to prevent infinite re-renders
@@ -213,8 +213,8 @@ function GameCanvasInner({ Skia, variant }: { Skia: any; variant: "embedded" | "
         <SkImageNode image={nestImg} x={x0} y={y0} width={boxSize} height={boxSize} fit="cover" />
       )}
 
-      {/* CHARACTER + BLINK + HAT - Palette Swapped */}
-      <PaletteSwappedBehaviorSprite
+      {/* CHARACTER WITH FULL COSMETIC SYSTEM */}
+      <UnifiedCharacterSprite
         Skia={Skia}
         rig={rig}
         behavior={gliderBehavior}
@@ -225,13 +225,15 @@ function GameCanvasInner({ Skia, variant }: { Skia: any; variant: "embedded" | "
         skinVariation={activeOutfit?.skinVariation || 'default'}
         eyeColor={activeOutfit?.eyeColor || 'blue'}
         shoeVariation={activeOutfit?.shoeVariation || 'brown'}
+        outfit={activeOutfit || {
+          skinVariation: 'default',
+          eyeColor: 'blue',
+          shoeVariation: 'brown',
+          cosmetics: {}
+        }}
         blinkTex={idleBlinkSheet}
         blinkEveryMin={4}
         blinkEveryMax={7}
-        hatTex={hatConfig?.tex ?? undefined}
-        hatFrameIndex={hatConfig?.frameIndex}
-        hatPivot={{ x: 18, y: 20 }}
-        hatOffset={hatConfig?.offset ?? { dx: -15, dy: 5 }}
         anchorOverrides={[{ range: [3, 6], headTop: { dx: -1 } }]}
       />
 

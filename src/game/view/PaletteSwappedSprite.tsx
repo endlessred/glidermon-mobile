@@ -118,23 +118,27 @@ export default function PaletteSwappedSprite({
 
   // If we have a source rectangle, we need to handle sprite sheet cropping
   if (srcRect) {
+    const { Group } = Skia;
+
+    // Calculate scale for sprite sheet
+    const imageWidth = image.width();
+    const imageHeight = image.height();
+    const scaleX = width / srcRect.w;
+    const scaleY = height / srcRect.h;
+
     return (
-      <SkImageNode
-        image={image}
-        x={x}
-        y={y}
-        width={width}
-        height={height}
-        fit={fit}
-        transform={transform}
-        colorFilter={colorFilter}
-        rect={{
-          x: srcRect.x,
-          y: srcRect.y,
-          width: srcRect.w,
-          height: srcRect.h
-        }}
-      />
+      <Group clip={Skia.Skia.XYWHRect(x, y, width, height)}>
+        <SkImageNode
+          image={image}
+          x={x - srcRect.x * scaleX}
+          y={y - srcRect.y * scaleY}
+          width={imageWidth * scaleX}
+          height={imageHeight * scaleY}
+          fit="fill"
+          transform={transform}
+          colorFilter={colorFilter}
+        />
+      </Group>
     );
   }
 

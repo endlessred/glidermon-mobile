@@ -9,7 +9,9 @@
       "Bash(grep:*)",
       "Bash(tree:*)",
       "Bash(pnpm expo start:web:*)",
-      "Bash(pnpm exec expo start:*)"
+      "Bash(pnpm exec expo start:*)",
+      "Bash(pnpm info:*)",
+      "WebFetch(domain:localhost)"
     ],
     "deny": [],
     "ask": []
