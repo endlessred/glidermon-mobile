@@ -13,6 +13,7 @@ import OutfitScreen from "./src/ui/screens/OutfitScreen";
 import SettingsScreen from "./src/ui/screens/SettingsScreen";
 import LeaderboardScreen from "./src/ui/screens/LeaderboardScreen";
 import GalleryScreen from "./src/ui/screens/GalleryScreen";
+import AcornHuntScreen from "./src/ui/screens/AcornHuntScreen";
 import OnboardingScreen from "./src/ui/screens/OnboardingScreen";
 import { useGameStore } from "./src/data/stores/gameStore";
 import { useSettingsStore } from "./src/data/stores/settingsStore";
@@ -27,7 +28,7 @@ import { useOutfitStore } from "./src/data/stores/outfitStore";
 import { POSE_DEFINITIONS } from "./src/data/poses/poseDefinitions";
 // import { migrateEquippedCosmeticsToOutfit, syncOutfitToCosmeticsStore } from "./src/data/utils/outfitMigration.ts";
 
-const TABS = ["HOME", "SHOP", "OUTFIT", "GALLERY", "SETTINGS"] as const;
+const TABS = ["HOME", "SHOP", "OUTFIT", "🌰 HUNT", "SETTINGS"] as const;
 type Tab = typeof TABS[number];
 
 export default function App() {
@@ -215,7 +216,7 @@ export default function App() {
 
           {tab === "SHOP" && <ShopScreen />}
           {tab === "OUTFIT" && <OutfitScreen />}
-          {tab === "GALLERY" && <GalleryScreen />}
+          {tab === "🌰 HUNT" && <AcornHuntScreen />}
           {tab === "SETTINGS" && <SettingsScreen />}
         </View>
       </SkiaBootstrap>

@@ -9,6 +9,9 @@ import DexcomEgvsScreen from "../screens/DexcomEgvsScreen";
 import SettingsScreen from "../screens/SettingsScreen";
 import ShopScreen from "../screens/ShopScreen";
 import EquipScreen from "../screens/EquipScreen";
+import GalleryScreen from "../screens/GalleryScreen";
+import OutfitScreen from "../screens/OutfitScreen";
+import AcornHuntScreen from "../screens/AcornHuntScreen";
 
 const Tab = createBottomTabNavigator();
 
@@ -27,17 +30,20 @@ export default function AppNavigator() {
           component={HudScreen}
           options={{ tabBarLabel: ({ color }) => <Text style={{ color }}>Home</Text> }}
         />
-        <Tab.Screen
-          name="Game"
-          component={GameScreen}
-          options={{ tabBarLabel: ({ color }) => <Text style={{ color }}>Game</Text> }}
-        />
-        <Tab.Screen
-          name="Dexcom"
-          component={DexcomEgvsScreen}
-          options={{ tabBarLabel: ({ color }) => <Text style={{ color }}>Dexcom</Text> }}
-        />
         <Tab.Screen name="Shop" component={ShopScreen} />
+        <Tab.Screen
+          name="Outfit"
+          component={OutfitScreen}
+          options={{ tabBarLabel: ({ color }) => <Text style={{ color }}>Outfit</Text> }}
+        />
+        <Tab.Screen
+          name="AcornHunt"
+          component={AcornHuntScreen}
+          options={{
+            tabBarLabel: ({ color }) => <Text style={{ color }}>🌰 Hunt</Text>,
+            headerTitle: 'Acorn Hunt'
+          }}
+        />
         <Tab.Screen
           name="Settings"
           component={SettingsScreen}

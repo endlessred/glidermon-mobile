@@ -11,7 +11,13 @@
       "Bash(pnpm expo start:web:*)",
       "Bash(pnpm exec expo start:*)",
       "Bash(pnpm info:*)",
-      "WebFetch(domain:localhost)"
+      "WebFetch(domain:localhost)",
+      "Bash(pnpm tsc:check:*)",
+      "Bash(pnpm run tsc:*)",
+      "Bash(find:*)",
+      "Bash(pnpm view:*)",
+      "Bash(pnpm search:*)",
+      "Bash(pnpm i:*)"
     ],
     "deny": [],
     "ask": []
