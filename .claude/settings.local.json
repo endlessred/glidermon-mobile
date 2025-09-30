@@ -17,7 +17,15 @@
       "Bash(find:*)",
       "Bash(pnpm view:*)",
       "Bash(pnpm search:*)",
-      "Bash(pnpm i:*)"
+      "Bash(pnpm i:*)",
+      "Bash(pnpm start:*)",
+      "WebSearch",
+      "Bash(pnpm remove:*)",
+      "Bash(taskkill:*)",
+      "Bash(pnpm list:*)",
+      "Bash(mkdir:*)",
+      "Bash(cp:*)",
+      "Bash(python:*)"
     ],
     "deny": [],
     "ask": []

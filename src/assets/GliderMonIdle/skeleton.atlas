@@ -1,174 +1,86 @@
-
 skeleton.png
-size: 1969,777
-format: RGBA8888
-filter: Linear,Linear
-repeat: none
+size:1969,777
+filter:Linear,Linear
+pma:true
 Cheeks
-  rotate: false
-  xy: 332, 40
-  size: 475, 188
-  orig: 3300, 2550
-  offset: 1481, 1296
-  index: -1
+bounds:332,40,475,188
+offsets:1481,1296,3300,2550
 Head
-  rotate: true
-  xy: 2, 230
-  size: 545, 472
-  orig: 3300, 2550
-  offset: 1419, 1288
-  index: -1
+bounds:2,230,545,472
+offsets:1419,1288,3300,2550
+rotate:90
 L_Arm
-  rotate: false
-  xy: 1220, 85
-  size: 230, 322
-  orig: 3300, 2550
-  offset: 1742, 990
-  index: -1
+bounds:1220,85,230,322
+offsets:1742,990,3300,2550
 L_Brow
-  rotate: false
-  xy: 332, 2
-  size: 107, 36
-  orig: 3300, 2550
-  offset: 1571, 1599
-  index: -1
+bounds:332,2,107,36
+offsets:1571,1599,3300,2550
 L_Ear
-  rotate: false
-  xy: 1723, 469
-  size: 242, 306
-  orig: 3300, 2550
-  offset: 1792, 1547
-  index: -1
+bounds:1723,469,242,306
+offsets:1792,1547,3300,2550
 L_Eye
-  rotate: true
-  xy: 1452, 90
-  size: 92, 150
-  orig: 3300, 2550
-  offset: 1809, 1443
-  index: -1
+bounds:1452,90,92,150
+offsets:1809,1443,3300,2550
+rotate:90
 L_Leg
-  rotate: true
-  xy: 1723, 349
-  size: 118, 169
-  orig: 3300, 2550
-  offset: 1731, 893
-  index: -1
+bounds:1723,349,118,169
+offsets:1731,893,3300,2550
+rotate:90
 L_Pupil
-  rotate: true
-  xy: 1404, 31
-  size: 52, 105
-  orig: 3300, 2550
-  offset: 1818, 1455
-  index: -1
+bounds:1404,31,52,105
+offsets:1818,1455,3300,2550
+rotate:90
 L_Shine
-  rotate: false
-  xy: 524, 14
-  size: 17, 24
-  orig: 3300, 2550
-  offset: 1843, 1521
-  index: -1
+bounds:524,14,17,24
+offsets:1843,1521,3300,2550
 L_Shoe
-  rotate: true
-  xy: 1718, 63
-  size: 284, 249
-  orig: 3300, 2550
-  offset: 1726, 712
-  index: -1
+bounds:1718,63,284,249
+offsets:1726,712,3300,2550
+rotate:90
 L_Wing
-  rotate: false
-  xy: 476, 363
-  size: 348, 412
-  orig: 3300, 2550
-  offset: 1753, 907
-  index: -1
+bounds:476,363,348,412
+offsets:1753,907,3300,2550
 Mouth
-  rotate: false
-  xy: 543, 3
-  size: 184, 12
-  orig: 3300, 2550
-  offset: 1682, 1368
-  index: -1
+bounds:543,3,184,12
+offsets:1682,1368,3300,2550
 Nose
-  rotate: false
-  xy: 1220, 6
-  size: 63, 77
-  orig: 3300, 2550
-  offset: 1760, 1386
-  index: -1
+bounds:1220,6,63,77
+offsets:1760,1386,3300,2550
 R_Arm
-  rotate: true
-  xy: 2, 2
-  size: 226, 328
-  orig: 3300, 2550
-  offset: 1420, 988
-  index: -1
+bounds:2,2,226,328
+offsets:1420,988,3300,2550
+rotate:90
 R_Brow
-  rotate: false
-  xy: 441, 13
-  size: 81, 25
-  orig: 3300, 2550
-  offset: 1799, 1600
-  index: -1
+bounds:441,13,81,25
+offsets:1799,1600,3300,2550
 R_Ear
-  rotate: false
-  xy: 1440, 463
-  size: 281, 312
-  orig: 3300, 2550
-  offset: 1269, 1521
-  index: -1
+bounds:1440,463,281,312
+offsets:1269,1521,3300,2550
 R_Eye
-  rotate: true
-  xy: 606, 237
-  size: 124, 155
-  orig: 3300, 2550
-  offset: 1561, 1439
-  index: -1
+bounds:606,237,124,155
+offsets:1561,1439,3300,2550
+rotate:90
 R_Leg
-  rotate: false
-  xy: 476, 232
-  size: 128, 129
-  orig: 3300, 2550
-  offset: 1537, 896
-  index: -1
+bounds:476,232,128,129
+offsets:1537,896,3300,2550
 R_Pupil
-  rotate: true
-  xy: 1285, 8
-  size: 75, 117
-  orig: 3300, 2550
-  offset: 1574, 1446
-  index: -1
+bounds:1285,8,75,117
+offsets:1574,1446,3300,2550
+rotate:90
 R_Shine
-  rotate: false
-  xy: 543, 17
-  size: 17, 21
-  orig: 3300, 2550
-  offset: 1611, 1524
-  index: -1
+bounds:543,17,17,21
+offsets:1611,1524,3300,2550
 R_Shoe
-  rotate: false
-  xy: 1452, 184
-  size: 264, 277
-  orig: 3300, 2550
-  offset: 1392, 673
-  index: -1
+bounds:1452,184,264,277
+offsets:1392,673,3300,2550
 R_Wing
-  rotate: true
-  xy: 809, 11
-  size: 350, 409
-  orig: 3300, 2550
-  offset: 1265, 918
-  index: -1
+bounds:809,11,350,409
+offsets:1265,918,3300,2550
+rotate:90
 Tail
-  rotate: true
-  xy: 1133, 409
-  size: 366, 305
-  orig: 3300, 2550
-  offset: 1319, 1035
-  index: -1
+bounds:1133,409,366,305
+offsets:1319,1035,3300,2550
+rotate:90
 Torso
-  rotate: false
-  xy: 826, 391
-  size: 305, 384
-  orig: 3300, 2550
-  offset: 1535, 969
-  index: -1
+bounds:826,391,305,384
+offsets:1535,969,3300,2550

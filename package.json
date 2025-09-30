@@ -13,6 +13,8 @@
   },
   "dependencies": {
     "@babel/runtime": "^7.28.3",
+    "@esotericsoftware/spine-canvaskit": "4.2.92",
+    "@esotericsoftware/spine-core": "4.2.92",
     "@expo/metro-runtime": "~3.2.3",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-navigation/bottom-tabs": "^7.4.7",

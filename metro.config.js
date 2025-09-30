@@ -14,5 +14,12 @@ module.exports = (async () => {
     // "canvaskit-wasm": require.resolve("canvaskit-wasm/bin/canvaskit.js"),
   };
 
+  // Add Spine asset extensions
+  config.resolver.assetExts = [
+    ...config.resolver.assetExts,
+    'atlas',  // Spine atlas files
+    'skel',   // Spine binary skeleton files (if you use them)
+  ];
+
   return config;
 })();

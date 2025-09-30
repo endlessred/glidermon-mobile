@@ -15,6 +15,12 @@ importers:
       '@babel/runtime':
         specifier: ^7.28.3
         version: 7.28.3
+      '@esotericsoftware/spine-canvaskit':
+        specifier: 4.2.92
+        version: 4.2.92
+      '@esotericsoftware/spine-core':
+        specifier: 4.2.92
+        version: 4.2.92
       '@expo/metro-runtime':
         specifier: ~3.2.3
         version: 3.2.3(react-native@0.81.4(@babel/core@7.28.3)(@react-native-community/cli@13.6.9)(@types/react@19.1.13)(react@19.0.0))
@@ -645,6 +651,12 @@ packages:
   '@babel/types@7.28.4':
     resolution: {integrity: sha512-bkFqkLhh3pMBUQQkpVgWDWq/lqzc2678eUyDlTBhRqhCHFguYYGM0Efga7tYk4TogG/3x0EEl66/OQ+WGbWB/Q==}
     engines: {node: '>=6.9.0'}
+
+  '@esotericsoftware/spine-canvaskit@4.2.92':
+    resolution: {integrity: sha512-uO+YxD5BjkLqJcWV3M14K7OLa5TJOpr7zsmE6lI6QlzWhxOcrhveYmY80JsPZdIeTyflPjiRme5V86I1Lzu5Vg==}
+
+  '@esotericsoftware/spine-core@4.2.92':
+    resolution: {integrity: sha512-fwVSaVjBmXZ+oqAp1jv3u+RB/EeOpT9nbM7hztGdbuwR2G6vJ9AjdR0RjO4zw9y0Hof9U8sTHvC1kpGJOAUr7Q==}
 
   '@expo/cli@54.0.4':
     resolution: {integrity: sha512-n3UukNRL8eG1XyN/sI6UCxvnJqhHxmtgReP2hBJnN9E1R+nPWdYxysV6hw1I/FghL0O/eZou2WTY1E8lGQ3Frw==}
@@ -1355,6 +1367,9 @@ packages:
 
   caniuse-lite@1.0.30001739:
     resolution: {integrity: sha512-y+j60d6ulelrNSwpPyrHdl+9mJnQzHBr08xm48Qno0nSk4h3Qojh+ziv2qE6rXf4k3tadF4o1J/1tAbVm1NtnA==}
+
+  canvaskit-wasm@0.39.1:
+    resolution: {integrity: sha512-Gy3lCmhUdKq+8bvDrs9t8+qf7RvcjuQn+we7vTVVyqgOVO1UVfHpsnBxkTZw+R4ApEJ3D5fKySl9TU11hmjl/A==}
 
   canvaskit-wasm@0.40.0:
     resolution: {integrity: sha512-Od2o+ZmoEw9PBdN/yCGvzfu0WVqlufBPEWNG452wY7E9aT8RBE+ChpZF526doOlg7zumO4iCS+RAeht4P0Gbpw==}
@@ -4034,6 +4049,13 @@ snapshots:
       '@babel/helper-string-parser': 7.27.1
       '@babel/helper-validator-identifier': 7.27.1
 
+  '@esotericsoftware/spine-canvaskit@4.2.92':
+    dependencies:
+      '@esotericsoftware/spine-core': 4.2.92
+      canvaskit-wasm: 0.39.1
+
+  '@esotericsoftware/spine-core@4.2.92': {}
+
   '@expo/cli@54.0.4(expo@54.0.6(@babel/core@7.28.3)(@expo/metro-runtime@3.2.3(react-native@0.81.4(@babel/core@7.28.3)(@react-native-community/cli@13.6.9)(@types/react@19.1.13)(react@19.0.0)))(graphql@15.8.0)(react-native@0.81.4(@babel/core@7.28.3)(@react-native-community/cli@13.6.9)(@types/react@19.1.13)(react@19.0.0))(react@19.0.0))(graphql@15.8.0)(react-native@0.81.4(@babel/core@7.28.3)(@react-native-community/cli@13.6.9)(@types/react@19.1.13)(react@19.0.0))':
     dependencies:
       '@0no-co/graphql.web': 1.2.0(graphql@15.8.0)
@@ -5299,6 +5321,10 @@ snapshots:
   camelcase@6.3.0: {}
 
   caniuse-lite@1.0.30001739: {}
+
+  canvaskit-wasm@0.39.1:
+    dependencies:
+      '@webgpu/types': 0.1.21
 
   canvaskit-wasm@0.40.0:
     dependencies:
