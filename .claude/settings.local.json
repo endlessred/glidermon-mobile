@@ -25,7 +25,9 @@
       "Bash(pnpm list:*)",
       "Bash(mkdir:*)",
       "Bash(cp:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(pnpm run:*)",
+      "Bash(pnpm install:*)"
     ],
     "deny": [],
     "ask": []

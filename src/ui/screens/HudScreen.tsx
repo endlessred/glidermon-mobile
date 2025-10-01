@@ -127,7 +127,6 @@ export default function HudScreen() {
         {/* Replace with Spine character */}
         <View style={{ width: 200, height: 200, overflow: 'hidden', borderRadius: 8 }}>
           <SpineCharacter
-            Skia={require("@shopify/react-native-skia")}
             x={100}
             y={100}
             scale={1}

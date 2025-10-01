@@ -3,7 +3,6 @@ import React, { useState, useEffect } from "react";
 import { Platform, SafeAreaView, View, Text, Pressable, AppState } from "react-native";
 import { useProgressionStore } from "./src/data/stores/progressionStore";
 import { useUserStore } from "./src/data/stores/userStore";
-import SkiaBootstrap from "./SkiaBootstrap";
 import HomeScreen from "./src/ui/screens/HudScreen"; // HudScreen serves as HomeScreen
 // import DexcomEgvsScreen from "./src/ui/screens/DexcomEgvsScreen"; // Preserved for future Bluetooth device integration
 import GameCanvas from "./src/game/view/GameCanvas";
@@ -208,18 +207,16 @@ export default function App() {
       </View>
 
       {/* content */}
-      <SkiaBootstrap>
-        <View style={{ flex: 1 }}>
-          {tab === "HOME" && <HomeScreen />}
-          {/* DEXCOM tab removed - component preserved for future Bluetooth device integration */}
-          {/* GAME tab removed - GameCanvas is now embedded in Home (formerly HUD) screen */}
+      <View style={{ flex: 1 }}>
+        {tab === "HOME" && <HomeScreen />}
+        {/* DEXCOM tab removed - component preserved for future Bluetooth device integration */}
+        {/* GAME tab removed - GameCanvas is now embedded in Home (formerly HUD) screen */}
 
-          {tab === "SHOP" && <ShopScreen />}
-          {tab === "OUTFIT" && <OutfitScreen />}
-          {tab === "🌰 HUNT" && <AcornHuntScreen />}
-          {tab === "SETTINGS" && <SettingsScreen />}
-        </View>
-      </SkiaBootstrap>
+        {tab === "SHOP" && <ShopScreen />}
+        {tab === "OUTFIT" && <OutfitScreen />}
+        {tab === "🌰 HUNT" && <AcornHuntScreen />}
+        {tab === "SETTINGS" && <SettingsScreen />}
+      </View>
 
       {/* global overlays */}
       <ToastHost />
