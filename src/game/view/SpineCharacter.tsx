@@ -15,6 +15,7 @@ import {
   Physics
 } from '@esotericsoftware/spine-core';
 import { SkeletonMesh } from '../../spine/SpineThree';
+import { LifelikeIdleNoMix } from './lifelikeIdle_noMix';
 
 interface SpineCharacterProps {
   x?: number;
@@ -120,18 +121,18 @@ export default function SpineCharacter({
       const skeletonData = skeletonJson.readSkeletonData(skeletonJsonData);
 
       const skeleton = new Skeleton(skeletonData);
-      const stateData = new AnimationStateData(skeletonData);
-      stateData.defaultMix = 0.08;
-      const state = new AnimationState(stateData);
 
-      console.log('🎬 Setting up animation...');
-      if (skeletonData.animations.length > 0) {
-        const animName = animation && skeletonData.animations.find(a => a.name === animation)
-          ? animation
-          : skeletonData.animations[0].name;
-        console.log('Setting animation:', animName);
-        state.setAnimation(0, animName, true);
-      }
+      console.log('🎬 Setting up lifelike idle animation system...');
+      const stateData = new AnimationStateData(skeletonData);
+      const idleDriver = new LifelikeIdleNoMix(stateData);
+
+      // Optional: customize timing ranges (uncomment to adjust)
+      // idleDriver.setBlinkRange(1.5, 4); // faster blinking
+      // idleDriver.setLookRange(2, 6);    // more frequent looks
+      // idleDriver.snapToIdleBoundary = false; // immediate start vs synced
+
+      const state = idleDriver.animationState;
+      console.log('Lifelike idle system initialized with random eye movements and blinking');
 
       skeleton.setToSetupPose();
 
@@ -179,8 +180,9 @@ export default function SpineCharacter({
             console.log(`Frame ${frameCount}, delta: ${delta.toFixed(3)}s`);
           }
 
-          // Update Spine animation and refresh geometry
-          state.update(delta);
+          // Update lifelike idle system (handles eye movements, blinking, and base idle)
+          idleDriver.update(delta);
+          skeleton.update(delta);                 // Essential for physics simulation
           state.apply(skeleton);
           skeleton.updateWorldTransform(Physics.update);
           mesh.refreshMeshes();
