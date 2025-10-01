@@ -1,190 +1,208 @@
-import React, { useEffect, useState } from 'react';
+import React, { useRef } from 'react';
 import { View, Text } from 'react-native';
-import { GLView, ExpoWebGLRenderingContext } from 'expo-gl';
+import { GLView } from 'expo-gl';
+import { Asset } from 'expo-asset';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as THREE from 'three';
+import { Renderer } from 'expo-three';
+import {
+  Skeleton,
+  AnimationState,
+  AnimationStateData,
+  AtlasAttachmentLoader,
+  SkeletonJson,
+  TextureAtlas,
+  Physics
+} from '@esotericsoftware/spine-core';
+import { SkeletonMesh } from '../../spine/SpineThree';
 
 interface SpineCharacterProps {
   x?: number;
   y?: number;
   scale?: number;
+  animation?: string;
+  skin?: string;
 }
 
-export default function SpineCharacter({ x = 100, y = 100, scale = 1 }: SpineCharacterProps) {
-  return <SpineGLRenderer x={x} y={y} scale={scale} />;
-}
+export default function SpineCharacter({
+  x = 100,
+  y = 100,
+  scale = 1,
+  animation = "idle",
+  skin
+}: SpineCharacterProps) {
+  const rafRef = useRef<number>(0);
 
-// Simple 2D WebGL test implementation (working baseline)
-const SpineGLRenderer = ({ x, y, scale }: SpineCharacterProps) => {
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    console.log('✅ Loading WebGL test for mobile...');
-    const timer = setTimeout(() => {
-      console.log('✅ WebGL test ready for mobile');
-      setIsLoading(false);
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, []);
-
-  const onContextCreate = async (gl: ExpoWebGLRenderingContext) => {
+  const onContextCreate = async (gl: any) => {
     try {
-      console.log('🎮 Initializing WebGL test...');
+      console.log('🎮 Initializing Spine with new adapter...');
 
-      // Set viewport
-      gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+      const width = gl.drawingBufferWidth;
+      const height = gl.drawingBufferHeight;
+      console.log(`Canvas size: ${width}x${height}`);
 
-      // Set clear color (dark blue background)
-      gl.clearColor(0.1, 0.1, 0.18, 1.0);
+      // Create Three.js scene with flipped Y coordinate system
+      const scene = new THREE.Scene();
+      const camera = new THREE.OrthographicCamera(0, width, height, 0, -1000, 1000); // Flipped Y coordinates
+      camera.position.z = 1;
 
-      // Create simple vertex shader
-      const vertexShaderSource = `
-        attribute vec2 a_position;
-        attribute vec3 a_color;
+      const renderer = new Renderer({ gl });
+      renderer.setSize(width, height);
+      renderer.setClearColor(0x0a0a12, 0); // Dark blue background to match theme
 
-        varying vec3 v_color;
+      console.log('📦 Loading Spine assets with complete Metro bypass...');
 
-        void main() {
-          gl_Position = vec4(a_position, 0.0, 1.0);
-          v_color = a_color;
+      // Handle Metro's auto-parsing of JSON files by working entirely with assets
+      const atlasRequire = require('../../assets/GliderMonSpine/skeleton.atlas');
+      const jsonRequire = require('../../assets/GliderMonSpine/skeleton.json');
+      const textureRequire = require('../../assets/GliderMonSpine/skeleton.png');
+
+      console.log('Asset types:', {
+        atlas: typeof atlasRequire,
+        json: typeof jsonRequire,
+        texture: typeof textureRequire
+      });
+
+      // Since Metro auto-parsed JSON, use it directly
+      const skeletonJsonData = jsonRequire;
+      console.log('Using Metro-parsed JSON directly');
+
+      // Load atlas file (always needs to be read as text)
+      const atlasAsset = Asset.fromModule(atlasRequire);
+      await atlasAsset.downloadAsync();
+      const atlasText = await FileSystem.readAsStringAsync(atlasAsset.localUri ?? atlasAsset.uri);
+
+      console.log('🖼️ Loading actual Spine texture using expo-three...');
+
+      const pageTextures: Record<string, THREE.Texture> = {};
+      const filename = 'skeleton.png';
+
+      // Use expo-three's loadAsync for more reliable texture loading
+      try {
+        const { loadAsync } = require('expo-three');
+        const texture = await loadAsync(textureRequire);
+
+        // Configure for Spine
+        texture.flipY = false; // Important for Spine textures
+        texture.generateMipmaps = true;
+        texture.needsUpdate = true;
+
+        pageTextures[filename] = texture;
+        console.log('✅ Real Spine texture loaded successfully with expo-three');
+      } catch (error) {
+        console.error('❌ Failed to load texture with expo-three:', error);
+        console.log('🔴 Using colored debug texture as fallback');
+
+        // Create a more visible debug texture - green square
+        const size = 64;
+        const data = new Uint8Array(size * size * 4);
+        for (let i = 0; i < data.length; i += 4) {
+          data[i] = 0;     // Red
+          data[i + 1] = 255; // Green
+          data[i + 2] = 0;   // Blue
+          data[i + 3] = 255; // Alpha
         }
-      `;
 
-      // Create simple fragment shader
-      const fragmentShaderSource = `
-        precision mediump float;
-
-        varying vec3 v_color;
-
-        void main() {
-          gl_FragColor = vec4(v_color, 1.0);
-        }
-      `;
-
-      // Helper function to create shader
-      function createShader(gl: ExpoWebGLRenderingContext, type: number, source: string) {
-        const shader = gl.createShader(type);
-        if (!shader) throw new Error('Could not create shader');
-
-        gl.shaderSource(shader, source);
-        gl.compileShader(shader);
-
-        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-          const error = gl.getShaderInfoLog(shader);
-          gl.deleteShader(shader);
-          throw new Error('Shader compilation error: ' + error);
-        }
-
-        return shader;
+        const debugTexture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+        debugTexture.flipY = false;
+        debugTexture.needsUpdate = true;
+        pageTextures[filename] = debugTexture;
       }
 
-      // Create shaders
-      const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
-      const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
+      console.log('🏗️ Building Spine objects...');
+      const atlas = new TextureAtlas(atlasText, (pageName: string) => {
+        console.log('Atlas requesting page:', pageName);
+        return pageTextures[pageName] || pageTextures[Object.keys(pageTextures)[0]];
+      });
 
-      // Create shader program
-      const program = gl.createProgram();
-      if (!program) throw new Error('Could not create program');
+      const attachmentLoader = new AtlasAttachmentLoader(atlas);
+      const skeletonJson = new SkeletonJson(attachmentLoader);
+      const skeletonData = skeletonJson.readSkeletonData(skeletonJsonData);
 
-      gl.attachShader(program, vertexShader);
-      gl.attachShader(program, fragmentShader);
-      gl.linkProgram(program);
+      const skeleton = new Skeleton(skeletonData);
+      const stateData = new AnimationStateData(skeletonData);
+      stateData.defaultMix = 0.08;
+      const state = new AnimationState(stateData);
 
-      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-        const error = gl.getProgramInfoLog(program);
-        gl.deleteProgram(program);
-        throw new Error('Program linking error: ' + error);
+      console.log('🎬 Setting up animation...');
+      if (skeletonData.animations.length > 0) {
+        const animName = animation && skeletonData.animations.find(a => a.name === animation)
+          ? animation
+          : skeletonData.animations[0].name;
+        console.log('Setting animation:', animName);
+        state.setAnimation(0, animName, true);
       }
 
-      // Use the program
-      gl.useProgram(program);
+      skeleton.setToSetupPose();
 
-      // Get attribute and uniform locations
-      const positionAttributeLocation = gl.getAttribLocation(program, 'a_position');
-      const colorAttributeLocation = gl.getAttribLocation(program, 'a_color');
-
-      // Create a simple colorful triangle
-      const vertices = new Float32Array([
-        // Position (x, y)   // Color (r, g, b)
-        0.0,  0.8,           1.0, 0.8, 0.0,  // Top vertex (gold)
-       -0.8, -0.8,           1.0, 0.0, 0.0,  // Bottom-left (red)
-        0.8, -0.8,           0.0, 1.0, 0.0,  // Bottom-right (green)
-      ]);
-
-      // Create buffer
-      const buffer = gl.createBuffer();
-      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-      gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
-
-      // Set up position attribute (2 floats per vertex)
-      gl.enableVertexAttribArray(positionAttributeLocation);
-      gl.vertexAttribPointer(positionAttributeLocation, 2, gl.FLOAT, false, 5 * 4, 0);
-
-      // Set up color attribute (3 floats per vertex, starting at offset 2*4 bytes)
-      gl.enableVertexAttribArray(colorAttributeLocation);
-      gl.vertexAttribPointer(colorAttributeLocation, 3, gl.FLOAT, false, 5 * 4, 2 * 4);
-
-      let rotation = 0;
-
-      // Animation loop
-      const animate = () => {
-        // Clear the canvas
-        gl.clear(gl.COLOR_BUFFER_BIT);
-
-        // Simple rotation by modifying vertices
-        rotation += 0.02;
-        const cos = Math.cos(rotation);
-        const sin = Math.sin(rotation);
-
-        // Rotate the triangle vertices
-        const rotatedVertices = new Float32Array([
-          // Rotate each vertex and keep original colors
-          cos * 0.0 - sin * 0.6,   sin * 0.0 + cos * 0.6,    1.0, 0.8, 0.0,  // Top
-          cos * -0.6 - sin * -0.6,  sin * -0.6 + cos * -0.6,  1.0, 0.0, 0.0,  // Bottom-left
-          cos * 0.6 - sin * -0.6,   sin * 0.6 + cos * -0.6,   0.0, 1.0, 0.0,  // Bottom-right
-        ]);
-
-        // Update buffer with rotated vertices
-        gl.bufferData(gl.ARRAY_BUFFER, rotatedVertices, gl.DYNAMIC_DRAW);
-
-        // Draw the triangle
-        gl.drawArrays(gl.TRIANGLES, 0, 3);
-
-        // Present the frame
-        gl.endFrameEXP();
-
-        // Request next frame
-        requestAnimationFrame(animate);
+      const resolveTexture = (pageOrFileName: string): THREE.Texture | undefined => {
+        if (pageTextures[pageOrFileName]) return pageTextures[pageOrFileName];
+        const short = pageOrFileName.split("/").pop()!;
+        return pageTextures[short];
       };
 
-      animate();
-      console.log('🎮 WebGL test initialized successfully');
+      // Use Spine's own transform system instead of Three.js transforms
+      const finalScale = scale * 0.30; // Double the size for better visibility
+      const posX = width * 0.5; // Center horizontally
+      const posY = height * 0.4; // Move down to show full character (lower values = down with flipped Y)
+      console.log(`🎯 SPINE TRANSFORMS [${new Date().toISOString()}]: scale=${finalScale}, pos=(${posX}, ${posY}), canvas=(${width}x${height})`);
+
+      // Apply transforms to the Spine skeleton (not the Three.js mesh)
+      skeleton.scaleX = finalScale;
+      skeleton.scaleY = finalScale;
+      skeleton.x = posX;
+      skeleton.y = posY;
+
+      console.log('🎭 Creating SkeletonMesh with new adapter...');
+      const mesh = new SkeletonMesh(skeleton, state, resolveTexture);
+
+      // Keep Three.js mesh at identity - let Spine handle the transforms
+      mesh.position.set(0, 0, 0);
+      mesh.scale.set(1, 1, 1);
+      scene.add(mesh);
+
+      console.log('📋 Character added to scene, mesh children:', mesh.children.length);
+
+      console.log('✅ Spine setup complete, starting render loop...');
+
+      let lastTime = Date.now() / 1000;
+      let frameCount = 0;
+
+      const renderLoop = () => {
+        try {
+          const now = Date.now() / 1000;
+          const delta = now - lastTime;
+          lastTime = now;
+          frameCount++;
+
+          if (frameCount % 60 === 0) {
+            console.log(`Frame ${frameCount}, delta: ${delta.toFixed(3)}s`);
+          }
+
+          // Update Spine animation and refresh geometry
+          state.update(delta);
+          state.apply(skeleton);
+          skeleton.updateWorldTransform(Physics.update);
+          mesh.refreshMeshes();
+
+          renderer.render(scene, camera);
+          gl.endFrameEXP();
+
+          rafRef.current = requestAnimationFrame(renderLoop);
+        } catch (renderError) {
+          console.error('❌ Error in render loop:', renderError);
+          console.error('Render error stack:', renderError.stack);
+        }
+      };
+
+      renderLoop();
+      console.log('🎮 Spine character initialized successfully with new adapter');
 
     } catch (err) {
-      console.error('❌ Error initializing GL context:', err);
-      setError(err instanceof Error ? err.message : 'Unknown GL error');
+      console.error('❌ Error initializing Spine:', err);
+      console.error('Error stack:', err.stack);
     }
   };
-
-  if (isLoading) {
-    return (
-      <View style={{ padding: 20, backgroundColor: '#1a1a2e', borderRadius: 8 }}>
-        <Text style={{ color: 'white', textAlign: 'center' }}>
-          Loading Simple WebGL Test...
-        </Text>
-      </View>
-    );
-  }
-
-  if (error) {
-    return (
-      <View style={{ padding: 20, backgroundColor: '#2e1a1a', borderRadius: 8 }}>
-        <Text style={{ color: '#ff6b6b', textAlign: 'center' }}>
-          GL Error: {error}
-        </Text>
-      </View>
-    );
-  }
 
   return (
     <View style={{ width: 200, height: 200, overflow: 'hidden', borderRadius: 8 }}>
@@ -194,4 +212,4 @@ const SpineGLRenderer = ({ x, y, scale }: SpineCharacterProps) => {
       />
     </View>
   );
-};
+}

@@ -27,7 +27,10 @@
       "Bash(cp:*)",
       "Bash(python:*)",
       "Bash(pnpm run:*)",
-      "Bash(pnpm install:*)"
+      "Bash(pnpm install:*)",
+      "Bash(Get-Process)",
+      "Bash(Stop-Process -Force)",
+      "Bash(npx expo r:*)"
     ],
     "deny": [],
     "ask": []
