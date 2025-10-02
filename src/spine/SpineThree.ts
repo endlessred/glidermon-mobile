@@ -7,17 +7,40 @@ import {
   Attachment,
   RegionAttachment,
   MeshAttachment,
+  ClippingAttachment,
+  SkeletonClipping,
   Color,
   Physics,
 } from "@esotericsoftware/spine-core";
 
-/**
- * Minimal cache so we don't recreate materials per frame.
- */
+/** Slots that should NOT use alphaTest (tiny/soft details) */
+const PUPIL_SLOT_REGEX = /(^|[_-])(L|R)?_?Pupil$/i;
+
+/** Default anti-halo threshold; trims fringes on most parts */
+const DEFAULT_ALPHA_TEST = 0.0015;
+
+/** Minimal cache with “material variants” keyed by (texture, alphaTest, pma) */
 class MaterialCache {
-  private map = new Map<THREE.Texture, THREE.MeshBasicMaterial>();
-  get(texture: THREE.Texture, premultipliedAlpha = true) {
-    let mat = this.map.get(texture);
+  private map = new Map<string, THREE.MeshBasicMaterial>();
+
+  private key(tex: THREE.Texture, alphaTest: number, pma: boolean) {
+    return `${(tex as any).uuid}|${alphaTest}|${pma ? 1 : 0}`;
+  }
+
+  get(texture: THREE.Texture, premultipliedAlpha = true, alphaTest = DEFAULT_ALPHA_TEST) {
+    // Anti-halo sampling: clamp edges, no mips, linear filtering
+    if (texture) {
+      texture.wrapS = THREE.ClampToEdgeWrapping;
+      texture.wrapT = THREE.ClampToEdgeWrapping;
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      texture.generateMipmaps = false;
+      // Do NOT set texture.premultiplyAlpha (Expo GL warns on pixelStorei)
+      texture.needsUpdate = true;
+    }
+
+    const k = this.key(texture, alphaTest, premultipliedAlpha);
+    let mat = this.map.get(k);
     if (!mat) {
       mat = new THREE.MeshBasicMaterial({
         map: texture,
@@ -26,31 +49,29 @@ class MaterialCache {
         depthTest: true,
         depthWrite: false,
         side: THREE.DoubleSide,
+        alphaTest,
+        blending: THREE.NormalBlending,
+        toneMapped: false,
       });
-      mat.map && (mat.map.needsUpdate = true);
-      this.map.set(texture, mat);
+      if (mat.map) mat.map.needsUpdate = true;
+      this.map.set(k, mat);
     }
     return mat;
   }
 }
 
-/**
- * A simple "renderable" per slot (one mesh per attachment).
- * Geometry is updated each frame from Spine world vertices.
- */
+/** One renderable per slot (geometry is rewritten each frame from Spine world vertices). */
 class SlotRenderable {
   mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
   geom: THREE.BufferGeometry;
   pos: THREE.BufferAttribute;
   uv: THREE.BufferAttribute;
   color: THREE.Color = new THREE.Color(1, 1, 1);
-  attachmentRef: Attachment | null = null;
 
   constructor() {
     this.geom = new THREE.BufferGeometry();
-    // Allocate for the largest common case (quad). We'll resize for meshes.
     this.pos = new THREE.BufferAttribute(new Float32Array(4 * 3), 3);
-    this.uv = new THREE.BufferAttribute(new Float32Array(4 * 2), 2);
+    this.uv  = new THREE.BufferAttribute(new Float32Array(4 * 2), 2);
     this.geom.setAttribute("position", this.pos);
     this.geom.setAttribute("uv", this.uv);
     this.geom.setIndex([0, 1, 2, 2, 3, 0]);
@@ -73,9 +94,7 @@ class SlotRenderable {
   }
 
   setMaterial(mat: THREE.MeshBasicMaterial) {
-    if (this.mesh.material !== mat) {
-      this.mesh.material = mat;
-    }
+    if (this.mesh.material !== mat) this.mesh.material = mat;
   }
 
   setVisible(v: boolean) {
@@ -83,44 +102,29 @@ class SlotRenderable {
   }
 }
 
-/**
- * Small helpers to convert Spine color (premultiplied alpha safe)
- */
+/** Spine color (0..1) → premultiplied RGB */
 function spineColorToPremultipliedRGB(c: Color, out: THREE.Color, alpha: number) {
-  // spine Color components are 0..1
   out.setRGB(c.r * alpha, c.g * alpha, c.b * alpha);
 }
 
-/**
- * Provide textures by page name or filename used in the atlas.
- * For example: (name) => pageTextures[name] || pageTextures["glider.png"]
- */
+/** Provide textures by page name or filename used in the atlas. */
 export type SpineTextureResolver = (pageOrFileName: string) => THREE.Texture | undefined;
 
-/**
- * SkeletonMesh
- * - Add to a THREE.Scene
- * - Call update(delta) each frame (or let your render loop call apply on state + skeleton then call refreshMeshes())
- */
 export class SkeletonMesh extends THREE.Object3D {
   private skeleton: Skeleton;
   private state: AnimationState;
   private slotsRenderables: SlotRenderable[] = [];
   private materialCache = new MaterialCache();
   private resolveTexture: SpineTextureResolver;
-  private premultipliedAlpha = true; // Spine uses PMA by default in many runtimes
+  private premultipliedAlpha = true; // your outline-free baseline used PMA tinting
+  private clipper = new SkeletonClipping();
 
-  constructor(
-    skeleton: Skeleton,
-    state: AnimationState,
-    resolveTexture: SpineTextureResolver
-  ) {
+  constructor(skeleton: Skeleton, state: AnimationState, resolveTexture: SpineTextureResolver) {
     super();
     this.skeleton = skeleton;
     this.state = state;
     this.resolveTexture = resolveTexture;
 
-    // Create one renderable per slot, in draw order
     for (let i = 0; i < skeleton.slots.length; i++) {
       const r = new SlotRenderable();
       r.mesh.renderOrder = i; // honor draw order
@@ -128,29 +132,22 @@ export class SkeletonMesh extends THREE.Object3D {
       this.add(r.mesh);
     }
 
-    // Position handled by setting world vertices; we keep object at origin.
     this.matrixAutoUpdate = false;
   }
 
-  /**
-   * Typical per-frame call:
-   *  state.update(delta); state.apply(skeleton); skeleton.updateWorldTransform(Physics.update); skeletonMesh.refreshMeshes();
-   * If you call this method directly, it will also apply state & transform for you.
-   */
   update(deltaSeconds: number) {
     this.state.update(deltaSeconds);
+    this.skeleton.update(deltaSeconds); // physics/constraints
     this.state.apply(this.skeleton);
     this.skeleton.updateWorldTransform(Physics.update);
     this.refreshMeshes();
   }
 
-  /**
-   * Builds/updates meshes for the current pose.
-   * Call after you've applied animations to the skeleton.
-   */
   refreshMeshes() {
     const drawOrder = this.skeleton.drawOrder;
     const slots = this.skeleton.slots;
+
+    this.clipper.clipEnd();
 
     for (let i = 0; i < drawOrder.length; i++) {
       const slot = drawOrder[i];
@@ -158,8 +155,16 @@ export class SkeletonMesh extends THREE.Object3D {
       renderable.mesh.renderOrder = i;
 
       const attachment = slot.getAttachment();
+
+      if (attachment instanceof ClippingAttachment) {
+        this.clipper.clipStart(slot, attachment);
+        renderable.setVisible(false);
+        continue;
+      }
+
       if (!attachment) {
         renderable.setVisible(false);
+        this.clipper.clipEndWithSlot(slot);
         continue;
       }
 
@@ -168,10 +173,13 @@ export class SkeletonMesh extends THREE.Object3D {
       } else if (attachment instanceof MeshAttachment) {
         this.updateMeshAttachment(slot, attachment, renderable);
       } else {
-        // Unsupported attachment types (Clipping, Point, Path, etc.)
         renderable.setVisible(false);
       }
+
+      this.clipper.clipEndWithSlot(slot);
     }
+
+    this.clipper.clipEnd();
   }
 
   private uploadTriangles(
@@ -181,60 +189,114 @@ export class SkeletonMesh extends THREE.Object3D {
     indices: Uint16Array | number[],
     slot: Slot
   ) {
-    // Upload original (no clipping for now)
-    const vCount = positionsXY.length / 2;
-    r.ensureSize(vCount, (indices as any).length);
+    if (this.clipper.isClipping()) {
+      // Use the length-based overload that worked for you.
+      (this.clipper as any).clipTriangles(
+        positionsXY,
+        positionsXY.length,
+        indices as any,
+        (indices as any).length,
+        uvs,
+        2
+      );
 
-    const p = r.pos.array as Float32Array;
-    for (let i = 0, j = 0; i < positionsXY.length; i += 2, j += 3) {
-      p[j] = positionsXY[i];
-      p[j + 1] = positionsXY[i + 1];
-      p[j + 2] = 0;
-    }
-    r.pos.needsUpdate = true;
+      const v = (this.clipper as any).clippedVertices as number[] | undefined;
+      const t = (this.clipper as any).clippedTriangles as number[] | undefined;
+      const u = (this.clipper as any).clippedUVs as number[] | undefined;
 
-    (r.uv.array as Float32Array).set(uvs, 0);
-    r.uv.needsUpdate = true;
+      if (!t || !v || !u || t.length === 0 || v.length === 0) {
+        r.setVisible(false);
+        return;
+      }
 
-    // indices
-    const tris = (indices as any);
-    if (!r.geom.getIndex() || r.geom.getIndex()!.count !== tris.length) {
-      r.geom.setIndex(new THREE.BufferAttribute(Uint16Array.from(tris), 1));
+      const vCount = (v.length / 2) | 0;
+      r.ensureSize(vCount, t.length);
+
+      const p = r.pos.array as Float32Array;
+      for (let i = 0, j = 0; i < v.length; i += 2, j += 3) {
+        p[j]   = v[i];
+        p[j+1] = v[i + 1];
+        p[j+2] = 0;
+      }
+      r.pos.needsUpdate = true;
+
+      (r.uv.array as Float32Array).set(u, 0);
+      r.uv.needsUpdate = true;
+
+      r.geom.setIndex(new THREE.BufferAttribute(Uint16Array.from(t), 1));
     } else {
-      (r.geom.getIndex()!.array as Uint16Array).set(tris, 0);
-      r.geom.getIndex()!.needsUpdate = true;
+      const vCount = positionsXY.length / 2;
+      r.ensureSize(vCount, (indices as any).length);
+
+      const p = r.pos.array as Float32Array;
+      for (let i = 0, j = 0; i < positionsXY.length; i += 2, j += 3) {
+        p[j]   = positionsXY[i];
+        p[j+1] = positionsXY[i + 1];
+        p[j+2] = 0;
+      }
+      r.pos.needsUpdate = true;
+
+      (r.uv.array as Float32Array).set(uvs, 0);
+      r.uv.needsUpdate = true;
+
+      const tris = indices as any;
+      if (!r.geom.getIndex() || r.geom.getIndex()!.count !== tris.length) {
+        r.geom.setIndex(new THREE.BufferAttribute(Uint16Array.from(tris), 1));
+      } else {
+        (r.geom.getIndex()!.array as Uint16Array).set(tris, 0);
+        r.geom.getIndex()!.needsUpdate = true;
+      }
     }
 
-    // Tint & visibility based on slot color
+    // PMA-safe tint & visibility (outline-free baseline)
     const a = slot.color.a * this.skeleton.color.a;
     spineColorToPremultipliedRGB(slot.color, r.color, a);
     const mat = r.mesh.material as THREE.MeshBasicMaterial;
     mat.color.copy(r.color);
     mat.opacity = a;
+    mat.transparent = a < 0.999;
 
     r.setVisible(a > 0.001);
     r.geom.computeBoundingSphere();
-    r.mesh.matrix.identity(); // baked verts; keep identity
+    r.mesh.matrix.identity();
+  }
+
+  private textureForRegionAttachment(att: RegionAttachment): THREE.Texture | undefined {
+    const region: any = att.region as any;
+    const candidates: Array<string | undefined> = [
+      region?.page?.name,
+      region?.rendererObject?.page?.name,
+      region?.name,
+      att.name ? `${att.name}.png` : undefined,
+      "skeleton.png",
+    ];
+
+    for (const key of candidates) {
+      if (!key) continue;
+      const tex = this.resolveTexture(String(key));
+      if (tex) return tex;
+    }
+    return undefined;
+  }
+
+  /** Choose the right material variant per slot (pupils get alphaTest=0) */
+  private chooseMaterial(tex: THREE.Texture, slot: Slot) {
+    const isPupil = PUPIL_SLOT_REGEX.test(slot.data?.name || "");
+    const alphaTest = isPupil ? 0.0 : DEFAULT_ALPHA_TEST;
+    return this.materialCache.get(tex, this.premultipliedAlpha, alphaTest);
   }
 
   private updateRegionAttachment(slot: Slot, attachment: RegionAttachment, r: SlotRenderable) {
     const world = new Float32Array(8); // 4 verts * (x,y)
-    attachment.computeWorldVertices(slot.bone, world, 0, 2);
+    // Correct for 4.2.43: pass Slot (not slot.bone)
+    attachment.computeWorldVertices(slot, world, 0, 2);
 
-    // uvs come as [u0,v0, u1,v1, u2,v2, u3,v3]
     const uvs = attachment.uvs as Float32Array;
+    const tris = new Uint16Array([0, 1, 2, 2, 3, 0]);
 
-    // indices for a quad
-    const tris = new Uint16Array([0,1,2, 2,3,0]);
-
-    // Material / texture (unchanged)
-    const pageName =
-      (attachment.region && (attachment.region.page?.name || attachment.region.page?.rendererObject)) ||
-      `${attachment.name}.png`;
-    const tex = this.resolveTexture(String(pageName));
+    const tex = this.textureForRegionAttachment(attachment);
     if (!tex) { r.setVisible(false); return; }
-    const mat = this.materialCache.get(tex, this.premultipliedAlpha);
-    r.setMaterial(mat);
+    r.setMaterial(this.chooseMaterial(tex, slot));
 
     this.uploadTriangles(r, world, uvs, tris, slot);
   }
@@ -247,15 +309,23 @@ export class SkeletonMesh extends THREE.Object3D {
     const uvs = attachment.uvs as Float32Array;
     const tris = attachment.triangles as Uint16Array | number[];
 
-    // Material / texture (unchanged)
-    const pageName =
-      (attachment.region && (attachment.region.page?.name || attachment.region.page?.rendererObject)) ||
-      `${attachment.name}.png`;
-
-    const tex = this.resolveTexture(String(pageName));
+    const region: any = (attachment as any).region;
+    const candidates: Array<string | undefined> = [
+      region?.page?.name,
+      region?.rendererObject?.page?.name,
+      region?.name,
+      attachment.name ? `${attachment.name}.png` : undefined,
+      "skeleton.png",
+    ];
+    let tex: THREE.Texture | undefined;
+    for (const key of candidates) {
+      if (!key) continue;
+      const t = this.resolveTexture(String(key));
+      if (t) { tex = t; break; }
+    }
     if (!tex) { r.setVisible(false); return; }
-    const mat = this.materialCache.get(tex, this.premultipliedAlpha);
-    r.setMaterial(mat);
+
+    r.setMaterial(this.chooseMaterial(tex, slot));
 
     this.uploadTriangles(r, verts2D, uvs, tris, slot);
   }
