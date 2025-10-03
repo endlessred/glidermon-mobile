@@ -18,6 +18,13 @@ export type CosmeticItem = {
   socket: Socket;
   tex?: any;              // module id or URI (screens already handle both) - optional for themes
   themeId?: string;       // for theme cosmetics, the ThemeVariation id
+  spineSkin?: string;     // Spine skin name for new Spine-based cosmetics
+  maskRecolor?: {         // Mask recoloring configuration
+    r?: string;           // Color for red channel
+    g?: string;           // Color for green channel
+    b?: string;           // Color for blue channel
+    a?: string;           // Color for alpha channel
+  };
 };
 
 type Equipped = {
@@ -50,11 +57,74 @@ type CosmeticsState = {
 };
 
 const DEFAULT_CATALOG: CosmeticItem[] = [
-  // Original Hats
+  // Spine-based Hat Cosmetics - Baseball Caps (using mask recoloring)
+  {
+    id: "blue_baseball_cap",
+    name: "Blue Baseball Cap",
+    cost: 200,
+    socket: "headTop",
+    spineSkin: "Hats/Baseball Caps/White Baseball Cap", // Use white cap as base
+    maskRecolor: { r: "#2563eb" }, // Blue color for R channel
+    tex: hatPackPng // Keep thumbnail for shop display
+  },
+  {
+    id: "green_baseball_cap",
+    name: "Green Baseball Cap",
+    cost: 200,
+    socket: "headTop",
+    spineSkin: "Hats/Baseball Caps/White Baseball Cap", // Use white cap as base
+    maskRecolor: { r: "#16a34a" }, // Green color for R channel
+    tex: hatPackPng
+  },
+  {
+    id: "red_baseball_cap",
+    name: "Red Baseball Cap",
+    cost: 200,
+    socket: "headTop",
+    spineSkin: "Hats/Baseball Caps/White Baseball Cap", // Use white cap as base
+    maskRecolor: { r: "#ff0000" }, // Bright red color for maximum visibility
+    tex: hatPackPng
+  },
+  {
+    id: "white_baseball_cap",
+    name: "White Baseball Cap",
+    cost: 150,
+    socket: "headTop",
+    spineSkin: "Hats/Baseball Caps/White Baseball Cap",
+    tex: hatPackPng
+  },
+
+  // Spine-based Hat Cosmetics - Special Hats
+  {
+    id: "flower_crown",
+    name: "Flower Crown",
+    cost: 400,
+    socket: "headTop",
+    spineSkin: "Hats/Flower Crown",
+    tex: hatPackPng
+  },
+  {
+    id: "top_hat",
+    name: "Top Hat",
+    cost: 500,
+    socket: "headTop",
+    spineSkin: "Hats/Top Hat",
+    tex: hatPackPng
+  },
+  {
+    id: "wizard_hat",
+    name: "Wizard Hat",
+    cost: 600,
+    socket: "headTop",
+    spineSkin: "Hats/Wizard Hat",
+    tex: hatPackPng
+  },
+
+  // Legacy pixel-based hats (keep for compatibility during transition)
   { id: "leaf_hat", name: "Leaf Cap", cost: 250, socket: "headTop", tex: leafPng },
   { id: "greater_hat", name: "Greater Leaf", cost: 600, socket: "headTop", tex: greaterPng },
 
-  // Hat Pack 1 - New Hats
+  // Legacy Hat Pack 1 - Old pixel system (keep for compatibility)
   { id: "frog_hat", name: "Green Frog Hat", cost: 300, socket: "headTop", tex: hatPackPng },
   { id: "black_headphones", name: "Black Headphones", cost: 400, socket: "headTop", tex: hatPackPng },
   { id: "white_headphones", name: "White Headphones", cost: 400, socket: "headTop", tex: hatPackPng },
@@ -76,11 +146,11 @@ export const useCosmeticsStore = create<CosmeticsState>()(
   persist(
     (set, get) => ({
       catalog: DEFAULT_CATALOG,
-      owned: { leaf_hat: true },          // starter hat owned
-      points: 0,                          // display only (Shop UI shows “Acorns: {points}”)
+      owned: { white_baseball_cap: true },  // starter hat owned (white baseball cap)
+      points: 0,                            // display only (Shop UI shows "Acorns: {points}")
 
-      // start with Leaf equipped
-      equipped: { headTop: "leaf_hat", hat: "leaf_hat" },
+      // start with White Baseball Cap equipped (Spine-based)
+      equipped: { headTop: "white_baseball_cap", hat: "white_baseball_cap" },
 
       loadCatalog: () => {
         // Always load the latest catalog to ensure new items are available
@@ -122,28 +192,28 @@ export const useCosmeticsStore = create<CosmeticsState>()(
       reset: () =>
         set({
           catalog: DEFAULT_CATALOG,
-          owned: { leaf_hat: true },
+          owned: { white_baseball_cap: true },
           points: 0,
-          equipped: { headTop: "leaf_hat", hat: "leaf_hat" },
+          equipped: { headTop: "white_baseball_cap", hat: "white_baseball_cap" },
         }),
     }),
     {
       name: "cosmetics_store_v4",
       storage: createJSONStorage(() => AsyncStorage),
-      version: 4,
+      version: 5,
       migrate: (state: any, from) => {
         const s = state ?? {};
         // Always update catalog to latest version to include new hats
         s.catalog = DEFAULT_CATALOG;
-        s.owned ??= { leaf_hat: true };
+        s.owned ??= { white_baseball_cap: true };
         s.points = typeof s.points === "number" ? s.points : 0;
         s.equipped ??= {};
         // Keep headTop <-> hat in sync
         if (!s.equipped.headTop && s.equipped.hat) s.equipped.headTop = s.equipped.hat;
         if (!s.equipped.hat && s.equipped.headTop) s.equipped.hat = s.equipped.headTop;
         if (!s.equipped.headTop && !s.equipped.hat) {
-          s.equipped.headTop = "leaf_hat";
-          s.equipped.hat = "leaf_hat";
+          s.equipped.headTop = "white_baseball_cap";
+          s.equipped.hat = "white_baseball_cap";
         }
         return s;
       },

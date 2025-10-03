@@ -3,7 +3,7 @@ import React from "react";
 import { View, Text } from "react-native";
 import { useTheme } from "../../data/hooks/useTheme";
 import { OutfitSlot, CosmeticSocket } from "../../data/types/outfitTypes";
-import CharacterPreview from "./CharacterPreview";
+import SpineCharacterPreview from "./SpineCharacterPreview";
 
 interface OutfitPreviewProps {
   outfit: OutfitSlot;
@@ -19,7 +19,7 @@ export default function OutfitPreview({ outfit, highlightSocket }: OutfitPreview
       alignItems: "center",
       gap: spacing.sm
     }}>
-      <CharacterPreview
+      <SpineCharacterPreview
         outfit={outfit}
         highlightSocket={highlightSocket}
         size="large"

@@ -12,6 +12,7 @@ import {
   ShoeVariation
 } from "../../data/types/outfitTypes";
 import { CosmeticDefinition } from "../../game/cosmetics/cosmeticSystem";
+import { CosmeticItem, useCosmeticsStore } from "../../data/stores/cosmeticsStore";
 import { SKIN_VARIATIONS, EYE_COLOR_VARIATIONS, SHOE_VARIATIONS } from "../../game/cosmetics/paletteSystem";
 import { useOutfitStore } from "../../data/stores/outfitStore";
 import AdjustmentSlider from "./AdjustmentSlider";
@@ -20,6 +21,7 @@ interface CosmeticAdjustmentControlsProps {
   socket: CosmeticSocket;
   outfit: OutfitSlot;
   cosmetics: CosmeticDefinition[];
+  cosmeticItems?: CosmeticItem[]; // New Spine-based cosmetics
   poses: PoseCosmetic[];
   onCustomizationChange: (socket: CosmeticSocket, customization: UserCosmeticCustomization) => void;
   onResetToDefault: (socket: CosmeticSocket) => void;
@@ -32,6 +34,7 @@ export default function CosmeticAdjustmentControls({
   socket,
   outfit,
   cosmetics,
+  cosmeticItems = [],
   poses,
   onCustomizationChange,
   onResetToDefault,
@@ -41,6 +44,17 @@ export default function CosmeticAdjustmentControls({
 }: CosmeticAdjustmentControlsProps) {
   const { colors, spacing, borderRadius, typography } = useTheme();
   const [showItemSelector, setShowItemSelector] = useState(false);
+
+  // Access cosmetics store directly to ensure we have latest data
+  const { catalog: latestCosmeticItems, loadCatalog } = useCosmeticsStore();
+
+  // Force refresh on mount to ensure we have latest cosmetics
+  React.useEffect(() => {
+    loadCatalog();
+  }, [loadCatalog]);
+
+  // Use latest cosmetic items instead of potentially stale prop
+  const activeCosmeticItems = latestCosmeticItems;
 
   // Access outfit store for palette operations
   const setSkinVariation = useOutfitStore(s => s.setSkinVariation);
@@ -113,7 +127,39 @@ export default function CosmeticAdjustmentControls({
     if (socket === "pose") {
       return poses;
     }
-    return cosmetics.filter(item => item.socket === socket);
+
+    // For headTop socket, only show Spine-based cosmetics (legacy won't work with Spine character)
+    if (socket === "headTop") {
+      return activeCosmeticItems
+        .filter(item => item.socket === socket && item.spineSkin) // Only Spine-based items
+        .map(item => ({
+          id: item.id,
+          name: item.name,
+          socket: item.socket,
+          renderLayer: "headFront" as any, // Default render layer for hats
+          texKey: "hatPackPng" as any, // Use thumbnail texture
+          frameMode: "static" as any,
+          cost: item.cost,
+          spineSkin: item.spineSkin
+        }));
+    }
+
+    // For other sockets, combine legacy cosmetics with new Spine-based cosmetics
+    const legacyCosmetics = cosmetics.filter(item => item.socket === socket);
+    const spineCosmetics = activeCosmeticItems
+      .filter(item => item.socket === socket && item.spineSkin) // Only Spine-based items
+      .map(item => ({
+        id: item.id,
+        name: item.name,
+        socket: item.socket,
+        renderLayer: "headFront" as any, // Default render layer for hats
+        texKey: "hatPackPng" as any, // Use thumbnail texture
+        frameMode: "static" as any,
+        cost: item.cost,
+        spineSkin: item.spineSkin
+      }));
+
+    return [...legacyCosmetics, ...spineCosmetics];
   };
 
   const availableItems = getAvailableItems();

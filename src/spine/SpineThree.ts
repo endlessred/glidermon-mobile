@@ -1,10 +1,8 @@
-// src/spine/SpineThree.ts
 import * as THREE from "three";
 import {
   Skeleton,
   AnimationState,
   Slot,
-  Attachment,
   RegionAttachment,
   MeshAttachment,
   ClippingAttachment,
@@ -28,17 +26,14 @@ class MaterialCache {
   }
 
   get(texture: THREE.Texture, premultipliedAlpha = true, alphaTest = DEFAULT_ALPHA_TEST) {
-    // Anti-halo sampling: clamp edges, no mips, linear filtering
     if (texture) {
       texture.wrapS = THREE.ClampToEdgeWrapping;
       texture.wrapT = THREE.ClampToEdgeWrapping;
       texture.minFilter = THREE.LinearFilter;
       texture.magFilter = THREE.LinearFilter;
       texture.generateMipmaps = false;
-      // Do NOT set texture.premultiplyAlpha (Expo GL warns on pixelStorei)
       texture.needsUpdate = true;
     }
-
     const k = this.key(texture, alphaTest, premultipliedAlpha);
     let mat = this.map.get(k);
     if (!mat) {
@@ -62,7 +57,7 @@ class MaterialCache {
 
 /** One renderable per slot (geometry is rewritten each frame from Spine world vertices). */
 class SlotRenderable {
-  mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
+  mesh: THREE.Mesh<THREE.BufferGeometry, THREE.Material>;
   geom: THREE.BufferGeometry;
   pos: THREE.BufferAttribute;
   uv: THREE.BufferAttribute;
@@ -77,6 +72,7 @@ class SlotRenderable {
     this.geom.setIndex([0, 1, 2, 2, 3, 0]);
     this.mesh = new THREE.Mesh(this.geom, new THREE.MeshBasicMaterial({ transparent: true }));
     this.mesh.matrixAutoUpdate = false;
+    this.mesh.frustumCulled = false;
   }
 
   ensureSize(vertexCount: number, indexCount?: number) {
@@ -93,7 +89,7 @@ class SlotRenderable {
     }
   }
 
-  setMaterial(mat: THREE.MeshBasicMaterial) {
+  setMaterial(mat: THREE.Material) {
     if (this.mesh.material !== mat) this.mesh.material = mat;
   }
 
@@ -116,8 +112,11 @@ export class SkeletonMesh extends THREE.Object3D {
   private slotsRenderables: SlotRenderable[] = [];
   private materialCache = new MaterialCache();
   private resolveTexture: SpineTextureResolver;
-  private premultipliedAlpha = true; // your outline-free baseline used PMA tinting
+  private premultipliedAlpha = true; // outline-free baseline uses PMA tinting
   private clipper = new SkeletonClipping();
+
+  /** Hook: return a material for this slot+texture (or null to use default). */
+  public materialOverride?: (slot: Slot, tex: THREE.Texture) => THREE.Material | null;
 
   constructor(skeleton: Skeleton, state: AnimationState, resolveTexture: SpineTextureResolver) {
     super();
@@ -128,6 +127,7 @@ export class SkeletonMesh extends THREE.Object3D {
     for (let i = 0; i < skeleton.slots.length; i++) {
       const r = new SlotRenderable();
       r.mesh.renderOrder = i; // honor draw order
+      r.mesh.userData.slotName = skeleton.slots[i].data.name;
       this.slotsRenderables.push(r);
       this.add(r.mesh);
     }
@@ -152,7 +152,24 @@ export class SkeletonMesh extends THREE.Object3D {
     for (let i = 0; i < drawOrder.length; i++) {
       const slot = drawOrder[i];
       const renderable = this.slotsRenderables[slots.indexOf(slot)];
-      renderable.mesh.renderOrder = i;
+
+      // Base renderOrder from Spine
+      let ro = i;
+
+      // If this is the hat, give it a tiny negative bias so it draws just before the next things,
+      // and (if the hat uses a shader) make sure it's in the opaque pass so it doesn't get forced last.
+      if ((slot.data?.name || "") === "Hat_Base") {
+        ro = i - 0.5; // tiny, local bias (no huge hacks)
+        const hatMat: any = renderable.mesh.material;
+        if (hatMat?.isShaderMaterial) {
+          // draw with opaque queue; alpha cutouts must be handled in the shader
+          hatMat.transparent = false;
+          hatMat.depthTest = true;
+          hatMat.depthWrite = false;
+        }
+      }
+
+      renderable.mesh.renderOrder = ro;
 
       const attachment = slot.getAttachment();
 
@@ -184,13 +201,12 @@ export class SkeletonMesh extends THREE.Object3D {
 
   private uploadTriangles(
     r: SlotRenderable,
-    positionsXY: Float32Array, // [x,y,...]
-    uvs: Float32Array,         // [u,v,...]
+    positionsXY: Float32Array,
+    uvs: Float32Array,
     indices: Uint16Array | number[],
     slot: Slot
   ) {
     if (this.clipper.isClipping()) {
-      // Use the length-based overload that worked for you.
       (this.clipper as any).clipTriangles(
         positionsXY,
         positionsXY.length,
@@ -248,13 +264,26 @@ export class SkeletonMesh extends THREE.Object3D {
       }
     }
 
-    // PMA-safe tint & visibility (outline-free baseline)
+    // ----- Tint / alpha handling (UNCHANGED pupil behavior) -----
     const a = slot.color.a * this.skeleton.color.a;
-    spineColorToPremultipliedRGB(slot.color, r.color, a);
-    const mat = r.mesh.material as THREE.MeshBasicMaterial;
-    mat.color.copy(r.color);
-    mat.opacity = a;
-    mat.transparent = a < 0.999;
+    const material: any = r.mesh.material;
+
+    if (material?.isMeshBasicMaterial) {
+      // Original PMA tint path (pupil-safe) — unchanged
+      spineColorToPremultipliedRGB(slot.color, r.color, a);
+      material.color.copy(r.color);
+      material.opacity = a;
+      material.transparent = a < 0.999;
+    } else if (material?.isShaderMaterial && material.uniforms) {
+      // Shader recolors get slot*skeleton alpha
+      if (material.uniforms.uGlobalAlpha) {
+        material.uniforms.uGlobalAlpha.value = a;
+      }
+      if (material.uniforms.uSlotColor) {
+        material.uniforms.uSlotColor.value.set(slot.color.r, slot.color.g, slot.color.b);
+      }
+      // Do NOT touch depth flags here — hat opacity is handled above for Hat_Base only
+    }
 
     r.setVisible(a > 0.001);
     r.geom.computeBoundingSphere();
@@ -270,7 +299,6 @@ export class SkeletonMesh extends THREE.Object3D {
       att.name ? `${att.name}.png` : undefined,
       "skeleton.png",
     ];
-
     for (const key of candidates) {
       if (!key) continue;
       const tex = this.resolveTexture(String(key));
@@ -279,30 +307,32 @@ export class SkeletonMesh extends THREE.Object3D {
     return undefined;
   }
 
-  /** Choose the right material variant per slot (pupils get alphaTest=0) */
+  /** Choose the right material variant per slot (pupils get alphaTest=0). */
   private chooseMaterial(tex: THREE.Texture, slot: Slot) {
+    // First let the app override (used for recolor)
+    if (this.materialOverride) {
+      const override = this.materialOverride(slot, tex);
+      if (override) return override;
+    }
     const isPupil = PUPIL_SLOT_REGEX.test(slot.data?.name || "");
     const alphaTest = isPupil ? 0.0 : DEFAULT_ALPHA_TEST;
     return this.materialCache.get(tex, this.premultipliedAlpha, alphaTest);
   }
 
   private updateRegionAttachment(slot: Slot, attachment: RegionAttachment, r: SlotRenderable) {
-    const world = new Float32Array(8); // 4 verts * (x,y)
-    // Correct for 4.2.43: pass Slot (not slot.bone)
+    const world = new Float32Array(8);
     attachment.computeWorldVertices(slot, world, 0, 2);
-
     const uvs = attachment.uvs as Float32Array;
     const tris = new Uint16Array([0, 1, 2, 2, 3, 0]);
 
     const tex = this.textureForRegionAttachment(attachment);
     if (!tex) { r.setVisible(false); return; }
     r.setMaterial(this.chooseMaterial(tex, slot));
-
     this.uploadTriangles(r, world, uvs, tris, slot);
   }
 
   private updateMeshAttachment(slot: Slot, attachment: MeshAttachment, r: SlotRenderable) {
-    const numFloats = attachment.worldVerticesLength; // x,y pairs
+    const numFloats = attachment.worldVerticesLength;
     const verts2D = new Float32Array(numFloats);
     attachment.computeWorldVertices(slot, 0, numFloats, verts2D, 0, 2);
 
@@ -326,7 +356,6 @@ export class SkeletonMesh extends THREE.Object3D {
     if (!tex) { r.setVisible(false); return; }
 
     r.setMaterial(this.chooseMaterial(tex, slot));
-
     this.uploadTriangles(r, verts2D, uvs, tris, slot);
   }
 }

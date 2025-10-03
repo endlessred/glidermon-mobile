@@ -13,7 +13,8 @@ import {
   validateAdjustment,
   SkinVariation,
   EyeColor,
-  ShoeVariation
+  ShoeVariation,
+  SpineCosmeticData
 } from "../types/outfitTypes";
 
 type OutfitStore = OutfitStorage & OutfitActions & {
@@ -38,7 +39,15 @@ function createDefaultOutfit(): OutfitSlot {
   return {
     id: generateId(),
     name: "Default Outfit",
-    cosmetics: {},
+    cosmetics: {
+      headTop: {
+        itemId: "white_baseball_cap"
+      }
+    },
+    spineSettings: {
+      currentSkin: "Hats/Baseball Caps/White Baseball Cap",
+      renderMode: "spine"
+    },
     skinVariation: 'default',
     eyeColor: 'blue',
     shoeVariation: 'brown',
@@ -55,9 +64,16 @@ function createDefaultPublicOutfit(): OutfitSlot {
     id: generateId(),
     name: "Gallery Look",
     cosmetics: {
+      headTop: {
+        itemId: "flower_crown"
+      },
       pose: {
         itemId: DEFAULT_POSE.id
       }
+    },
+    spineSettings: {
+      currentSkin: "Hats/Flower Crown",
+      renderMode: "spine"
     },
     skinVariation: 'default',
     eyeColor: 'blue',
@@ -97,6 +113,10 @@ export const useOutfitStore = create<OutfitStore>()(
           id: generateId(),
           name,
           cosmetics: {},
+          spineSettings: {
+            currentSkin: "default",
+            renderMode: "spine"
+          },
           skinVariation: 'default',
           eyeColor: 'blue',
           shoeVariation: 'brown',
@@ -296,6 +316,62 @@ export const useOutfitStore = create<OutfitStore>()(
         }));
       },
 
+      // Spine cosmetic management
+      equipSpineCosmetic: (outfitId: string, socket: CosmeticSocket, itemId: string, spineData: SpineCosmeticData) => {
+        set(state => ({
+          slots: state.slots.map(slot =>
+            slot.id === outfitId
+              ? {
+                  ...slot,
+                  cosmetics: {
+                    ...slot.cosmetics,
+                    [socket]: { itemId, spineData }
+                  },
+                  spineSettings: {
+                    currentSkin: spineData.skinName,
+                    renderMode: slot.spineSettings?.renderMode || "spine"
+                  },
+                  lastModified: new Date()
+                }
+              : slot
+          )
+        }));
+      },
+
+      setSpineSkin: (outfitId: string, skinName: string) => {
+        set(state => ({
+          slots: state.slots.map(slot =>
+            slot.id === outfitId
+              ? {
+                  ...slot,
+                  spineSettings: {
+                    currentSkin: skinName,
+                    renderMode: slot.spineSettings?.renderMode || "spine"
+                  },
+                  lastModified: new Date()
+                }
+              : slot
+          )
+        }));
+      },
+
+      setRenderMode: (outfitId: string, mode: "spine" | "legacy") => {
+        set(state => ({
+          slots: state.slots.map(slot =>
+            slot.id === outfitId
+              ? {
+                  ...slot,
+                  spineSettings: {
+                    currentSkin: slot.spineSettings?.currentSkin || "default",
+                    renderMode: mode
+                  },
+                  lastModified: new Date()
+                }
+              : slot
+          )
+        }));
+      },
+
       // Palette unlock system
       unlockSkin: (skin: SkinVariation) => {
         set(state => ({
@@ -374,6 +450,10 @@ export const useOutfitStore = create<OutfitStore>()(
             id: generateId(),
             name: `${outfitData.name} (Imported)`,
             cosmetics: outfitData.cosmetics,
+            spineSettings: outfitData.spineSettings || {
+              currentSkin: "default",
+              renderMode: "spine"
+            },
             skinVariation: outfitData.skinVariation || 'default',
             eyeColor: outfitData.eyeColor || 'blue',
             shoeVariation: outfitData.shoeVariation || 'brown',

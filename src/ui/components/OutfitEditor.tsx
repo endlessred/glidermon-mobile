@@ -4,6 +4,7 @@ import { View, Text, ScrollView, Pressable } from "react-native";
 import { useTheme } from "../../data/hooks/useTheme";
 import { usePaletteUnlocks } from "../../data/hooks/usePaletteUnlocks";
 import { useOutfitStore } from "../../data/stores/outfitStore";
+import { useCosmeticsStore } from "../../data/stores/cosmeticsStore";
 import { cosmeticSystem } from "../../game/cosmetics/cosmeticSystem";
 import { CosmeticSocket, UserCosmeticCustomization } from "../../data/types/outfitTypes";
 import CosmeticAdjustmentControls from "./CosmeticAdjustmentControls";
@@ -28,9 +29,15 @@ export default function OutfitEditor({ outfitId, onClose }: OutfitEditorProps) {
   const unequipCosmetic = useOutfitStore(state => state.unequipCosmetic);
   const setPose = useOutfitStore(state => state.setPose);
 
-  // Get cosmetics from the game system
+  // Get cosmetics from the cosmetics store (includes Spine-based cosmetics)
   const poses = useOutfitStore(state => state.poses);
-  const cosmetics = cosmeticSystem.getAllCosmetics();
+  const { catalog: cosmeticItems, loadCatalog } = useCosmeticsStore();
+  const cosmetics = cosmeticSystem.getAllCosmetics(); // Keep for legacy cosmetics
+
+  // Force refresh of catalog to ensure latest Spine hats are loaded
+  React.useEffect(() => {
+    loadCatalog();
+  }, [loadCatalog]);
 
   if (!outfit) {
     return (
@@ -228,6 +235,7 @@ export default function OutfitEditor({ outfitId, onClose }: OutfitEditorProps) {
               socket={selectedSocket}
               outfit={outfit}
               cosmetics={cosmetics}
+              cosmeticItems={cosmeticItems}
               poses={poses}
               onCustomizationChange={handleCustomizationChange}
               onResetToDefault={handleResetToDefault}

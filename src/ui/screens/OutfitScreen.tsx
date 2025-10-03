@@ -5,7 +5,7 @@ import { useTheme } from "../../data/hooks/useTheme";
 import { useOutfitStore, useOutfitSlots, useActiveLocalOutfit, useActivePublicOutfit } from "../../data/stores/outfitStore";
 import { OutfitSlot } from "../../data/types/outfitTypes";
 import OutfitEditor from "../components/OutfitEditor";
-import CharacterPreview from "../components/CharacterPreview";
+import SpineCharacterPreview from "../components/SpineCharacterPreview";
 
 export default function OutfitScreen() {
   const { colors, spacing, borderRadius, typography } = useTheme();
@@ -110,7 +110,7 @@ export default function OutfitScreen() {
           gap: spacing.md
         }}>
           {/* Character Preview */}
-          <CharacterPreview
+          <SpineCharacterPreview
             outfit={outfit}
             size="small"
           />

@@ -14,6 +14,16 @@ export type UserCosmeticCustomization = {
   tags?: string[];                        // "retro", "formal", "silly"
 };
 
+// Spine-specific cosmetic data
+export type SpineCosmeticData = {
+  skinName: string;                       // Spine skin name (e.g., "Hats/Baseball Caps/Blue Baseball Cap")
+  renderType: "spine";                    // Indicates this uses Spine rendering
+  animationOverrides?: {                  // Optional animation overrides for this cosmetic
+    idle?: string;
+    walk?: string;
+  };
+};
+
 // Adjustment boundaries for validation
 export const ADJUSTMENT_LIMITS = {
   offset: { x: [-20, 20], y: [-20, 20] } as const,
@@ -58,7 +68,13 @@ export type OutfitSlot = {
     [K in CosmeticSocket]?: {
       itemId: string;
       customization?: UserCosmeticCustomization;
+      spineData?: SpineCosmeticData;     // Spine-specific data for Spine cosmetics
     }
+  };
+  // Spine character configuration
+  spineSettings: {
+    currentSkin: string;                 // Active Spine skin name
+    renderMode: "spine" | "legacy";      // Whether to use Spine or legacy pixel rendering
   };
   // New palette-based cosmetics
   skinVariation: SkinVariation;          // Character skin color palette
@@ -112,6 +128,11 @@ export type OutfitActions = {
   equipCosmetic: (outfitId: string, socket: CosmeticSocket, itemId: string) => void;
   unequipCosmetic: (outfitId: string, socket: CosmeticSocket) => void;
   customizeCosmetic: (outfitId: string, socket: CosmeticSocket, customization: UserCosmeticCustomization) => void;
+
+  // Spine cosmetic management
+  equipSpineCosmetic: (outfitId: string, socket: CosmeticSocket, itemId: string, spineData: SpineCosmeticData) => void;
+  setSpineSkin: (outfitId: string, skinName: string) => void;
+  setRenderMode: (outfitId: string, mode: "spine" | "legacy") => void;
 
   // Palette-based cosmetic management
   setSkinVariation: (outfitId: string, skinVariation: SkinVariation) => void;
