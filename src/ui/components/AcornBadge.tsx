@@ -25,6 +25,9 @@ export default function AcornBadge({ count }: Props) {
         shadowRadius: 2,
         elevation: 1,
       }}
+      accessibilityLabel={`You have ${safe} acorns`}
+      accessibilityRole="text"
+      accessibilityHint="Acorns are the currency used to purchase items in the shop"
     >
       <Text style={{ fontSize: typography.size.lg }}>🌰</Text>
       <Text style={{

@@ -25,6 +25,7 @@ import { useTheme } from "./src/data/hooks/useTheme";
 import { initializeCosmeticSystem } from "./src/game/cosmetics/cosmeticDefinitions";
 import { useOutfitStore } from "./src/data/stores/outfitStore";
 import { POSE_DEFINITIONS } from "./src/data/poses/poseDefinitions";
+import { useHealthKit } from "./src/data/hooks/useHealthKit";
 // import { migrateEquippedCosmeticsToOutfit, syncOutfitToCosmeticsStore } from "./src/data/utils/outfitMigration.ts";
 
 const TABS = ["HOME", "SHOP", "OUTFIT", "🌰 HUNT", "SETTINGS"] as const;
@@ -58,10 +59,11 @@ export default function App() {
   // ---- tabs ----
   const [tab, setTab] = useState<Tab>("HOME");
 
-  // ---- sim wiring ----
+  // ---- sim wiring & health integration ----
   const onEgvs = useGameStore.getState().onEgvs; // stable reference is fine
   const useSimulator = useSettingsStore((s) => s.useSimulator);
   const simSpeed = useSettingsStore((s) => s.simSpeed);
+  const healthKit = useHealthKit();
 
   // Load settings once (if your settings store persists/loads)
   useEffect(() => {
@@ -104,9 +106,12 @@ export default function App() {
     if (rehydrated) syncProgressionToEngine();
   }, [rehydrated, syncProgressionToEngine]);
 
-  // EGV simulator lifecycle
+  // EGV data source lifecycle (HealthKit + simulator fallback)
   useEffect(() => {
-    const shouldSim = useSimulator || Platform.OS === "web";
+    // Use HealthKit if available and monitoring, otherwise fall back to simulator
+    const shouldUseHealthKit = healthKit.isAvailable && healthKit.isObserving;
+    const shouldSim = useSimulator || Platform.OS === "web" || !shouldUseHealthKit;
+
     if (!shouldSim) {
       stopEgvsSimulator();
       return;
@@ -124,7 +129,7 @@ export default function App() {
     });
 
     return () => handle.stop();
-  }, [useSimulator, simSpeed, onEgvs]);
+  }, [useSimulator, simSpeed, onEgvs, healthKit.isAvailable, healthKit.isObserving]);
 
   // Daily reset guard (no Date arg; store handles its own clock)
   useEffect(() => {

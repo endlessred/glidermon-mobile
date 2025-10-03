@@ -47,63 +47,63 @@ export function ResultsScreen({ run, onPlayAgain, onExit }: ResultsScreenProps) 
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
       <ScrollView style={styles.content}>
         {/* Header */}
         <View style={styles.headerSection}>
-          <Text style={[styles.mainTitle, { color: colors.text }]}>
+          <Text style={[styles.mainTitle, { color: colors.text.primary }]}>
             {isVictory ? '🎉 Victory!' : '💔 Adventure Ended'}
           </Text>
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+          <Text style={[styles.subtitle, { color: colors.text.secondary }]}>
             {isVictory
               ? 'You have conquered the Hollow Acorn and saved the forest!'
               : 'Your journey ends here, but your courage was admirable.'
             }
           </Text>
-          <Text style={[styles.performanceRating, { color: colors.primary }]}>
+          <Text style={[styles.performanceRating, { color: colors.primary[500] }]}>
             {getPerformanceRating()}
           </Text>
         </View>
 
         {/* Run Statistics */}
-        <View style={[styles.statsSection, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+        <View style={[styles.statsSection, { backgroundColor: colors.background.card }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
             📊 Adventure Summary
           </Text>
 
           <View style={styles.statsGrid}>
             <View style={styles.statCard}>
-              <Text style={[styles.statValue, { color: colors.primary }]}>
+              <Text style={[styles.statValue, { color: colors.primary[500] }]}>
                 {summary.nodesCompleted}/{summary.totalNodes}
               </Text>
-              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+              <Text style={[styles.statLabel, { color: colors.text.secondary }]}>
                 Nodes Completed
               </Text>
             </View>
 
             <View style={styles.statCard}>
-              <Text style={[styles.statValue, { color: colors.primary }]}>
+              <Text style={[styles.statValue, { color: colors.primary[500] }]}>
                 🌰 {summary.acornsEarned}
               </Text>
-              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+              <Text style={[styles.statLabel, { color: colors.text.secondary }]}>
                 Acorns Earned
               </Text>
             </View>
 
             <View style={styles.statCard}>
-              <Text style={[styles.statValue, { color: colors.primary }]}>
+              <Text style={[styles.statValue, { color: colors.primary[500] }]}>
                 ✨ {summary.relicsCollected}
               </Text>
-              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+              <Text style={[styles.statLabel, { color: colors.text.secondary }]}>
                 Relics Found
               </Text>
             </View>
 
             <View style={styles.statCard}>
-              <Text style={[styles.statValue, { color: colors.primary }]}>
+              <Text style={[styles.statValue, { color: colors.primary[500] }]}>
                 {summary.completionRate}%
               </Text>
-              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+              <Text style={[styles.statLabel, { color: colors.text.secondary }]}>
                 Completion
               </Text>
             </View>
@@ -111,8 +111,8 @@ export function ResultsScreen({ run, onPlayAgain, onExit }: ResultsScreenProps) 
         </View>
 
         {/* Party Performance */}
-        <View style={[styles.partySection, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+        <View style={[styles.partySection, { backgroundColor: colors.background.card }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
             👥 Your Brave Party
           </Text>
 
@@ -120,12 +120,12 @@ export function ResultsScreen({ run, onPlayAgain, onExit }: ResultsScreenProps) 
             {run.party.map((characterId, index) => {
               const character = CHARACTERS[characterId];
               return (
-                <View key={characterId} style={[styles.partyCard, { backgroundColor: colors.background }]}>
+                <View key={characterId} style={[styles.partyCard, { backgroundColor: colors.background.primary }]}>
                   <Text style={styles.partyEmoji}>{character.emoji}</Text>
-                  <Text style={[styles.partyName, { color: colors.text }]}>
+                  <Text style={[styles.partyName, { color: colors.text.primary }]}>
                     {character.name}
                   </Text>
-                  <Text style={[styles.partyRole, { color: colors.textSecondary }]}>
+                  <Text style={[styles.partyRole, { color: colors.text.secondary }]}>
                     {index === 0 ? 'Leader' : 'Companion'}
                   </Text>
                 </View>
@@ -136,8 +136,8 @@ export function ResultsScreen({ run, onPlayAgain, onExit }: ResultsScreenProps) 
 
         {/* Collected Relics */}
         {run.relics.length > 0 && (
-          <View style={[styles.relicsSection, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          <View style={[styles.relicsSection, { backgroundColor: colors.background.card }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
               🎒 Treasures Collected
             </Text>
 
@@ -148,11 +148,11 @@ export function ResultsScreen({ run, onPlayAgain, onExit }: ResultsScreenProps) 
 
                 const getRarityColor = (rarity: string) => {
                   switch (rarity) {
-                    case 'common': return '#9ca3af';
-                    case 'uncommon': return '#22c55e';
-                    case 'rare': return '#3b82f6';
-                    case 'legendary': return '#a855f7';
-                    default: return colors.textSecondary;
+                    case 'common': return colors.gray?.[500] || '#9ca3af';
+                    case 'uncommon': return colors.status?.success || '#22c55e';
+                    case 'rare': return colors.primary[500][500] || '#3b82f6';
+                    case 'legendary': return colors.accent?.purple || '#a855f7';
+                    default: return colors.text.secondary;
                   }
                 };
 
@@ -162,13 +162,13 @@ export function ResultsScreen({ run, onPlayAgain, onExit }: ResultsScreenProps) 
                     style={[
                       styles.relicCard,
                       {
-                        backgroundColor: colors.background,
+                        backgroundColor: colors.background.primary,
                         borderColor: getRarityColor(relic.rarity)
                       }
                     ]}
                   >
                     <Text style={styles.relicEmoji}>{relic.emoji}</Text>
-                    <Text style={[styles.relicName, { color: colors.text }]}>
+                    <Text style={[styles.relicName, { color: colors.text.primary }]}>
                       {relic.name}
                     </Text>
                     <Text style={[styles.relicRarity, { color: getRarityColor(relic.rarity) }]}>
@@ -182,8 +182,8 @@ export function ResultsScreen({ run, onPlayAgain, onExit }: ResultsScreenProps) 
         )}
 
         {/* Achievements */}
-        <View style={[styles.achievementsSection, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+        <View style={[styles.achievementsSection, { backgroundColor: colors.background.card }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
             🏆 Achievements
           </Text>
 
@@ -191,7 +191,7 @@ export function ResultsScreen({ run, onPlayAgain, onExit }: ResultsScreenProps) 
             {isVictory && (
               <View style={styles.achievementItem}>
                 <Text style={styles.achievementEmoji}>👑</Text>
-                <Text style={[styles.achievementText, { color: colors.text }]}>
+                <Text style={[styles.achievementText, { color: colors.text.primary }]}>
                   Forest Champion - Defeated the Hollow Acorn
                 </Text>
               </View>
@@ -200,7 +200,7 @@ export function ResultsScreen({ run, onPlayAgain, onExit }: ResultsScreenProps) 
             {summary.acornsEarned >= 100 && (
               <View style={styles.achievementItem}>
                 <Text style={styles.achievementEmoji}>💰</Text>
-                <Text style={[styles.achievementText, { color: colors.text }]}>
+                <Text style={[styles.achievementText, { color: colors.text.primary }]}>
                   Acorn Collector - Earned 100+ acorns
                 </Text>
               </View>
@@ -209,7 +209,7 @@ export function ResultsScreen({ run, onPlayAgain, onExit }: ResultsScreenProps) 
             {summary.relicsCollected >= 3 && (
               <View style={styles.achievementItem}>
                 <Text style={styles.achievementEmoji}>🗝️</Text>
-                <Text style={[styles.achievementText, { color: colors.text }]}>
+                <Text style={[styles.achievementText, { color: colors.text.primary }]}>
                   Treasure Hunter - Found 3+ relics
                 </Text>
               </View>
@@ -218,7 +218,7 @@ export function ResultsScreen({ run, onPlayAgain, onExit }: ResultsScreenProps) 
             {summary.completionRate === 100 && (
               <View style={styles.achievementItem}>
                 <Text style={styles.achievementEmoji}>🎯</Text>
-                <Text style={[styles.achievementText, { color: colors.text }]}>
+                <Text style={[styles.achievementText, { color: colors.text.primary }]}>
                   Completionist - Explored every node
                 </Text>
               </View>
@@ -227,7 +227,7 @@ export function ResultsScreen({ run, onPlayAgain, onExit }: ResultsScreenProps) 
             {run.relics.some(id => RELICS[id]?.rarity === 'legendary') && (
               <View style={styles.achievementItem}>
                 <Text style={styles.achievementEmoji}>⭐</Text>
-                <Text style={[styles.achievementText, { color: colors.text }]}>
+                <Text style={[styles.achievementText, { color: colors.text.primary }]}>
                   Legend Seeker - Found a legendary relic
                 </Text>
               </View>
@@ -236,22 +236,22 @@ export function ResultsScreen({ run, onPlayAgain, onExit }: ResultsScreenProps) 
         </View>
 
         {/* Rewards Summary */}
-        <View style={[styles.rewardsSection, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+        <View style={[styles.rewardsSection, { backgroundColor: colors.background.card }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
             🎁 Final Rewards
           </Text>
 
           <View style={styles.rewardsList}>
             <View style={styles.rewardItem}>
               <Text style={styles.rewardEmoji}>🌰</Text>
-              <Text style={[styles.rewardText, { color: colors.text }]}>
+              <Text style={[styles.rewardText, { color: colors.text.primary }]}>
                 {summary.acornsEarned} Acorns added to your collection
               </Text>
             </View>
 
             <View style={styles.rewardItem}>
               <Text style={styles.rewardEmoji}>🌰✨</Text>
-              <Text style={[styles.rewardText, { color: colors.text }]}>
+              <Text style={[styles.rewardText, { color: colors.text.primary }]}>
                 {summary.virtuAcornsEarned} VirtuAcorns for character upgrades
               </Text>
             </View>
@@ -259,7 +259,7 @@ export function ResultsScreen({ run, onPlayAgain, onExit }: ResultsScreenProps) 
             {isUnlockAwardEligible && (
               <View style={styles.rewardItem}>
                 <Text style={styles.rewardEmoji}>🆕</Text>
-                <Text style={[styles.rewardText, { color: colors.primary }]}>
+                <Text style={[styles.rewardText, { color: colors.primary[500] }]}>
                   Bonus: New cosmetics available in shop!
                 </Text>
               </View>
@@ -267,7 +267,7 @@ export function ResultsScreen({ run, onPlayAgain, onExit }: ResultsScreenProps) 
 
             <View style={styles.rewardItem}>
               <Text style={styles.rewardEmoji}>⭐</Text>
-              <Text style={[styles.rewardText, { color: colors.text }]}>
+              <Text style={[styles.rewardText, { color: colors.text.primary }]}>
                 Experience points earned: {Math.floor(summary.acornsEarned * 0.5)}
               </Text>
             </View>
@@ -275,11 +275,11 @@ export function ResultsScreen({ run, onPlayAgain, onExit }: ResultsScreenProps) 
         </View>
 
         {/* Story Epilogue */}
-        <View style={[styles.epilogueSection, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+        <View style={[styles.epilogueSection, { backgroundColor: colors.background.card }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
             📖 Your Legend
           </Text>
-          <Text style={[styles.epilogueText, { color: colors.textSecondary }]}>
+          <Text style={[styles.epilogueText, { color: colors.text.secondary }]}>
             {isVictory
               ? `The forest creatures will long remember the brave ${run.party[0]} and their companions ${run.party.slice(1).join(', ')}. Your victory over the Hollow Acorn has restored peace to the enchanted woods, and the acorns you collected will help rebuild what was lost. The relics you discovered will serve as reminders of your heroic journey.`
               : `Though your adventure ended before reaching the Hollow Acorn, your courage inspired many. The ${summary.acornsEarned} acorns you collected and the ${summary.relicsCollected} relics you found will aid future heroes who dare to venture into the mysterious forest. Your legacy lives on.`
@@ -291,19 +291,19 @@ export function ResultsScreen({ run, onPlayAgain, onExit }: ResultsScreenProps) 
       {/* Action Buttons */}
       <View style={styles.actionButtons}>
         <TouchableOpacity
-          style={[styles.playAgainButton, { backgroundColor: colors.primary }]}
+          style={[styles.playAgainButton, { backgroundColor: colors.primary[500] }]}
           onPress={onPlayAgain}
         >
-          <Text style={[styles.buttonText, { color: colors.background }]}>
+          <Text style={[styles.buttonText, { color: colors.text.inverse }]}>
             🎮 Play Again
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.exitButton, { backgroundColor: colors.surface }]}
+          style={[styles.exitButton, { backgroundColor: colors.background.card }]}
           onPress={onExit}
         >
-          <Text style={[styles.buttonText, { color: colors.text }]}>
+          <Text style={[styles.buttonText, { color: colors.text.primary }]}>
             🏠 Return Home
           </Text>
         </TouchableOpacity>

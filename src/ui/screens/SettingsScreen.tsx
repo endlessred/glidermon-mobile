@@ -621,19 +621,47 @@ export default function SettingsScreen() {
                 label={reduceMotion ? "Allow Motion" : "Reduce Motion"}
                 onPress={() => setReduceMotion(!reduceMotion)}
                 variant="secondary"
+                accessibilityLabel={reduceMotion ? "Allow motion and animations" : "Reduce motion for accessibility"}
+                accessibilityHint="Toggles whether animations and motion effects are enabled or reduced for accessibility"
               />
               <Button
                 label={highContrast ? "Normal Contrast" : "High Contrast"}
                 onPress={() => setHighContrast(!highContrast)}
                 variant="secondary"
+                accessibilityLabel={highContrast ? "Switch to normal contrast" : "Enable high contrast mode"}
+                accessibilityHint="Toggles high contrast colors for better visibility"
               />
             </View>
 
             <View style={{ flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" }}>
-              <Button label="Text 0.8×" onPress={() => setTextScale(0.8)} variant="secondary" />
-              <Button label="Text 1.0×" onPress={() => setTextScale(1.0)} variant="secondary" />
-              <Button label="Text 1.2×" onPress={() => setTextScale(1.2)} variant="secondary" />
-              <Button label="Text 1.5×" onPress={() => setTextScale(1.5)} variant="secondary" />
+              <Button
+                label="Text 0.8×"
+                onPress={() => setTextScale(0.8)}
+                variant="secondary"
+                accessibilityLabel="Set text size to small: 0.8 times normal"
+                accessibilityHint="Makes all text smaller for compact viewing"
+              />
+              <Button
+                label="Text 1.0×"
+                onPress={() => setTextScale(1.0)}
+                variant="secondary"
+                accessibilityLabel="Set text size to normal: 1.0 times default"
+                accessibilityHint="Uses the default text size"
+              />
+              <Button
+                label="Text 1.2×"
+                onPress={() => setTextScale(1.2)}
+                variant="secondary"
+                accessibilityLabel="Set text size to large: 1.2 times normal"
+                accessibilityHint="Makes all text 20 percent larger for easier reading"
+              />
+              <Button
+                label="Text 1.5×"
+                onPress={() => setTextScale(1.5)}
+                variant="secondary"
+                accessibilityLabel="Set text size to extra large: 1.5 times normal"
+                accessibilityHint="Makes all text 50 percent larger for much easier reading"
+              />
             </View>
           </>
         ))}

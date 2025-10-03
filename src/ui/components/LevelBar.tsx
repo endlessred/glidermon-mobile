@@ -16,8 +16,15 @@ export default function LevelBar({ level, current, next }: Props) {
     return p;
   }, [current, next]);
 
+  const progressPercentage = Math.round(pct * 100);
+
   return (
-    <View style={{ gap: spacing.xs }}>
+    <View
+      style={{ gap: spacing.xs }}
+      accessibilityLabel={`Level ${level}. Progress: ${Math.floor(current)} out of ${next} experience points. ${progressPercentage} percent complete.`}
+      accessibilityRole="progressbar"
+      accessibilityValue={{ min: 0, max: next, now: current }}
+    >
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
         <Text style={{
           color: colors.text.primary,

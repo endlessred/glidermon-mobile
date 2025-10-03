@@ -67,22 +67,17 @@ export function TreasureScreen({ run, onRelicSelected, onSkip }: TreasureScreenP
 
   const getRarityColor = (rarity: string): string => {
     switch (rarity) {
-      case 'common': return '#9ca3af';
-      case 'uncommon': return '#22c55e';
-      case 'rare': return '#3b82f6';
-      case 'legendary': return '#a855f7';
-      default: return colors.textSecondary;
+      case 'common': return colors.gray?.[500] || '#9ca3af';
+      case 'uncommon': return colors.status?.success || '#22c55e';
+      case 'rare': return colors.primary[500][500] || '#3b82f6';
+      case 'legendary': return colors.accent?.purple || '#a855f7';
+      default: return colors.text.secondary;
     }
   };
 
   const getRarityGlow = (rarity: string): string => {
-    switch (rarity) {
-      case 'common': return '#9ca3af20';
-      case 'uncommon': return '#22c55e20';
-      case 'rare': return '#3b82f620';
-      case 'legendary': return '#a855f720';
-      default: return colors.surface;
-    }
+    const baseColor = getRarityColor(rarity);
+    return baseColor + '20'; // Add transparency
   };
 
   const handleRelicSelect = (relicId: string) => {
@@ -110,14 +105,14 @@ export function TreasureScreen({ run, onRelicSelected, onSkip }: TreasureScreenP
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
       {/* Header */}
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <Text style={[styles.title, { color: colors.text }]}>
+      <View style={[styles.header, { borderBottomColor: colors.gray[300] }]}>
+        <Text style={[styles.title, { color: colors.text.primary }]}>
           📦 Treasure Found!
         </Text>
         <TouchableOpacity onPress={handleSkip}>
-          <Text style={[styles.skipButton, { color: colors.textSecondary }]}>
+          <Text style={[styles.skipButton, { color: colors.text.secondary }]}>
             Skip →
           </Text>
         </TouchableOpacity>
@@ -125,11 +120,11 @@ export function TreasureScreen({ run, onRelicSelected, onSkip }: TreasureScreenP
 
       <ScrollView style={styles.content}>
         {/* Introduction */}
-        <View style={[styles.introContainer, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.introTitle, { color: colors.text }]}>
+        <View style={[styles.introContainer, { backgroundColor: colors.background.card }]}>
+          <Text style={[styles.introTitle, { color: colors.text.primary }]}>
             ✨ Ancient Treasures ✨
           </Text>
-          <Text style={[styles.introText, { color: colors.textSecondary }]}>
+          <Text style={[styles.introText, { color: colors.text.secondary }]}>
             You've discovered a hidden cache! Choose one relic to aid you on your journey.
             Each relic provides unique bonuses and abilities.
           </Text>
@@ -138,7 +133,7 @@ export function TreasureScreen({ run, onRelicSelected, onSkip }: TreasureScreenP
         {/* Current Relics */}
         {run.relics.length > 0 && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
               🎒 Your Current Relics ({run.relics.length})
             </Text>
             <View style={styles.currentRelicsContainer}>
@@ -158,7 +153,7 @@ export function TreasureScreen({ run, onRelicSelected, onSkip }: TreasureScreenP
                     ]}
                   >
                     <Text style={styles.currentRelicEmoji}>{relic.emoji}</Text>
-                    <Text style={[styles.currentRelicName, { color: colors.text }]}>
+                    <Text style={[styles.currentRelicName, { color: colors.text.primary }]}>
                       {relic.name}
                     </Text>
                   </View>
@@ -170,20 +165,20 @@ export function TreasureScreen({ run, onRelicSelected, onSkip }: TreasureScreenP
 
         {/* Available Relics */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
             🎁 Choose Your Treasure
           </Text>
 
           {availableRelics.length === 0 ? (
-            <View style={[styles.noRelicsContainer, { backgroundColor: colors.surface }]}>
-              <Text style={[styles.noRelicsText, { color: colors.textSecondary }]}>
+            <View style={[styles.noRelicsContainer, { backgroundColor: colors.background.card }]}>
+              <Text style={[styles.noRelicsText, { color: colors.text.secondary }]}>
                 No new relics available. You've collected them all!
               </Text>
               <TouchableOpacity
-                style={[styles.continueButton, { backgroundColor: colors.primary }]}
+                style={[styles.continueButton, { backgroundColor: colors.primary[500] }]}
                 onPress={onSkip}
               >
-                <Text style={[styles.continueButtonText, { color: colors.background }]}>
+                <Text style={[styles.continueButtonText, { color: colors.text.inverse }]}>
                   Continue Journey
                 </Text>
               </TouchableOpacity>
@@ -216,7 +211,7 @@ export function TreasureScreen({ run, onRelicSelected, onSkip }: TreasureScreenP
                 <View style={styles.relicHeader}>
                   <Text style={styles.relicEmoji}>{relic.emoji}</Text>
                   <View style={styles.relicInfo}>
-                    <Text style={[styles.relicName, { color: colors.text }]}>
+                    <Text style={[styles.relicName, { color: colors.text.primary }]}>
                       {relic.name}
                     </Text>
                     <Text style={[
@@ -226,13 +221,13 @@ export function TreasureScreen({ run, onRelicSelected, onSkip }: TreasureScreenP
                       {relic.rarity.toUpperCase()}
                     </Text>
                   </View>
-                  <Text style={[styles.tapHint, { color: colors.textSecondary }]}>
+                  <Text style={[styles.tapHint, { color: colors.text.secondary }]}>
                     Tap to select
                   </Text>
                 </View>
 
                 {/* Relic Description */}
-                <Text style={[styles.relicDescription, { color: colors.textSecondary }]}>
+                <Text style={[styles.relicDescription, { color: colors.text.secondary }]}>
                   {relic.description}
                 </Text>
 
@@ -245,16 +240,16 @@ export function TreasureScreen({ run, onRelicSelected, onSkip }: TreasureScreenP
                   return (
                     <View style={styles.requirementsContainer}>
                       <View style={styles.requirementsHeader}>
-                        <Text style={[styles.requirementsLabel, { color: colors.textSecondary }]}>
+                        <Text style={[styles.requirementsLabel, { color: colors.text.secondary }]}>
                           Requirements:
                         </Text>
                         <View style={[
                           styles.requirementStatus,
-                          { backgroundColor: anyMet ? '#22c55e20' : '#ef444420' }
+                          { backgroundColor: anyMet ? (colors.status?.success + '20' || '#22c55e20') : (colors.status?.error + '20' || '#ef444420') }
                         ]}>
                           <Text style={[
                             styles.requirementStatusText,
-                            { color: anyMet ? '#22c55e' : '#ef4444' }
+                            { color: anyMet ? (colors.status?.success || '#22c55e') : (colors.status?.error || '#ef4444') }
                           ]}>
                             {anyMet ? '✅ Met' : '❌ Not Met'}
                           </Text>
@@ -272,17 +267,17 @@ export function TreasureScreen({ run, onRelicSelected, onSkip }: TreasureScreenP
                               style={[
                                 styles.requirement,
                                 {
-                                  backgroundColor: isStatMet ? '#22c55e15' : '#ef444415',
-                                  borderColor: isStatMet ? '#22c55e40' : '#ef444440'
+                                  backgroundColor: isStatMet ? (colors.status?.success + '15' || '#22c55e15') : (colors.status?.error + '15' || '#ef444415'),
+                                  borderColor: isStatMet ? (colors.status?.success + '40' || '#22c55e40') : (colors.status?.error + '40' || '#ef444440')
                                 }
                               ]}
                             >
-                              <Text style={[styles.requirementText, { color: colors.text }]}>
+                              <Text style={[styles.requirementText, { color: colors.text.primary }]}>
                                 {stat} ≥ {value}
                               </Text>
                               <Text style={[
                                 styles.requirementValue,
-                                { color: isStatMet ? '#22c55e' : '#ef4444' }
+                                { color: isStatMet ? (colors.status?.success || '#22c55e') : (colors.status?.error || '#ef4444') }
                               ]}>
                                 (Best: {bestCharacterValue})
                               </Text>
@@ -293,7 +288,7 @@ export function TreasureScreen({ run, onRelicSelected, onSkip }: TreasureScreenP
                       {/* Character breakdown for requirements */}
                       {relic.requires && (
                         <View style={styles.characterBreakdown}>
-                          <Text style={[styles.characterBreakdownLabel, { color: colors.textSecondary }]}>
+                          <Text style={[styles.characterBreakdownLabel, { color: colors.text.secondary }]}>
                             Party Status:
                           </Text>
                           <View style={styles.characterList}>
@@ -305,15 +300,15 @@ export function TreasureScreen({ run, onRelicSelected, onSkip }: TreasureScreenP
                               return (
                                 <View key={characterId} style={[
                                   styles.characterRequirement,
-                                  { backgroundColor: characterCheck.met ? '#22c55e10' : '#6b728010' }
+                                  { backgroundColor: characterCheck.met ? (colors.status?.success + '10' || '#22c55e10') : (colors.gray?.[500] + '10' || '#6b728010') }
                                 ]}>
                                   <Text style={styles.characterEmoji}>{character.emoji}</Text>
-                                  <Text style={[styles.characterName, { color: colors.text }]}>
+                                  <Text style={[styles.characterName, { color: colors.text.primary }]}>
                                     {character.name}
                                   </Text>
                                   <Text style={[
                                     styles.characterStatus,
-                                    { color: characterCheck.met ? '#22c55e' : '#6b7280' }
+                                    { color: characterCheck.met ? (colors.status?.success || '#22c55e') : (colors.gray?.[500] || '#6b7280') }
                                   ]}>
                                     {characterCheck.met ? '✓' : '✕'}
                                   </Text>
@@ -325,7 +320,7 @@ export function TreasureScreen({ run, onRelicSelected, onSkip }: TreasureScreenP
                       )}
 
                       {!anyMet && (
-                        <Text style={[styles.requirementHint, { color: colors.textSecondary }]}>
+                        <Text style={[styles.requirementHint, { color: colors.text.secondary }]}>
                           💡 This relic won't be as effective without meeting requirements
                         </Text>
                       )}
@@ -347,10 +342,10 @@ export function TreasureScreen({ run, onRelicSelected, onSkip }: TreasureScreenP
 
         {/* Rarity Guide */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
             💎 Rarity Guide
           </Text>
-          <View style={[styles.rarityGuide, { backgroundColor: colors.surface }]}>
+          <View style={[styles.rarityGuide, { backgroundColor: colors.background.card }]}>
             {[
               { rarity: 'common', desc: 'Basic bonuses and effects' },
               { rarity: 'uncommon', desc: 'Moderate bonuses with conditions' },
@@ -364,10 +359,10 @@ export function TreasureScreen({ run, onRelicSelected, onSkip }: TreasureScreenP
                     { backgroundColor: getRarityColor(rarity) }
                   ]}
                 />
-                <Text style={[styles.rarityName, { color: colors.text }]}>
+                <Text style={[styles.rarityName, { color: colors.text.primary }]}>
                   {rarity.charAt(0).toUpperCase() + rarity.slice(1)}
                 </Text>
-                <Text style={[styles.rarityDesc, { color: colors.textSecondary }]}>
+                <Text style={[styles.rarityDesc, { color: colors.text.secondary }]}>
                   {desc}
                 </Text>
               </View>

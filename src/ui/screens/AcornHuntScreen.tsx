@@ -361,8 +361,8 @@ export default function AcornHuntScreen({ navigation }: AcornHuntScreenProps = {
 
       default:
         return (
-          <View style={[styles.container, { backgroundColor: colors.background }]}>
-            <Text style={[typography.body, { color: colors.text }]}>
+          <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
+            <Text style={[typography.body, { color: colors.text.primary }]}>
               Unknown screen state
             </Text>
           </View>
@@ -371,7 +371,7 @@ export default function AcornHuntScreen({ navigation }: AcornHuntScreenProps = {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background.primary }]}>
       {renderCurrentScreen()}
     </SafeAreaView>
   );

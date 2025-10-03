@@ -30,7 +30,8 @@
       "Bash(pnpm install:*)",
       "Bash(Get-Process)",
       "Bash(Stop-Process -Force)",
-      "Bash(npx expo r:*)"
+      "Bash(npx expo r:*)",
+      "WebFetch(domain:github.com)"
     ],
     "deny": [],
     "ask": []

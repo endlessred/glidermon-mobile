@@ -166,9 +166,9 @@ export function BattleScreen({
 
   if (!battleState) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
         <View style={styles.centerContent}>
-          <Text style={[styles.loadingText, { color: colors.text }]}>
+          <Text style={[styles.loadingText, { color: colors.text.primary }]}>
             Preparing for battle...
           </Text>
         </View>
@@ -180,16 +180,16 @@ export function BattleScreen({
   const enemies = battleState.combatants.filter((c: Combatant) => c.isEnemy);
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
       {/* Header */}
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <Text style={[styles.title, { color: colors.text }]}>Battle!</Text>
+      <View style={[styles.header, { borderBottomColor: colors.gray[300] }]}>
+        <Text style={[styles.title, { color: colors.text.primary }]}>Battle!</Text>
         <View style={styles.headerControls}>
           <TouchableOpacity
-            style={[styles.speedButton, { backgroundColor: colors.surface }]}
+            style={[styles.speedButton, { backgroundColor: colors.background.card }]}
             onPress={toggleSpeed}
           >
-            <Text style={[styles.speedText, { color: colors.text }]}>
+            <Text style={[styles.speedText, { color: colors.text.primary }]}>
               {run.speed}× Speed
             </Text>
           </TouchableOpacity>
@@ -200,7 +200,7 @@ export function BattleScreen({
       <View style={styles.arena}>
         {/* Allies Side */}
         <View style={styles.alliesSide}>
-          <Text style={[styles.sideTitle, { color: colors.text }]}>Your Party</Text>
+          <Text style={[styles.sideTitle, { color: colors.text.primary }]}>Your Party</Text>
           <View style={styles.combatantGrid}>
             {allies.map((ally: Combatant) => (
               <CombatantCard
@@ -216,12 +216,12 @@ export function BattleScreen({
 
         {/* VS Divider */}
         <View style={styles.vsDivider}>
-          <Text style={[styles.vsText, { color: colors.textSecondary }]}>⚔️</Text>
+          <Text style={[styles.vsText, { color: colors.text.secondary }]}>⚔️</Text>
         </View>
 
         {/* Enemies Side */}
         <View style={styles.enemiesSide}>
-          <Text style={[styles.sideTitle, { color: colors.text }]}>Enemies</Text>
+          <Text style={[styles.sideTitle, { color: colors.text.primary }]}>Enemies</Text>
           <View style={styles.combatantGrid}>
             {enemies.map((enemy: Combatant) => (
               <CombatantCard
@@ -237,13 +237,13 @@ export function BattleScreen({
       </View>
 
       {/* Battle Log */}
-      <View style={[styles.battleLog, { backgroundColor: colors.surface }]}>
-        <Text style={[styles.logTitle, { color: colors.text }]}>Battle Log</Text>
+      <View style={[styles.battleLog, { backgroundColor: colors.background.card }]}>
+        <Text style={[styles.logTitle, { color: colors.text.primary }]}>Battle Log</Text>
         <ScrollView style={styles.logScroll}>
           {battleState.battleLog.map((action: any, index: number) => (
             <Text
               key={index}
-              style={[styles.logEntry, { color: colors.textSecondary }]}
+              style={[styles.logEntry, { color: colors.text.secondary }]}
             >
               {action.message}
               {action.crit && ' ✨'}
@@ -260,7 +260,7 @@ export function BattleScreen({
             style={[
               styles.actionButton,
               {
-                backgroundColor: isProcessing ? colors.surface : colors.primary,
+                backgroundColor: isProcessing ? colors.background.card : colors.primary[500],
                 opacity: isProcessing ? 0.5 : 1
               }
             ]}
@@ -269,17 +269,17 @@ export function BattleScreen({
           >
             <Text style={[
               styles.actionButtonText,
-              { color: isProcessing ? colors.textSecondary : colors.background }
+              { color: isProcessing ? colors.text.secondary : colors.text.inverse }
             ]}>
               {isProcessing ? 'Processing...' : 'Continue Battle'}
             </Text>
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: colors.primary }]}
+            style={[styles.actionButton, { backgroundColor: colors.primary[500] }]}
             onPress={processBattleTurn}
           >
-            <Text style={[styles.actionButtonText, { color: colors.background }]}>
+            <Text style={[styles.actionButtonText, { color: colors.text.inverse }]}>
               Start Battle!
             </Text>
           </TouchableOpacity>
@@ -304,31 +304,31 @@ function CombatantCard({
   const isAlive = combatant.stats.HP > 0;
 
   const getHealthColor = (percent: number) => {
-    if (percent > 0.6) return '#4ade80';
-    if (percent > 0.3) return '#facc15';
-    return '#ef4444';
+    if (percent > 0.6) return colors.status?.success || '#4ade80';
+    if (percent > 0.3) return colors.status?.warning || '#facc15';
+    return colors.status?.error || '#ef4444';
   };
 
   return (
     <View style={[
       styles.combatantCard,
       {
-        backgroundColor: colors.surface,
+        backgroundColor: colors.background.card,
         opacity: isAlive ? 1 : 0.5,
-        borderColor: isAlly ? '#4ade80' : '#ef4444'
+        borderColor: isAlly ? (colors.status?.success || '#4ade80') : (colors.status?.error || '#ef4444')
       }
     ]}>
       <Text style={[styles.combatantEmoji, isAnimating && styles.combatantEmojiAnimating]}>
         {isAnimating ? `    ${combatant.character.emoji}` : combatant.character.emoji}
         {!isAlive && ' 💀'}
       </Text>
-      <Text style={[styles.combatantName, { color: colors.text }]}>
+      <Text style={[styles.combatantName, { color: colors.text.primary }]}>
         {combatant.character.name}
       </Text>
 
       {/* Health Bar */}
       <View style={styles.healthContainer}>
-        <View style={[styles.healthBar, { backgroundColor: colors.border }]}>
+        <View style={[styles.healthBar, { backgroundColor: colors.gray[300] }]}>
           <View
             style={[
               styles.healthFill,
@@ -339,7 +339,7 @@ function CombatantCard({
             ]}
           />
         </View>
-        <Text style={[styles.healthText, { color: colors.textSecondary }]}>
+        <Text style={[styles.healthText, { color: colors.text.secondary }]}>
           {combatant.stats.HP}/{combatant.stats.HPMax}
         </Text>
       </View>
@@ -348,8 +348,8 @@ function CombatantCard({
       {combatant.statusEffects.length > 0 && (
         <View style={styles.statusEffects}>
           {combatant.statusEffects.map((effect, index) => (
-            <View key={index} style={[styles.statusBadge, { backgroundColor: colors.border }]}>
-              <Text style={[styles.statusText, { color: colors.text }]}>
+            <View key={index} style={[styles.statusBadge, { backgroundColor: colors.gray[300] }]}>
+              <Text style={[styles.statusText, { color: colors.text.primary }]}>
                 {effect.name} ({effect.ttl})
               </Text>
             </View>
@@ -359,7 +359,7 @@ function CombatantCard({
 
       {/* Last Action */}
       {combatant.lastAction && (
-        <Text style={[styles.lastAction, { color: colors.textSecondary }]}>
+        <Text style={[styles.lastAction, { color: colors.text.secondary }]}>
           {combatant.lastAction}
         </Text>
       )}

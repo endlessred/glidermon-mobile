@@ -40,20 +40,20 @@ const baseColors = {
     butter: '#fff2b3', // Soft yellow for notifications
   },
 
-  // Status colors - health-appropriate (same for both themes)
+  // Status colors - health-appropriate and color-blind safe (same for both themes)
   status: {
-    success: '#22c55e',
-    warning: '#f59e0b',
-    error: '#ef4444',
-    info: '#0ea5e9',
+    success: '#22c55e', // Green - kept for success
+    warning: '#f59e0b', // Orange - distinct from red/green
+    error: '#ef4444', // Red - but always paired with icons/text
+    info: '#0ea5e9', // Blue - safe for all color blindness types
   },
 
-  // Glucose-specific colors (health context - same for both themes)
+  // Glucose-specific colors (health context - color-blind safe)
   glucose: {
-    low: '#ef4444', // Red for low glucose
-    normal: '#22c55e', // Green for normal range
-    high: '#f59e0b', // Orange for high glucose
-    critical: '#dc2626', // Darker red for critical values
+    low: '#dc2626', // Dark red for low glucose - always paired with down arrow ↓
+    normal: '#0ea5e9', // Blue for normal range (instead of green for color-blind safety)
+    high: '#f59e0b', // Orange for high glucose - always paired with up arrow ↑
+    critical: '#7c2d12', // Very dark red for critical values - always paired with urgent icon ⚠️
   }
 };
 
@@ -320,12 +320,19 @@ export const components = {
   },
 };
 
-// Helper functions for dynamic theming
+// Helper functions for dynamic theming - color-blind safe
 export const getGlucoseColor = (mgdl: number) => {
   if (mgdl < 70) return colors.glucose.low;
   if (mgdl < 180) return colors.glucose.normal;
   if (mgdl < 250) return colors.glucose.high;
   return colors.glucose.critical;
+};
+
+export const getGlucoseColorAndIcon = (mgdl: number) => {
+  if (mgdl < 70) return { color: colors.glucose.low, icon: '↓', label: 'Low' };
+  if (mgdl < 180) return { color: colors.glucose.normal, icon: '→', label: 'Normal' };
+  if (mgdl < 250) return { color: colors.glucose.high, icon: '↑', label: 'High' };
+  return { color: colors.glucose.critical, icon: '⚠️', label: 'Critical' };
 };
 
 export const getTrendIcon = (trend: 0 | 1 | 2 | 3) => {
@@ -334,5 +341,15 @@ export const getTrendIcon = (trend: 0 | 1 | 2 | 3) => {
     case 1: return '→';
     case 2: return '↑';
     default: return '—';
+  }
+};
+
+// Color-blind safe status indicators
+export const getStatusIndicator = (type: 'success' | 'warning' | 'error' | 'info') => {
+  switch (type) {
+    case 'success': return { color: colors.status.success, icon: '✓', label: 'Success' };
+    case 'warning': return { color: colors.status.warning, icon: '⚠️', label: 'Warning' };
+    case 'error': return { color: colors.status.error, icon: '✕', label: 'Error' };
+    case 'info': return { color: colors.status.info, icon: 'ⓘ', label: 'Info' };
   }
 };

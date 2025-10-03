@@ -5,7 +5,11 @@
     "scheme": "glidermon",
     "orientation": "portrait",
     "plugins": [
-      ["react-native-ble-plx"]
+      ["react-native-ble-plx"],
+      ["react-native-health", {
+        "healthSharePermission": "This app reads blood glucose data to monitor your virtual pet's health.",
+        "healthUpdatePermission": "This app may write health data for tracking purposes."
+      }]
     ],
     "ios": {
       "bundleIdentifier": "com.kevin.glidermon",

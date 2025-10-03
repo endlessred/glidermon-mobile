@@ -243,9 +243,9 @@ export function EventScreen({ run, onEventComplete }: EventScreenProps) {
 
   if (!currentEvent) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
         <View style={styles.centerContent}>
-          <Text style={[styles.loadingText, { color: colors.text }]}>
+          <Text style={[styles.loadingText, { color: colors.text.primary }]}>
             Something stirs in the forest...
           </Text>
         </View>
@@ -255,15 +255,15 @@ export function EventScreen({ run, onEventComplete }: EventScreenProps) {
 
   if (outcome) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[styles.outcomeContainer, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.outcomeTitle, { color: colors.text }]}>
+      <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
+        <View style={[styles.outcomeContainer, { backgroundColor: colors.background.card }]}>
+          <Text style={[styles.outcomeTitle, { color: colors.text.primary }]}>
             ✨ Outcome ✨
           </Text>
-          <Text style={[styles.outcomeText, { color: colors.textSecondary }]}>
+          <Text style={[styles.outcomeText, { color: colors.text.secondary }]}>
             {outcome}
           </Text>
-          <Text style={[styles.continueText, { color: colors.textSecondary }]}>
+          <Text style={[styles.continueText, { color: colors.text.secondary }]}>
             Continuing automatically...
           </Text>
         </View>
@@ -272,56 +272,56 @@ export function EventScreen({ run, onEventComplete }: EventScreenProps) {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
       {/* Header */}
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <Text style={[styles.title, { color: colors.text }]}>
+      <View style={[styles.header, { borderBottomColor: colors.gray[300] }]}>
+        <Text style={[styles.title, { color: colors.text.primary }]}>
           ❓ Random Event
         </Text>
-        <Text style={[styles.nodeInfo, { color: colors.textSecondary }]}>
+        <Text style={[styles.nodeInfo, { color: colors.text.secondary }]}>
           Node {run.nodeIndex + 1}
         </Text>
       </View>
 
       <ScrollView style={styles.content}>
         {/* Event Story */}
-        <View style={[styles.eventContainer, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.eventTitle, { color: colors.text }]}>
+        <View style={[styles.eventContainer, { backgroundColor: colors.background.card }]}>
+          <Text style={[styles.eventTitle, { color: colors.text.primary }]}>
             {currentEvent.title}
           </Text>
-          <View style={styles.divider} />
-          <Text style={[styles.eventDescription, { color: colors.textSecondary }]}>
+          <View style={[styles.divider, { backgroundColor: colors.gray[300] }]} />
+          <Text style={[styles.eventDescription, { color: colors.text.secondary }]}>
             {currentEvent.description}
           </Text>
         </View>
 
         {/* Run Status */}
-        <View style={[styles.statusContainer, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.statusTitle, { color: colors.text }]}>
+        <View style={[styles.statusContainer, { backgroundColor: colors.background.card }]}>
+          <Text style={[styles.statusTitle, { color: colors.text.primary }]}>
             📊 Current Status
           </Text>
           <View style={styles.statusRow}>
             <View style={styles.statusItem}>
-              <Text style={[styles.statusValue, { color: colors.primary }]}>
+              <Text style={[styles.statusValue, { color: colors.primary[500] }]}>
                 🌰 {run.rewards.acorns}
               </Text>
-              <Text style={[styles.statusLabel, { color: colors.textSecondary }]}>
+              <Text style={[styles.statusLabel, { color: colors.text.secondary }]}>
                 Acorns
               </Text>
             </View>
             <View style={styles.statusItem}>
-              <Text style={[styles.statusValue, { color: colors.text }]}>
+              <Text style={[styles.statusValue, { color: colors.text.primary }]}>
                 ✨ {run.relics.length}
               </Text>
-              <Text style={[styles.statusLabel, { color: colors.textSecondary }]}>
+              <Text style={[styles.statusLabel, { color: colors.text.secondary }]}>
                 Relics
               </Text>
             </View>
             <View style={styles.statusItem}>
-              <Text style={[styles.statusValue, { color: colors.text }]}>
+              <Text style={[styles.statusValue, { color: colors.text.primary }]}>
                 👥 {run.party.length}
               </Text>
-              <Text style={[styles.statusLabel, { color: colors.textSecondary }]}>
+              <Text style={[styles.statusLabel, { color: colors.text.secondary }]}>
                 Party
               </Text>
             </View>
@@ -330,7 +330,7 @@ export function EventScreen({ run, onEventComplete }: EventScreenProps) {
 
         {/* Choices */}
         <View style={styles.choicesSection}>
-          <Text style={[styles.choicesTitle, { color: colors.text }]}>
+          <Text style={[styles.choicesTitle, { color: colors.text.primary }]}>
             🤔 What do you do?
           </Text>
 
@@ -340,8 +340,8 @@ export function EventScreen({ run, onEventComplete }: EventScreenProps) {
               style={[
                 styles.choiceCard,
                 {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
+                  backgroundColor: colors.background.card,
+                  borderColor: colors.gray[300],
                   opacity: isProcessing ? 0.5 : 1
                 }
               ]}
@@ -349,15 +349,15 @@ export function EventScreen({ run, onEventComplete }: EventScreenProps) {
               disabled={isProcessing}
             >
               <View style={styles.choiceContent}>
-                <Text style={[styles.choiceText, { color: colors.text }]}>
+                <Text style={[styles.choiceText, { color: colors.text.primary }]}>
                   {choice.text}
                 </Text>
                 {choice.description && (
-                  <Text style={[styles.choiceDescription, { color: colors.textSecondary }]}>
+                  <Text style={[styles.choiceDescription, { color: colors.text.secondary }]}>
                     {choice.description}
                   </Text>
                 )}
-                <Text style={[styles.tapHint, { color: colors.textSecondary }]}>
+                <Text style={[styles.tapHint, { color: colors.text.secondary }]}>
                   Tap to choose →
                 </Text>
               </View>
@@ -366,28 +366,28 @@ export function EventScreen({ run, onEventComplete }: EventScreenProps) {
         </View>
 
         {/* Event Tips */}
-        <View style={[styles.tipsContainer, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.tipsTitle, { color: colors.text }]}>
+        <View style={[styles.tipsContainer, { backgroundColor: colors.background.card }]}>
+          <Text style={[styles.tipsTitle, { color: colors.text.primary }]}>
             💡 Choice Effects Guide
           </Text>
-          <Text style={[styles.tipsText, { color: colors.textSecondary }]}>
+          <Text style={[styles.tipsText, { color: colors.text.secondary }]}>
             • 🌰 = Acorns gained or spent
           </Text>
-          <Text style={[styles.tipsText, { color: colors.textSecondary }]}>
+          <Text style={[styles.tipsText, { color: colors.text.secondary }]}>
             • STR/SPD/MAG/DEF/LCK = Permanent stat changes
           </Text>
-          <Text style={[styles.tipsText, { color: colors.textSecondary }]}>
+          <Text style={[styles.tipsText, { color: colors.text.secondary }]}>
             • "Random" = Chance-based outcomes with probabilities shown
           </Text>
-          <Text style={[styles.tipsText, { color: colors.textSecondary }]}>
+          <Text style={[styles.tipsText, { color: colors.text.secondary }]}>
             • "Cost" = Requirements that must be met to get full benefits
           </Text>
         </View>
       </ScrollView>
 
       {isProcessing && (
-        <View style={[styles.processingOverlay, { backgroundColor: colors.background + '80' }]}>
-          <Text style={[styles.processingText, { color: colors.text }]}>
+        <View style={[styles.processingOverlay, { backgroundColor: colors.background.primary + '80' }]}>
+          <Text style={[styles.processingText, { color: colors.text.primary }]}>
             Processing your choice...
           </Text>
         </View>
@@ -432,7 +432,6 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: '#e0e0e0',
     marginBottom: 16,
   },
   eventDescription: {

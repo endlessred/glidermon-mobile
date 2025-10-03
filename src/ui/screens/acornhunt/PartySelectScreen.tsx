@@ -61,20 +61,37 @@ export function PartySelectScreen({ onPartySelected, onBack, onProgression }: Pa
         style={[
           styles.characterCard,
           {
-            backgroundColor: colors.surface,
-            borderColor: isSelected ? colors.primary : colors.border,
+            backgroundColor: colors.background.card,
+            borderColor: isSelected ? colors.primary[500] : colors.gray[300],
             borderWidth: isSelected ? 2 : 1,
             opacity: isPlayer ? 1 : (isSelectable ? 1 : 0.5)
           }
         ]}
         onPress={() => !isPlayer && isSelectable && toggleCharacterSelection(character.id)}
         disabled={isPlayer || !isSelectable}
+        accessibilityLabel={
+          isPlayer
+            ? `${character.name}, your character. ${description.role}. ${description.playstyle}`
+            : isSelected
+            ? `${character.name}, selected for your party. ${description.role}. ${description.playstyle}. Tap to deselect.`
+            : isSelectable
+            ? `${character.name}, available companion. ${description.role}. ${description.playstyle}. Tap to add to party.`
+            : `${character.name}, not available. Party is full.`
+        }
+        accessibilityRole={isPlayer ? "text" : "button"}
+        accessibilityHint={
+          !isPlayer && isSelectable
+            ? isSelected
+              ? "Double tap to remove from party"
+              : "Double tap to add to party"
+            : undefined
+        }
       >
         <View style={styles.characterHeader}>
           <Text style={styles.characterEmoji}>{character.emoji}</Text>
           <View style={styles.characterInfo}>
             <View style={styles.nameRow}>
-              <Text style={[styles.characterName, { color: colors.text }]}>
+              <Text style={[styles.characterName, { color: colors.text.primary }]}>
                 {character.name}
                 {isPlayer && ' (You)'}
               </Text>
@@ -82,11 +99,11 @@ export function PartySelectScreen({ onPartySelected, onBack, onProgression }: Pa
                 <Text style={styles.roleEmoji}>{roleEmoji}</Text>
               </View>
             </View>
-            <Text style={[styles.characterRole, { color: colors.textSecondary }]}>
+            <Text style={[styles.characterRole, { color: colors.text.secondary }]}>
               {description.role}
             </Text>
             {isSelected && !isPlayer && (
-              <Text style={[styles.selectedLabel, { color: colors.primary }]}>
+              <Text style={[styles.selectedLabel, { color: colors.primary[500] }]}>
                 ✓ Selected
               </Text>
             )}
@@ -94,7 +111,7 @@ export function PartySelectScreen({ onPartySelected, onBack, onProgression }: Pa
         </View>
 
         <View style={styles.descriptionContainer}>
-          <Text style={[styles.playstyleText, { color: colors.text }]}>
+          <Text style={[styles.playstyleText, { color: colors.text.primary }]}>
             {description.playstyle}
           </Text>
           <View style={styles.strengthsContainer}>
@@ -121,11 +138,11 @@ export function PartySelectScreen({ onPartySelected, onBack, onProgression }: Pa
           </View>
         </View>
 
-        <View style={styles.movesContainer}>
-          <Text style={[styles.movesLabel, { color: colors.textSecondary }]}>
+        <View style={[styles.movesContainer, { borderTopColor: colors.gray[300] }]}>
+          <Text style={[styles.movesLabel, { color: colors.text.secondary }]}>
             Key Abilities:
           </Text>
-          <Text style={[styles.movesList, { color: colors.textSecondary }]}>
+          <Text style={[styles.movesList, { color: colors.text.secondary }]}>
             {description.keyMoves.slice(0, 2).join(' • ')}
           </Text>
         </View>
@@ -134,16 +151,16 @@ export function PartySelectScreen({ onPartySelected, onBack, onProgression }: Pa
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
       {/* Header */}
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
+      <View style={[styles.header, { borderBottomColor: colors.gray[300] }]}>
         <TouchableOpacity onPress={onBack}>
-          <Text style={[styles.backButton, { color: colors.primary }]}>← Back</Text>
+          <Text style={[styles.backButton, { color: colors.primary[500] }]}>← Back</Text>
         </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.text }]}>Choose Your Party</Text>
+        <Text style={[styles.title, { color: colors.text.primary }]}>Choose Your Party</Text>
         {onProgression && (
           <TouchableOpacity onPress={onProgression} style={styles.progressionButton}>
-            <Text style={[styles.progressionButtonText, { color: colors.primary }]}>
+            <Text style={[styles.progressionButtonText, { color: colors.primary[500] }]}>
               🌟 Upgrades
             </Text>
           </TouchableOpacity>
@@ -154,10 +171,10 @@ export function PartySelectScreen({ onPartySelected, onBack, onProgression }: Pa
       <ScrollView style={styles.content}>
         {/* Instructions */}
         <View style={styles.instructionsContainer}>
-          <Text style={[styles.instructionsTitle, { color: colors.text }]}>
+          <Text style={[styles.instructionsTitle, { color: colors.text.primary }]}>
             🌰 Welcome to Acorn Hunt! 🌰
           </Text>
-          <Text style={[styles.instructionsText, { color: colors.textSecondary }]}>
+          <Text style={[styles.instructionsText, { color: colors.text.secondary }]}>
             Choose 2 companions to join your adventure through the enchanted forest.
             Each character has unique abilities and stats that will help in battle.
           </Text>
@@ -165,13 +182,13 @@ export function PartySelectScreen({ onPartySelected, onBack, onProgression }: Pa
 
         {/* Player Character (Always in party) */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Your Character</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>Your Character</Text>
           {renderCharacterCard(playerCharacter, true)}
         </View>
 
         {/* Available Companions */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
             Choose 2 Companions ({selectedParty.length}/2)
           </Text>
           {availableCharacters.map(character => renderCharacterCard(character))}
@@ -180,8 +197,8 @@ export function PartySelectScreen({ onPartySelected, onBack, onProgression }: Pa
         {/* Party Preview */}
         {selectedParty.length > 0 && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Your Party</Text>
-            <View style={[styles.partyPreview, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>Your Party</Text>
+            <View style={[styles.partyPreview, { backgroundColor: colors.background.card }]}>
               <Text style={styles.partyMember}>
                 {playerCharacter.emoji} {playerCharacter.name}
               </Text>
@@ -194,7 +211,7 @@ export function PartySelectScreen({ onPartySelected, onBack, onProgression }: Pa
                 );
               })}
               {selectedParty.length < 2 && (
-                <Text style={[styles.emptySlot, { color: colors.textSecondary }]}>
+                <Text style={[styles.emptySlot, { color: colors.text.secondary }]}>
                   + Choose {2 - selectedParty.length} more
                 </Text>
               )}
@@ -209,16 +226,28 @@ export function PartySelectScreen({ onPartySelected, onBack, onProgression }: Pa
           style={[
             styles.startButton,
             {
-              backgroundColor: canStartAdventure ? colors.primary : colors.surface,
+              backgroundColor: canStartAdventure ? colors.primary[500] : colors.background.card,
               opacity: canStartAdventure ? 1 : 0.5
             }
           ]}
           onPress={startAdventure}
           disabled={!canStartAdventure}
+          accessibilityLabel={
+            canStartAdventure
+              ? "Start Adventure with selected party"
+              : `Select ${2 - selectedParty.length} more companions to start adventure`
+          }
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !canStartAdventure }}
+          accessibilityHint={
+            canStartAdventure
+              ? "Double tap to begin the acorn hunt adventure"
+              : "You need to select 2 companions before starting"
+          }
         >
           <Text style={[
             styles.startButtonText,
-            { color: canStartAdventure ? colors.background : colors.textSecondary }
+            { color: canStartAdventure ? colors.text.inverse : colors.text.secondary }
           ]}>
             {canStartAdventure ? '🚀 Start Adventure!' : 'Select 2 Companions'}
           </Text>
@@ -231,8 +260,8 @@ export function PartySelectScreen({ onPartySelected, onBack, onProgression }: Pa
 function StatDisplay({ label, value, colors }: { label: string; value: number; colors: any }) {
   return (
     <View style={styles.statItem}>
-      <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{label}</Text>
-      <Text style={[styles.statValue, { color: colors.text }]}>{value}</Text>
+      <Text style={[styles.statLabel, { color: colors.text.secondary }]}>{label}</Text>
+      <Text style={[styles.statValue, { color: colors.text.primary }]}>{value}</Text>
     </View>
   );
 }
@@ -384,7 +413,6 @@ const styles = StyleSheet.create({
   },
   movesContainer: {
     borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
     paddingTop: 12,
   },
   movesLabel: {
