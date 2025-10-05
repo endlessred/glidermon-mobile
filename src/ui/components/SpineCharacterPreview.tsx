@@ -18,13 +18,50 @@ import {
 import { SkeletonMesh } from "../../spine/SpineThree";
 import { LifelikeIdleNoMix } from "../../game/view/lifelikeIdle_noMix";
 import { makeMaskRecolorMaterial } from "../../spine/MaskRecolor";
+import { makeHueIndexedRecolorMaterial } from "../../spine/HueIndexedRecolor";
 import { normalizeMaterialForSlot } from "../../spine/SpineThree";
 import { useTheme } from "../../data/hooks/useTheme";
 import { OutfitSlot, CosmeticSocket } from "../../data/types/outfitTypes";
 import { useCosmeticsStore } from "../../data/stores/cosmeticsStore";
 
+// Find an attachment by (slotName, attachmentName) across default skin and all named skins.
+function getAttachmentFromAnySkin(
+  skeletonData: any,
+  slotName: string,
+  attachmentName: string
+) {
+  // Find slot index by searching through slots array
+  let slotIndex = -1;
+  for (let i = 0; i < skeletonData.slots.length; i++) {
+    if (skeletonData.slots[i].name === slotName) {
+      slotIndex = i;
+      break;
+    }
+  }
+  if (slotIndex < 0) return null;
+
+  // 1) Try the special default skin first (JSON "default")
+  const defSkin = skeletonData.defaultSkin;
+  if (defSkin) {
+    const a = defSkin.getAttachment(slotIndex, attachmentName);
+    if (a) return a;
+  }
+
+  // 2) Try all named skins
+  const skins: any[] = skeletonData.skins || [];
+  for (const s of skins) {
+    const a = s.getAttachment(slotIndex, attachmentName);
+    if (a) return a;
+  }
+
+  return null;
+}
+
 // ---- simple recolor material cache (per page + colors) ----
 const RECOLOR_CACHE = new Map<string, THREE.ShaderMaterial>();
+
+// Regex to detect shader slots (consistent with SpineThree.ts)
+const SHADER_SLOT_REGEX = /Shader$/i;
 
 interface SpineCharacterPreviewProps {
   outfit: OutfitSlot;
@@ -45,9 +82,8 @@ export default function SpineCharacterPreview({
   const skeletonMeshRef = useRef<SkeletonMesh | null>(null);
   const idleDriverRef = useRef<LifelikeIdleNoMix | null>(null);
 
-  // Base and mask textures keyed by atlas page name (e.g., "skeleton.png")
+  // Base textures keyed by atlas page name (e.g., "skeleton.png")
   const pageBaseTexturesRef = useRef<Record<string, THREE.Texture>>({});
-  const pageMaskTexturesRef = useRef<Record<string, THREE.Texture>>({});
 
   const { catalog } = useCosmeticsStore();
 
@@ -82,74 +118,132 @@ export default function SpineCharacterPreview({
 
   // ---- set/refresh material override: recolor both hats and body parts ----
   const setupMaterialOverride = (skeletonMesh: SkeletonMesh, hatRecolor: any, skinRecolor: any) => {
-    const pageMaskTextures = pageMaskTexturesRef.current;
 
     if (!hatRecolor && !skinRecolor) {
       skeletonMesh.materialOverride = undefined;
       return;
     }
 
-    // Body part slots that should be recolored with skin cosmetics
+    // Body part slots that should be recolored with skin cosmetics (excluding shoes - they're separate)
     const skinSlots = ["Tail", "R_Wing", "L_Wing", "L_Leg", "L_Arm", "R_Leg", "R_Arm", "L_Ear", "Head", "R_Ear", "Cheeks", "Nose", "Torso"];
+
+    // Switch skin slots to their shader variants when skin recoloring is enabled
+    if (skinRecolor) {
+      const slotToShaderMap: Record<string, string> = {
+        "Tail": "NewTailShader",
+        "R_Wing": "R_WingShader",
+        "L_Wing": "L_WingShader",
+        "L_Leg": "L_LegShader",
+        "L_Arm": "L_ArmShader",
+        "R_Leg": "R_LegShader",
+        "R_Arm": "R_ArmShader",
+        "L_Ear": "L_EarShader",
+        "Head": "HeadShader",
+        "R_Ear": "R_EarShader",
+        "Cheeks": "CheeksShader",
+        "Nose": "NoseShader",
+        "Torso": "TorsoShader"
+        // Note: L_Shoe and R_Shoe excluded - they'll be separate recolorable pieces
+      };
+
+      const skeleton = skeletonRef.current;
+      if (skeleton) {
+        for (const baseSlotName of skinSlots) {
+          const shaderAttachmentName = slotToShaderMap[baseSlotName];
+          if (shaderAttachmentName) {
+            const slot = skeleton.findSlot(baseSlotName);
+            if (slot) {
+              const shaderAttachment = getAttachmentFromAnySkin(skeletonDataRef.current, baseSlotName, shaderAttachmentName);
+              if (shaderAttachment) {
+                slot.setAttachment(shaderAttachment);
+                console.log(`✅ Preview: Switched ${baseSlotName} slot to shader variant: ${shaderAttachmentName}`);
+              } else {
+                console.warn(`⚠️ Preview: Could not find shader attachment: ${shaderAttachmentName} for slot: ${baseSlotName}`);
+              }
+            } else {
+              console.warn(`⚠️ Preview: Could not find slot: ${baseSlotName}`);
+            }
+          }
+        }
+
+        // Keep our attachment switches; just recompute world transforms
+        skeleton.updateWorldTransform(Physics.update);
+
+        // Verify the switches stuck
+        console.log('🔎 Preview: Verifying attachment switches:');
+        for (const baseSlotName of skinSlots) {
+          const slot = skeleton.findSlot(baseSlotName);
+          if (slot) {
+            console.log(`🔎 Preview: ${baseSlotName} now has attachment:`, slot.getAttachment()?.name || 'none');
+          }
+        }
+      }
+    }
 
     skeletonMesh.materialOverride = (slot: any, baseTex: THREE.Texture) => {
       const slotName: string = slot?.data?.name ?? "";
+      const attachment = slot.getAttachment?.();
+      const attName = (attachment && attachment.name) ? String(attachment.name) : "";
+      const isShaderAttachment = SHADER_SLOT_REGEX.test(attName); // Check attachment name, not slot name
 
-      // Determine which recolor to apply based on slot name
-      let maskRecolor = null;
+      // Determine which recolor to apply
+      let recolorData = null;
+
+      // Hat example (unchanged)
       if (slotName === "Hat_Base" && hatRecolor) {
-        maskRecolor = hatRecolor;
-      } else if (skinSlots.includes(slotName) && skinRecolor) {
-        maskRecolor = skinRecolor;
+        recolorData = hatRecolor;
       }
-
-      if (!maskRecolor) return null;
-
-      // Resolve attachment's page name to grab the correct mask page
-      const att: any = slot.getAttachment?.();
-      const pageName: string | undefined = att?.region?.page?.name;
-
-      if (!pageName) return null;
-      const maskTex = pageMaskTextures[pageName];
-      if (!maskTex) {
-        // If there's no mask page for this atlas page, skip recolor gracefully
-        console.warn(`No mask page found for atlas page "${pageName}" — skipping recolor for ${slotName}`);
+      // Skin via shader variant
+      else if (isShaderAttachment && skinRecolor) {
+        const baseSlotName = slotName; // shader is on the attachment, slot name stays the same
+        if (skinSlots.includes(baseSlotName)) {
+          recolorData = skinRecolor;
+        }
+      }
+      // Legacy fallback (non-shader attachment) - show info message for debugging
+      else if (skinSlots.includes(slotName) && skinRecolor) {
+        console.log(`ℹ️ Preview: Non-shader slot "${slotName}" (attachment: "${attName}") found - no recoloring applied`);
         return null;
       }
+
+      if (!recolorData) return null;
 
       // Check if this slot should use special alphaTest handling (like pupils)
       const isPupil = /Pupil/i.test(slotName);
       const alphaTest = isPupil ? 0.0 : 0.0015; // Match SpineThree logic
 
-      // Cache per (page uuid + chosen colors + slot + alphaTest)
-      const key = `${(baseTex as any).uuid}|${maskRecolor.r}|${maskRecolor.g}|${maskRecolor.b}|${maskRecolor.a}|${slotName}|${alphaTest}|shade|pma1`;
-      let mat = RECOLOR_CACHE.get(key);
-      if (!mat) {
-
-        mat = makeMaskRecolorMaterial(
-          baseTex,
-          maskTex,
-          {
-            r: maskRecolor.r ?? "#ffffff",
-            g: maskRecolor.g,
-            b: maskRecolor.b,
-            a: maskRecolor.a,
-          },
-          {
-            mode: "shade", // keep grayscale shading from base
-            premultipliedAlpha: true,
+      if (isShaderAttachment) {
+        // Use hue-indexed recolor for shader slots
+        const key = `hue|${(baseTex as any).uuid}|${recolorData.r}|${recolorData.g}|${recolorData.b}|${recolorData.a}|${slotName}|${alphaTest}`;
+        let mat = RECOLOR_CACHE.get(key);
+        if (!mat) {
+          mat = makeHueIndexedRecolorMaterial(baseTex, {
             alphaTest,
-            preserveDarkThreshold: 0.14, // keep near-black outlines unpainted
             strength: 1,
-          }
-        );
-        RECOLOR_CACHE.set(key, mat);
-        console.log(`✅ Applied ${slotName} recolor: R=${maskRecolor.r}, G=${maskRecolor.g}, B=${maskRecolor.b}, A=${maskRecolor.a}`);
-      }
+            shadeMode: true,
+            satMin: 0.1,        // Lower threshold to catch more pixels
+            hueCosMin: 0.75,    // More lenient angle matching (was 0.90)
+            useYellow: true,    // Enable yellow detection
+            preserveDarkThreshold: 0.15,
+            colors: {
+              red: recolorData.r ?? "#ff0000",
+              green: recolorData.g ?? "#00ff00",
+              blue: recolorData.b ?? recolorData.r ?? "#ff0000",
+              yellow: recolorData.a ?? "#ffff00",
+            }
+          });
+          RECOLOR_CACHE.set(key, mat);
+          console.log(`✅ Applied ${slotName} hue-indexed recolor: R=${recolorData.r}, G=${recolorData.g}, B=${recolorData.b}, Y=${recolorData.a}`);
+        }
 
-      // Apply material normalization for proper render pass
-      normalizeMaterialForSlot(slot, mat);
-      return mat;
+        // Apply material normalization for proper render pass
+        normalizeMaterialForSlot(slot, mat);
+        return mat;
+      } else {
+        // Legacy non-shader slots: skip recoloring (all skin parts should now be shader variants)
+        console.log(`ℹ️ Non-shader slot "${slotName}" found - no recoloring applied (consider updating to shader variant)`);
+        return null;
+      }
     };
   };
 
@@ -208,7 +302,6 @@ export default function SpineCharacterPreview({
 
       // Base page(s)
       const pageBaseTextures = pageBaseTexturesRef.current;
-      const pageMaskTextures = pageMaskTexturesRef.current;
 
       try {
         const { loadAsync } = require("expo-three");
@@ -228,20 +321,7 @@ export default function SpineCharacterPreview({
         pageBaseTextures["skeleton.png"] = fallback;
       }
 
-      // ---- Load mask page(s) matching the base atlas pages ----
-      // IMPORTANT: ensure this file exists and matches base page dimensions/layout
-      try {
-        const { loadAsync } = require("expo-three");
-        const maskPageRequire = require("../../assets/GliderMonSpine/skeleton_mask.png");
-        const maskTex: THREE.Texture = await loadAsync(maskPageRequire);
-        maskTex.flipY = false;
-        maskTex.generateMipmaps = false;
-        maskTex.needsUpdate = true;
-        // Key by the same base page name ("skeleton.png") so we can find it by attachment.page.name
-        pageMaskTextures["skeleton.png"] = maskTex;
-      } catch (e) {
-        console.warn("No mask page found (skeleton_mask.png). Hat recolor will be skipped for that page.");
-      }
+      // Hue-indexed recolor system doesn't need mask textures
 
       // ---- Build Spine objects ----
       const atlas = new TextureAtlas(atlasText);

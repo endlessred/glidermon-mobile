@@ -11,9 +11,13 @@ import {
   Physics,
 } from "@esotericsoftware/spine-core";
 import { setMaskRecolorOpaque } from "./MaskRecolor";
+import { updateHueIndexedRecolorAlpha } from "./HueIndexedRecolor";
 
 /** Slots that should NOT use alphaTest (tiny/soft details) */
 const PUPIL_SLOT_REGEX = /(^|[_-])(L|R)?_?Pupil$/i;
+
+/** Slots that use hue-indexed recolor (have "Shader" in name) */
+const SHADER_SLOT_REGEX = /Shader$/i;
 
 /** Soft slots that should stay in transparent pass for blending */
 const SOFT_SLOT_REGEX = /^$/; // No slots need transparent pass - all can be hard cutouts
@@ -67,8 +71,22 @@ export function normalizeMaterialForSlot(slot: Slot, mat: THREE.Material) {
   const m: any = mat;
   const isSoft = SOFT_SLOT_REGEX.test(name);
 
+  // Check attachment name, not slot name for shader detection
+  const attachment = slot.getAttachment?.();
+  const attName = (attachment && attachment.name) ? String(attachment.name) : "";
+  const isShaderAttachment = SHADER_SLOT_REGEX.test(attName);
+
   if (m.isShaderMaterial) {
-    // Recolor shaders: hard parts should be opaque cutouts; soft parts stay transparent
+    // Hue-indexed shader materials are always opaque cutouts (no mask recolor logic needed)
+    if (isShaderAttachment) {
+      m.transparent = false;  // ⬅️ render in opaque pass
+      m.depthTest = true;
+      m.depthWrite = false;
+      // No setMaskRecolorOpaque call needed - hue-indexed materials handle this internally
+      return;
+    }
+
+    // Legacy mask recolor shaders: hard parts should be opaque cutouts; soft parts stay transparent
     if (isSoft) {
       m.transparent = true;
       m.depthTest = false;
@@ -317,12 +335,22 @@ export class SkeletonMesh extends THREE.Object3D {
       material.opacity = a;
       material.transparent = a < 0.999;
     } else if (material?.isShaderMaterial && material.uniforms) {
-      // Shader recolors get slot*skeleton alpha
-      if (material.uniforms.uGlobalAlpha) {
-        material.uniforms.uGlobalAlpha.value = a;
-      }
-      if (material.uniforms.uSlotColor) {
-        material.uniforms.uSlotColor.value.set(slot.color.r, slot.color.g, slot.color.b);
+      const slotName = slot.data?.name || "";
+      const attachment = slot.getAttachment?.();
+      const attName = (attachment && attachment.name) ? String(attachment.name) : "";
+      const isShaderAttachment = SHADER_SLOT_REGEX.test(attName);
+
+      if (isShaderAttachment) {
+        // Hue-indexed shader materials only need global alpha
+        updateHueIndexedRecolorAlpha(material, a);
+      } else {
+        // Legacy mask recolor shaders get slot*skeleton alpha
+        if (material.uniforms && material.uniforms.uGlobalAlpha) {
+          material.uniforms.uGlobalAlpha.value = a;
+        }
+        if (material.uniforms && material.uniforms.uSlotColor && material.uniforms.uSlotColor.value) {
+          material.uniforms.uSlotColor.value.set(slot.color.r, slot.color.g, slot.color.b);
+        }
       }
       // Do NOT touch depth flags here — hat opacity is handled above for Hat_Base only
     }
