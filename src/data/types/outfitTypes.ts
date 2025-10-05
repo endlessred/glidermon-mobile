@@ -38,6 +38,7 @@ export type CosmeticSocket =
   | "bodyFront" | "bodyBack" | "hand" | "waist"
   | "background" | "foreground" | "fullBody"
   | "pose" // Special socket for poses
+  | "skin" // 4-channel recoloring for body parts
   | "skinVariation" | "eyeColor" | "shoeVariation"; // Palette-based cosmetics
 
 // Pose cosmetic definition

@@ -13,6 +13,8 @@ import SettingsScreen from "./src/ui/screens/SettingsScreen";
 import LeaderboardScreen from "./src/ui/screens/LeaderboardScreen";
 import GalleryScreen from "./src/ui/screens/GalleryScreen";
 import AcornHuntScreen from "./src/ui/screens/AcornHuntScreen";
+import ArcadeScreen from "./src/ui/screens/ArcadeScreen";
+import UpsAndDownsScreen from "./src/ui/screens/UpsAndDownsScreen";
 import OnboardingScreen from "./src/ui/screens/OnboardingScreen";
 import { useGameStore } from "./src/data/stores/gameStore";
 import { useSettingsStore } from "./src/data/stores/settingsStore";
@@ -28,12 +30,28 @@ import { POSE_DEFINITIONS } from "./src/data/poses/poseDefinitions";
 import { useHealthKit } from "./src/data/hooks/useHealthKit";
 // import { migrateEquippedCosmeticsToOutfit, syncOutfitToCosmeticsStore } from "./src/data/utils/outfitMigration.ts";
 
-const TABS = ["HOME", "SHOP", "OUTFIT", "🌰 HUNT", "SETTINGS"] as const;
+const TABS = ["HOME", "SHOP", "OUTFIT", "🕹️ ARCADE", "SETTINGS"] as const;
 type Tab = typeof TABS[number];
 
 export default function App() {
   // ---- theme ----
   const { colors, spacing, borderRadius, typography } = useTheme();
+
+  // Filter out noisy EXGL warnings
+  useEffect(() => {
+    const originalLog = console.log;
+    console.log = (...args) => {
+      const message = args.join(' ');
+      if (message.includes('EXGL: gl.pixelStorei() doesn\'t support this parameter yet!')) {
+        return; // Silently ignore this warning
+      }
+      originalLog.apply(console, args);
+    };
+
+    return () => {
+      console.log = originalLog;
+    };
+  }, []);
 
   // Cross-platform shadow styles for tabs
   const getTabShadow = (isActive: boolean) => Platform.select({
@@ -41,7 +59,7 @@ export default function App() {
       boxShadow: isActive ? `0 1px 2px rgba(0, 0, 0, 0.1)` : `0 1px 2px rgba(0, 0, 0, 0.05)`,
     },
     default: {
-      shadowColor: colors.gray[900],
+      shadowColor: colors.gray?.[900] || '#fafaf9',
       shadowOffset: { width: 0, height: 1 },
       shadowOpacity: isActive ? 0.1 : 0.05,
       shadowRadius: 2,
@@ -194,16 +212,16 @@ export default function App() {
               paddingVertical: spacing.sm,
               paddingHorizontal: spacing.md,
               borderRadius: borderRadius.md,
-              backgroundColor: tab === t ? colors.primary[500] : colors.background.card,
+              backgroundColor: tab === t ? (colors.primary?.[500] || '#0ea5e9') : (colors.background?.card || '#ffffff'),
               borderWidth: 1,
-              borderColor: tab === t ? colors.primary[600] : colors.gray[300],
+              borderColor: tab === t ? (colors.primary?.[600] || '#0284c7') : (colors.gray?.[300] || '#d6d3d1'),
               ...getTabShadow(tab === t),
             }}
           >
             <Text style={{
-              color: tab === t ? colors.text.inverse : colors.text.primary,
-              fontWeight: typography.weight.semibold as any,
-              fontSize: typography.size.sm,
+              color: tab === t ? (colors.text?.inverse || '#ffffff') : (colors.text?.primary || '#1c1917'),
+              fontWeight: (typography.weight?.semibold || '600') as any,
+              fontSize: typography.size?.sm || 14,
             }}>
               {t}
             </Text>
@@ -219,7 +237,7 @@ export default function App() {
 
         {tab === "SHOP" && <ShopScreen />}
         {tab === "OUTFIT" && <OutfitScreen />}
-        {tab === "🌰 HUNT" && <AcornHuntScreen />}
+        {tab === "🕹️ ARCADE" && <ArcadeScreen />}
         {tab === "SETTINGS" && <SettingsScreen />}
       </View>
 

@@ -80,6 +80,7 @@ export function makeMaskRecolorMaterial(
     uniform float uGlobalAlpha;      // set by adapter each frame
     uniform float uDebugMask;        // 0/1
     uniform float uAutoFallback;     // 0/1
+    uniform float uForceOpaque;      // 0/1, force alpha=1.0 for opaque cutout mode
 
     varying vec2 vUv;
 
@@ -127,7 +128,12 @@ export function makeMaskRecolorMaterial(
       vec3 outRgb = mix(tex.rgb, shaded, w * uStrength);
       float outA  = tex.a * uGlobalAlpha;
 
-      if (uPMA) outRgb *= outA;
+      // Force alpha=1.0 for opaque cutout mode (hard parts)
+      if (uForceOpaque > 0.5) {
+        outA = 1.0;
+      }
+
+      if (uPMA && uForceOpaque <= 0.5) outRgb *= outA; // Only apply PMA if not forcing opaque
 
       gl_FragColor = vec4(outRgb, outA);
     }
@@ -149,11 +155,12 @@ export function makeMaskRecolorMaterial(
       uGlobalAlpha:   { value: 1.0 },
       uDebugMask:     { value: 0.0 },
       uAutoFallback:  { value: 1.0 },
+      uForceOpaque:   { value: 0.0 },
     },
     vertexShader: vert,
     fragmentShader: frag,
     transparent: true,
-    depthTest: false,
+    depthTest: true,    // Match SpineThree MaterialCache for proper draw order
     depthWrite: false,
     side: THREE.DoubleSide,
     blending: THREE.NormalBlending,
@@ -191,4 +198,9 @@ export function updateMaskRecolorOptions(
 export function updateMaskRecolorAlpha(mat: THREE.ShaderMaterial, a: number) {
   if (!mat || !(mat as any).uniforms) return;
   (mat as any).uniforms.uGlobalAlpha.value = Math.max(0, Math.min(1, a));
+}
+
+export function setMaskRecolorOpaque(mat: THREE.ShaderMaterial, isOpaque: boolean) {
+  if (!mat || !(mat as any).uniforms) return;
+  (mat as any).uniforms.uForceOpaque.value = isOpaque ? 1.0 : 0.0;
 }

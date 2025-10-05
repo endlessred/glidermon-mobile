@@ -9,7 +9,7 @@ const leafPng = require("../../assets/GliderMonLeafHat.png");
 const greaterPng = require("../../assets/GliderMonGreaterHat.png");
 const hatPackPng = require("../../assets/hats/hat_pack_1.png");
 
-type Socket = "headTop" | "theme";
+type Socket = "headTop" | "theme" | "skin";
 
 export type CosmeticItem = {
   id: string;
@@ -120,19 +120,77 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     tex: hatPackPng
   },
 
-  // Legacy pixel-based hats (keep for compatibility during transition)
-  { id: "leaf_hat", name: "Leaf Cap", cost: 250, socket: "headTop", tex: leafPng },
-  { id: "greater_hat", name: "Greater Leaf", cost: 600, socket: "headTop", tex: greaterPng },
-
-  // Legacy Hat Pack 1 - Old pixel system (keep for compatibility)
-  { id: "frog_hat", name: "Green Frog Hat", cost: 300, socket: "headTop", tex: hatPackPng },
-  { id: "black_headphones", name: "Black Headphones", cost: 400, socket: "headTop", tex: hatPackPng },
-  { id: "white_headphones", name: "White Headphones", cost: 400, socket: "headTop", tex: hatPackPng },
-  { id: "pink_headphones", name: "Pink Headphones", cost: 400, socket: "headTop", tex: hatPackPng },
-  { id: "pink_aniphones", name: "Pink AniPhones", cost: 500, socket: "headTop", tex: hatPackPng },
-  { id: "feather_cap", name: "Feather Cap", cost: 450, socket: "headTop", tex: hatPackPng },
-  { id: "viking_hat", name: "Viking Hat", cost: 700, socket: "headTop", tex: hatPackPng },
-  { id: "adventurer_fedora", name: "Adventurer Fedora", cost: 550, socket: "headTop", tex: hatPackPng },
+  // Themed Skin Cosmetics - 4-channel recoloring for body parts
+  {
+    id: "skin_cute",
+    name: "Cute Skin",
+    cost: 300,
+    socket: "skin",
+    spineSkin: "default", // Uses default skin with recoloring
+    maskRecolor: {
+      r: "#ff69b4", // Cute pink main
+      g: "#ffb3d9", // Cute light pink bright
+      b: "#cc1466", // Cute dark pink
+      a: "#9966ff"  // Cute purple accent
+    },
+    tex: hatPackPng
+  },
+  {
+    id: "skin_cyberpunk",
+    name: "Cyberpunk Skin",
+    cost: 400,
+    socket: "skin",
+    spineSkin: "default",
+    maskRecolor: {
+      r: "#00ffff", // Cyberpunk cyan main
+      g: "#66ffff", // Cyberpunk bright cyan
+      b: "#0099cc", // Cyberpunk dark cyan
+      a: "#ff0080"  // Cyberpunk magenta accent
+    },
+    tex: hatPackPng
+  },
+  {
+    id: "skin_forest",
+    name: "Forest Skin",
+    cost: 250,
+    socket: "skin",
+    spineSkin: "default",
+    maskRecolor: {
+      r: "#228b22", // Forest green main
+      g: "#90ee90", // Forest light green bright
+      b: "#006400", // Forest dark green
+      a: "#8b4513"  // Forest brown accent
+    },
+    tex: hatPackPng
+  },
+  {
+    id: "skin_ocean",
+    name: "Ocean Skin",
+    cost: 350,
+    socket: "skin",
+    spineSkin: "default",
+    maskRecolor: {
+      r: "#1e90ff", // Ocean blue main
+      g: "#87ceeb", // Ocean light blue bright
+      b: "#000080", // Ocean dark blue
+      a: "#20b2aa"  // Ocean teal accent
+    },
+    tex: hatPackPng
+  },
+  {
+    id: "skin_sunset",
+    name: "Sunset Skin",
+    cost: 400,
+    socket: "skin",
+    spineSkin: "default",
+    maskRecolor: {
+      r: "#ff4500", // Sunset orange main
+      g: "#ffa500", // Sunset bright orange
+      b: "#8b0000", // Sunset dark red
+      a: "#ffd700"  // Sunset gold accent
+    },
+    tex: hatPackPng
+  },
 
   // Theme cosmetics - unlockable color themes
   { id: "theme_cute", name: themeDisplayNames.cute, cost: 500, socket: "theme", themeId: "cute" },
@@ -146,7 +204,18 @@ export const useCosmeticsStore = create<CosmeticsState>()(
   persist(
     (set, get) => ({
       catalog: DEFAULT_CATALOG,
-      owned: { white_baseball_cap: true },  // starter hat owned (white baseball cap)
+      owned: {
+        white_baseball_cap: true,      // starter hat owned
+        blue_baseball_cap: true,       // for testing mask recoloring
+        red_baseball_cap: true,        // for testing mask recoloring
+        green_baseball_cap: true,      // for testing mask recoloring
+        flower_crown: true,            // for testing spine cosmetics
+        top_hat: true,                 // for testing spine cosmetics
+        wizard_hat: true,              // for testing spine cosmetics
+        skin_cute: true,               // for testing skin recoloring
+        skin_forest: true,             // for testing skin recoloring
+        skin_ocean: true               // for testing skin recoloring
+      },
       points: 0,                            // display only (Shop UI shows "Acorns: {points}")
 
       // start with White Baseball Cap equipped (Spine-based)
@@ -192,7 +261,18 @@ export const useCosmeticsStore = create<CosmeticsState>()(
       reset: () =>
         set({
           catalog: DEFAULT_CATALOG,
-          owned: { white_baseball_cap: true },
+          owned: {
+            white_baseball_cap: true,
+            blue_baseball_cap: true,
+            red_baseball_cap: true,
+            green_baseball_cap: true,
+            flower_crown: true,
+            top_hat: true,
+            wizard_hat: true,
+            skin_cute: true,
+            skin_forest: true,
+            skin_ocean: true
+          },
           points: 0,
           equipped: { headTop: "white_baseball_cap", hat: "white_baseball_cap" },
         }),
@@ -200,12 +280,27 @@ export const useCosmeticsStore = create<CosmeticsState>()(
     {
       name: "cosmetics_store_v4",
       storage: createJSONStorage(() => AsyncStorage),
-      version: 5,
+      version: 7,
       migrate: (state: any, from) => {
         const s = state ?? {};
         // Always update catalog to latest version to include new hats
         s.catalog = DEFAULT_CATALOG;
-        s.owned ??= { white_baseball_cap: true };
+
+        // Force update owned items to include all current hats and skins (for testing)
+        s.owned = {
+          ...s.owned,
+          white_baseball_cap: true,
+          blue_baseball_cap: true,
+          red_baseball_cap: true,
+          green_baseball_cap: true,
+          flower_crown: true,
+          top_hat: true,
+          wizard_hat: true,
+          skin_cute: true,
+          skin_forest: true,
+          skin_ocean: true
+        };
+
         s.points = typeof s.points === "number" ? s.points : 0;
         s.equipped ??= {};
         // Keep headTop <-> hat in sync

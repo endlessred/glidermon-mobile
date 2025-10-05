@@ -16,6 +16,10 @@ import {
 } from '@esotericsoftware/spine-core';
 import { SkeletonMesh } from '../../spine/SpineThree';
 import { LifelikeIdleNoMix } from './lifelikeIdle_noMix';
+import { makeMaskRecolorMaterial } from '../../spine/MaskRecolor';
+import { normalizeMaterialForSlot } from '../../spine/SpineThree';
+import { OutfitSlot } from '../../data/types/outfitTypes';
+import { useCosmeticsStore } from '../../data/stores/cosmeticsStore';
 
 interface SpineCharacterProps {
   x?: number;
@@ -23,6 +27,7 @@ interface SpineCharacterProps {
   scale?: number;
   animation?: string;
   skin?: string;
+  outfit?: OutfitSlot; // Optional outfit to apply cosmetics
 }
 
 export default function SpineCharacter({
@@ -30,9 +35,14 @@ export default function SpineCharacter({
   y = 100,
   scale = 1,
   animation = "idle",
-  skin
+  skin,
+  outfit
 }: SpineCharacterProps) {
   const rafRef = useRef<number>(0);
+  const { catalog } = useCosmeticsStore();
+
+  // Cache for recolor materials
+  const RECOLOR_CACHE = useRef(new Map<string, THREE.ShaderMaterial>()).current;
 
   const onContextCreate = async (gl: any) => {
     try {
@@ -110,6 +120,23 @@ export default function SpineCharacter({
         pageTextures[filename] = debugTexture;
       }
 
+      // Load mask texture for recoloring if outfit is provided
+      const pageMaskTextures: Record<string, THREE.Texture> = {};
+      if (outfit) {
+        try {
+          const { loadAsync } = require('expo-three');
+          const maskRequire = require('../../assets/GliderMonSpine/skeleton_mask.png');
+          const maskTex = await loadAsync(maskRequire);
+          maskTex.flipY = false;
+          maskTex.generateMipmaps = false;
+          maskTex.needsUpdate = true;
+          pageMaskTextures['skeleton.png'] = maskTex;
+          console.log('✅ Mask page loaded successfully for HUD character');
+        } catch (e) {
+          console.warn('⚠️ No mask page found for HUD character. Recolor will be skipped.');
+        }
+      }
+
       console.log('🏗️ Building Spine objects...');
       const atlas = new TextureAtlas(atlasText, (pageName: string) => {
         console.log('Atlas requesting page:', pageName);
@@ -136,6 +163,21 @@ export default function SpineCharacter({
 
       skeleton.setToSetupPose();
 
+      // Apply skin from outfit if provided
+      if (outfit && outfit.cosmetics.headTop?.itemId) {
+        const equippedHat = outfit.cosmetics.headTop;
+        const cosmeticItem = catalog.find(item => item.id === equippedHat.itemId);
+        if (cosmeticItem?.spineSkin) {
+          const skin = skeletonData.findSkin(cosmeticItem.spineSkin);
+          if (skin) {
+            skeleton.setSkin(skin);
+            skeleton.setToSetupPose();
+            skeleton.updateWorldTransform(Physics.update);
+            console.log(`✅ Applied HUD character skin: ${cosmeticItem.spineSkin}`);
+          }
+        }
+      }
+
       const resolveTexture = (pageOrFileName: string): THREE.Texture | undefined => {
         if (pageTextures[pageOrFileName]) return pageTextures[pageOrFileName];
         const short = pageOrFileName.split("/").pop()!;
@@ -145,7 +187,7 @@ export default function SpineCharacter({
       // Use Spine's own transform system instead of Three.js transforms
       const finalScale = scale * 0.30; // Double the size for better visibility
       const posX = width * 0.5; // Center horizontally
-      const posY = height * 0.4; // Move down to show full character (lower values = down with flipped Y)
+      const posY = height * 0.25; // Move down to show full character including hats (lower Y values = down with flipped Y)
       console.log(`🎯 SPINE TRANSFORMS [${new Date().toISOString()}]: scale=${finalScale}, pos=(${posX}, ${posY}), canvas=(${width}x${height})`);
 
       // Apply transforms to the Spine skeleton (not the Three.js mesh)
@@ -156,6 +198,77 @@ export default function SpineCharacter({
 
       console.log('🎭 Creating SkeletonMesh with new adapter...');
       const mesh = new SkeletonMesh(skeleton, state, resolveTexture);
+
+      // Set up material override for recoloring if outfit has cosmetics
+      if (outfit && (outfit.cosmetics.headTop?.itemId || outfit.cosmetics.skin?.itemId)) {
+        // Get hat recolor
+        const equippedHat = outfit.cosmetics.headTop;
+        const hatCosmeticItem = equippedHat?.itemId ? catalog.find(item => item.id === equippedHat.itemId) : null;
+        const hatRecolor = hatCosmeticItem?.maskRecolor;
+
+        // Get skin recolor
+        const equippedSkin = outfit.cosmetics.skin;
+        const skinCosmeticItem = equippedSkin?.itemId ? catalog.find(item => item.id === equippedSkin.itemId) : null;
+        const skinRecolor = skinCosmeticItem?.maskRecolor;
+
+        if ((hatRecolor || skinRecolor) && pageMaskTextures['skeleton.png']) {
+          // Body part slots that should be recolored with skin cosmetics
+          const skinSlots = ["Tail", "R_Wing", "L_Wing", "L_Leg", "L_Arm", "R_Leg", "R_Arm", "L_Ear", "Head", "R_Ear", "Cheeks", "Nose", "Torso"];
+
+          mesh.materialOverride = (slot: any, baseTex: THREE.Texture) => {
+            const slotName: string = slot?.data?.name ?? "";
+
+            // Determine which recolor to apply based on slot name
+            let maskRecolor = null;
+            if (slotName === "Hat_Base" && hatRecolor) {
+              maskRecolor = hatRecolor;
+            } else if (skinSlots.includes(slotName) && skinRecolor) {
+              maskRecolor = skinRecolor;
+            }
+
+            if (!maskRecolor) return null;
+
+            const att: any = slot.getAttachment?.();
+            const pageName: string | undefined = att?.region?.page?.name || 'skeleton.png';
+            const maskTex = pageMaskTextures[pageName];
+            if (!maskTex) return null;
+
+            // Check if this slot should use special alphaTest handling (like pupils)
+            const isPupil = /Pupil/i.test(slotName);
+            const alphaTest = isPupil ? 0.0 : 0.0015; // Match SpineThree logic
+
+            // Cache key includes slot name and alphaTest for unique caching
+            const key = `${(baseTex as any).uuid}|${maskRecolor.r}|${maskRecolor.g}|${maskRecolor.b}|${maskRecolor.a}|${slotName}|${alphaTest}|shade|pma1`;
+            let mat = RECOLOR_CACHE.get(key);
+            if (!mat) {
+
+              mat = makeMaskRecolorMaterial(
+                baseTex,
+                maskTex,
+                {
+                  r: maskRecolor.r ?? "#ffffff",
+                  g: maskRecolor.g,
+                  b: maskRecolor.b,
+                  a: maskRecolor.a,
+                },
+                {
+                  mode: "shade",
+                  premultipliedAlpha: true,
+                  alphaTest,
+                  preserveDarkThreshold: 0.14,
+                  strength: 1,
+                }
+              );
+              RECOLOR_CACHE.set(key, mat);
+              console.log(`✅ Applied HUD ${slotName} recolor: R=${maskRecolor.r}, G=${maskRecolor.g}, B=${maskRecolor.b}, A=${maskRecolor.a}`);
+            }
+
+            // Apply material normalization for proper render pass
+            normalizeMaterialForSlot(slot, mat);
+            return mat;
+          };
+        }
+      }
 
       // Keep Three.js mesh at identity - let Spine handle the transforms
       mesh.position.set(0, 0, 0);

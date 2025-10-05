@@ -10,9 +10,13 @@ import {
   Color,
   Physics,
 } from "@esotericsoftware/spine-core";
+import { setMaskRecolorOpaque } from "./MaskRecolor";
 
 /** Slots that should NOT use alphaTest (tiny/soft details) */
 const PUPIL_SLOT_REGEX = /(^|[_-])(L|R)?_?Pupil$/i;
+
+/** Soft slots that should stay in transparent pass for blending */
+const SOFT_SLOT_REGEX = /^$/; // No slots need transparent pass - all can be hard cutouts
 
 /** Default anti-halo threshold; trims fringes on most parts */
 const DEFAULT_ALPHA_TEST = 0.0015;
@@ -52,6 +56,44 @@ class MaterialCache {
       this.map.set(k, mat);
     }
     return mat;
+  }
+}
+
+/** Normalize material render pass based on slot type to preserve draw order */
+export function normalizeMaterialForSlot(slot: Slot, mat: THREE.Material) {
+  const name = slot.data?.name || "";
+  if (PUPIL_SLOT_REGEX.test(name)) return; // 🚫 do NOT touch pupils
+
+  const m: any = mat;
+  const isSoft = SOFT_SLOT_REGEX.test(name);
+
+  if (m.isShaderMaterial) {
+    // Recolor shaders: hard parts should be opaque cutouts; soft parts stay transparent
+    if (isSoft) {
+      m.transparent = true;
+      m.depthTest = false;
+      m.depthWrite = false;
+      setMaskRecolorOpaque(m, false); // Stay in transparent pass
+    } else {
+      m.transparent = false;  // ⬅️ render in opaque pass
+      m.depthTest = true;
+      m.depthWrite = false;
+      setMaskRecolorOpaque(m, true); // Force alpha=1.0 for opaque cutout
+    }
+    return;
+  }
+
+  if (m.isMeshBasicMaterial) {
+    // Basic textures: hard parts opaque, soft parts transparent painter's sort
+    if (isSoft) {
+      m.transparent = true;
+      m.depthTest = false;
+      m.depthWrite = false;
+    } else {
+      m.transparent = false;
+      m.depthTest = true;
+      m.depthWrite = false;
+    }
   }
 }
 
@@ -328,6 +370,7 @@ export class SkeletonMesh extends THREE.Object3D {
     const tex = this.textureForRegionAttachment(attachment);
     if (!tex) { r.setVisible(false); return; }
     r.setMaterial(this.chooseMaterial(tex, slot));
+    normalizeMaterialForSlot(slot, r.mesh.material);
     this.uploadTriangles(r, world, uvs, tris, slot);
   }
 
@@ -356,6 +399,7 @@ export class SkeletonMesh extends THREE.Object3D {
     if (!tex) { r.setVisible(false); return; }
 
     r.setMaterial(this.chooseMaterial(tex, slot));
+    normalizeMaterialForSlot(slot, r.mesh.material);
     this.uploadTriangles(r, verts2D, uvs, tris, slot);
   }
 }

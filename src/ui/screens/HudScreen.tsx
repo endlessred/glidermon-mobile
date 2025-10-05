@@ -14,6 +14,7 @@ import { getGlucoseColor, getTrendIcon } from "../../styles/theme";
 import GlucoseWindTrail from "../components/GlucoseWindTrail";
 import { useGlucoseHistory } from "../../data/hooks/useGlucoseHistory";
 import { useComplimentShower } from "../components/ComplimentShower";
+import { useActiveLocalOutfit } from "../../data/stores/outfitStore";
 
 export default function HudScreen() {
   const { width } = useWindowDimensions();
@@ -30,6 +31,9 @@ export default function HudScreen() {
 
   // User data
   const glidermonName = useUserStore(s => s.glidermonName);
+
+  // Local outfit for character display (what the user sees in their own app)
+  const localOutfit = useActiveLocalOutfit();
 
   // Gallery system for compliment shower
   const { myEntry, getNewReactions, clearNewReactions } = useGalleryStore();
@@ -130,6 +134,7 @@ export default function HudScreen() {
             x={100}
             y={100}
             scale={1}
+            outfit={localOutfit}
           />
         </View>
       </View>

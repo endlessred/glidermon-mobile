@@ -1,47 +1,46 @@
-// ui/components/OutfitEditor.tsx
 import React, { useState } from "react";
-import { View, Text, ScrollView, Pressable } from "react-native";
+import { View, Text, ScrollView, Pressable, Modal, SafeAreaView } from "react-native";
 import { useTheme } from "../../data/hooks/useTheme";
-import { usePaletteUnlocks } from "../../data/hooks/usePaletteUnlocks";
 import { useOutfitStore } from "../../data/stores/outfitStore";
 import { useCosmeticsStore } from "../../data/stores/cosmeticsStore";
-import { cosmeticSystem } from "../../game/cosmetics/cosmeticSystem";
-import { CosmeticSocket, UserCosmeticCustomization } from "../../data/types/outfitTypes";
-import CosmeticAdjustmentControls from "./CosmeticAdjustmentControls";
-import OutfitPreview from "./OutfitPreview";
+import { CosmeticSocket } from "../../data/types/outfitTypes";
+import SpineCharacterPreview from "./SpineCharacterPreview";
 
 interface OutfitEditorProps {
   outfitId: string;
   onClose: () => void;
 }
 
+type CosmeticSlot = {
+  id: CosmeticSocket;
+  name: string;
+  icon: string;
+};
+
+const COSMETIC_SLOTS: CosmeticSlot[] = [
+  { id: "headTop", name: "Head Top", icon: "🎩" },
+  { id: "skin", name: "Skin", icon: "🎨" },
+  { id: "face", name: "Face", icon: "😊" },
+  { id: "shirt", name: "Shirt", icon: "👕" },
+  { id: "jacket", name: "Jacket", icon: "🧥" },
+];
+
 export default function OutfitEditor({ outfitId, onClose }: OutfitEditorProps) {
   const { colors, spacing, borderRadius, typography } = useTheme();
-  const [selectedSocket, setSelectedSocket] = useState<CosmeticSocket | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<CosmeticSocket | null>(null);
 
   const outfit = useOutfitStore(state =>
     state.slots.find(slot => slot.id === outfitId)
   );
 
-  const customizeCosmetic = useOutfitStore(state => state.customizeCosmetic);
-  const resetCosmeticToDefault = useOutfitStore(state => state.resetCosmeticToDefault);
   const equipCosmetic = useOutfitStore(state => state.equipCosmetic);
   const unequipCosmetic = useOutfitStore(state => state.unequipCosmetic);
-  const setPose = useOutfitStore(state => state.setPose);
 
-  // Get cosmetics from the cosmetics store (includes Spine-based cosmetics)
-  const poses = useOutfitStore(state => state.poses);
-  const { catalog: cosmeticItems, loadCatalog } = useCosmeticsStore();
-  const cosmetics = cosmeticSystem.getAllCosmetics(); // Keep for legacy cosmetics
-
-  // Force refresh of catalog to ensure latest Spine hats are loaded
-  React.useEffect(() => {
-    loadCatalog();
-  }, [loadCatalog]);
+  const { catalog: cosmeticItems, owned } = useCosmeticsStore();
 
   if (!outfit) {
     return (
-      <View style={{
+      <SafeAreaView style={{
         flex: 1,
         justifyContent: "center",
         alignItems: "center",
@@ -53,82 +52,73 @@ export default function OutfitEditor({ outfitId, onClose }: OutfitEditorProps) {
         }}>
           Outfit not found
         </Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
-  const handleCustomizationChange = (socket: CosmeticSocket, customization: UserCosmeticCustomization) => {
-    customizeCosmetic(outfitId, socket, customization);
-  };
-
-  const handleResetToDefault = (socket: CosmeticSocket) => {
-    resetCosmeticToDefault(outfitId, socket);
+  // Get cosmetics for the selected slot
+  const getSlotCosmetics = (slot: CosmeticSocket) => {
+    switch (slot) {
+      case "headTop":
+        // Filter for headTop/hat cosmetics from the cosmetics store that are owned
+        const allHeadTop = cosmeticItems.filter(item => item.socket === "headTop");
+        const ownedHeadTop = allHeadTop.filter(item => owned[item.id]);
+        console.log("Debug OutfitEditor - All headTop items:", allHeadTop.map(i => i.id));
+        console.log("Debug OutfitEditor - Owned items:", Object.keys(owned).filter(k => owned[k]));
+        console.log("Debug OutfitEditor - Owned headTop items:", ownedHeadTop.map(i => i.id));
+        return ownedHeadTop;
+      case "skin":
+        // Filter for skin cosmetics from the cosmetics store that are owned
+        const allSkin = cosmeticItems.filter(item => item.socket === "skin");
+        const ownedSkin = allSkin.filter(item => owned[item.id]);
+        console.log("Debug OutfitEditor - All skin items:", allSkin.map(i => i.id));
+        console.log("Debug OutfitEditor - Owned skin items:", ownedSkin.map(i => i.id));
+        return ownedSkin;
+      case "face":
+      case "shirt":
+      case "jacket":
+        // For now, return empty array for unimplemented slots
+        return [];
+      default:
+        return [];
+    }
   };
 
   const handleEquipCosmetic = (socket: CosmeticSocket, itemId: string) => {
     equipCosmetic(outfitId, socket, itemId);
+    setSelectedSlot(null);
   };
 
   const handleUnequipCosmetic = (socket: CosmeticSocket) => {
     unequipCosmetic(outfitId, socket);
+    setSelectedSlot(null);
   };
 
-  const handleSetPose = (poseId: string) => {
-    setPose(outfitId, poseId);
-  };
+  const getEquippedItemName = (socket: CosmeticSocket) => {
+    const cosmetic = outfit.cosmetics[socket];
+    if (!cosmetic?.itemId) return "None";
 
-  // Initialize palette unlock system
-  usePaletteUnlocks();
-
-  const sockets: CosmeticSocket[] = [
-    "skinVariation", "eyeColor", "shoeVariation", // Palette-based cosmetics first
-    "headTop", "headFront", "headBack", "bodyFront", "bodyBack", "hand", "waist", "pose"
-  ];
-
-  // Helper functions for palette-based sockets
-  const getSocketDisplayName = (socket: CosmeticSocket): string => {
-    switch (socket) {
-      case "skinVariation": return "Skin Color";
-      case "eyeColor": return "Eye Color";
-      case "shoeVariation": return "Shoe Color";
-      default: return socket.charAt(0).toUpperCase() + socket.slice(1);
-    }
-  };
-
-  const getSocketStatus = (socket: CosmeticSocket): string => {
-    switch (socket) {
-      case "skinVariation": return outfit.skinVariation;
-      case "eyeColor": return outfit.eyeColor;
-      case "shoeVariation": return outfit.shoeVariation;
-      default: {
-        const equippedItem = outfit.cosmetics[socket];
-        return equippedItem?.itemId || "Empty";
-      }
-    }
-  };
-
-  const isPaletteSocket = (socket: CosmeticSocket): boolean => {
-    return ["skinVariation", "eyeColor", "shoeVariation"].includes(socket);
+    const item = cosmeticItems.find(item => item.id === cosmetic.itemId);
+    return item?.name || cosmetic.itemId;
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background.primary }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background.primary }}>
       {/* Header */}
       <View style={{
         flexDirection: "row",
-        justifyContent: "space-between",
         alignItems: "center",
+        justifyContent: "space-between",
         padding: spacing.lg,
-        backgroundColor: colors.background.secondary,
         borderBottomWidth: 1,
-        borderBottomColor: colors.gray[200]
+        borderBottomColor: colors.gray[200],
       }}>
         <Text style={{
           fontSize: typography.size.xl,
           fontWeight: typography.weight.bold as any,
-          color: colors.text.primary
+          color: colors.text.primary,
         }}>
-          Edit: {outfit.name}
+          Edit {outfit.name}
         </Text>
 
         <Pressable
@@ -137,130 +127,327 @@ export default function OutfitEditor({ outfitId, onClose }: OutfitEditorProps) {
             backgroundColor: colors.gray[500],
             paddingHorizontal: spacing.md,
             paddingVertical: spacing.sm,
-            borderRadius: borderRadius.md
+            borderRadius: borderRadius.md,
           }}
         >
           <Text style={{
             color: colors.text.inverse,
             fontSize: typography.size.sm,
-            fontWeight: typography.weight.medium as any
+            fontWeight: typography.weight.medium as any,
           }}>
             Done
           </Text>
         </Pressable>
       </View>
 
-      <View style={{ flex: 1, flexDirection: "row" }}>
-        {/* Left Panel - Socket Selection */}
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          padding: spacing.lg,
+          paddingBottom: spacing["3xl"],
+        }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Character Preview - Centered */}
         <View style={{
-          width: "30%",
-          backgroundColor: colors.background.card,
-          borderRightWidth: 1,
-          borderRightColor: colors.gray[200]
+          alignItems: "center",
+          marginBottom: spacing.xl,
         }}>
-          <ScrollView style={{ flex: 1 }}>
-            <View style={{ padding: spacing.md }}>
-              <Text style={{
-                fontSize: typography.size.lg,
-                fontWeight: typography.weight.semibold as any,
-                color: colors.text.primary,
-                marginBottom: spacing.md
-              }}>
-                Cosmetic Slots
-              </Text>
+          <SpineCharacterPreview
+            outfit={outfit}
+            size="large"
+          />
+        </View>
 
-              {sockets.map(socket => {
-                const isSelected = selectedSocket === socket;
-                const isPalette = isPaletteSocket(socket);
-                const status = getSocketStatus(socket);
-                const hasItem = isPalette ? true : !!outfit.cosmetics[socket]?.itemId;
+        {/* Cosmetic Slots */}
+        <View style={{
+          backgroundColor: colors.background.card,
+          borderRadius: borderRadius.lg,
+          padding: spacing.lg,
+        }}>
+          <Text style={{
+            fontSize: typography.size.lg,
+            fontWeight: typography.weight.semibold as any,
+            color: colors.text.primary,
+            marginBottom: spacing.lg,
+            textAlign: "center",
+          }}>
+            Cosmetic Slots
+          </Text>
 
-                return (
-                  <Pressable
-                    key={socket}
-                    onPress={() => setSelectedSocket(socket)}
-                    style={{
-                      backgroundColor: isSelected ? colors.primary[100] : colors.background.secondary,
-                      borderRadius: borderRadius.md,
-                      padding: spacing.md,
-                      marginBottom: spacing.sm,
-                      borderWidth: isSelected ? 2 : 1,
-                      borderColor: isSelected ? colors.primary[500] : colors.gray[200]
-                    }}
-                  >
+          {COSMETIC_SLOTS.map((slot) => {
+            const equippedName = getEquippedItemName(slot.id);
+            const slotCosmetics = getSlotCosmetics(slot.id);
+            const isImplemented = slotCosmetics.length > 0;
+
+            return (
+              <Pressable
+                key={slot.id}
+                onPress={() => isImplemented ? setSelectedSlot(slot.id) : null}
+                disabled={!isImplemented}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  backgroundColor: isImplemented ? colors.background.secondary : colors.gray[100],
+                  padding: spacing.md,
+                  borderRadius: borderRadius.md,
+                  marginBottom: spacing.sm,
+                  opacity: isImplemented ? 1 : 0.5,
+                }}
+              >
+                <View style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  flex: 1,
+                }}>
+                  <Text style={{
+                    fontSize: typography.size.xl,
+                    marginRight: spacing.md,
+                  }}>
+                    {slot.icon}
+                  </Text>
+
+                  <View style={{ flex: 1 }}>
                     <Text style={{
                       fontSize: typography.size.base,
                       fontWeight: typography.weight.medium as any,
                       color: colors.text.primary,
-                      marginBottom: spacing.xs
+                      marginBottom: 2,
                     }}>
-                      {getSocketDisplayName(socket)}
+                      {slot.name}
                     </Text>
 
                     <Text style={{
                       fontSize: typography.size.sm,
-                      color: hasItem ? colors.health[600] : colors.text.secondary
+                      color: colors.text.secondary,
                     }}>
-                      {status}
+                      {equippedName}
                     </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </ScrollView>
-        </View>
+                  </View>
+                </View>
 
-        {/* Center Panel - Live Preview */}
-        <View style={{
-          width: "40%",
-          backgroundColor: colors.background.primary,
-          justifyContent: "center",
-          alignItems: "center"
-        }}>
-          <OutfitPreview
-            outfit={outfit}
-            highlightSocket={selectedSocket}
-          />
-        </View>
+                {isImplemented && (
+                  <Text style={{
+                    fontSize: typography.size.sm,
+                    color: colors.primary[500],
+                    fontWeight: typography.weight.medium as any,
+                  }}>
+                    Tap to change
+                  </Text>
+                )}
 
-        {/* Right Panel - Customization Controls */}
-        <View style={{
-          width: "30%",
-          backgroundColor: colors.background.card,
-          borderLeftWidth: 1,
-          borderLeftColor: colors.gray[200]
-        }}>
-          {selectedSocket ? (
-            <CosmeticAdjustmentControls
-              socket={selectedSocket}
-              outfit={outfit}
-              cosmetics={cosmetics}
-              cosmeticItems={cosmeticItems}
-              poses={poses}
-              onCustomizationChange={handleCustomizationChange}
-              onResetToDefault={handleResetToDefault}
-              onEquipCosmetic={handleEquipCosmetic}
-              onUnequipCosmetic={handleUnequipCosmetic}
-              onSetPose={handleSetPose}
-            />
-          ) : (
-            <View style={{
-              flex: 1,
-              justifyContent: "center",
-              alignItems: "center",
-              padding: spacing.lg
+                {!isImplemented && (
+                  <Text style={{
+                    fontSize: typography.size.sm,
+                    color: colors.text.secondary,
+                    fontStyle: "italic",
+                  }}>
+                    Coming soon
+                  </Text>
+                )}
+              </Pressable>
+            );
+          })}
+        </View>
+      </ScrollView>
+
+      {/* Cosmetic Selection Modal */}
+      <Modal
+        visible={selectedSlot !== null}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setSelectedSlot(null)}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background.primary }}>
+          {/* Modal Header */}
+          <View style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: spacing.lg,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.gray[200],
+          }}>
+            <Text style={{
+              fontSize: typography.size.lg,
+              fontWeight: typography.weight.bold as any,
+              color: colors.text.primary,
             }}>
+              {selectedSlot ? COSMETIC_SLOTS.find(s => s.id === selectedSlot)?.name : "Select Cosmetic"}
+            </Text>
+
+            <Pressable
+              onPress={() => setSelectedSlot(null)}
+              style={{
+                backgroundColor: colors.gray[500],
+                paddingHorizontal: spacing.md,
+                paddingVertical: spacing.sm,
+                borderRadius: borderRadius.md,
+              }}
+            >
+              <Text style={{
+                color: colors.text.inverse,
+                fontSize: typography.size.sm,
+                fontWeight: typography.weight.medium as any,
+              }}>
+                Cancel
+              </Text>
+            </Pressable>
+          </View>
+
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{
+              padding: spacing.lg,
+              paddingBottom: spacing["3xl"],
+            }}
+          >
+            {/* None Option */}
+            <Pressable
+              onPress={() => selectedSlot && handleUnequipCosmetic(selectedSlot)}
+              style={{
+                backgroundColor: colors.background.card,
+                padding: spacing.lg,
+                borderRadius: borderRadius.md,
+                marginBottom: spacing.md,
+                borderWidth: 2,
+                borderColor: selectedSlot && !outfit.cosmetics[selectedSlot]?.itemId
+                  ? colors.primary[500]
+                  : "transparent",
+              }}
+            >
               <Text style={{
                 fontSize: typography.size.base,
-                color: colors.text.secondary,
-                textAlign: "center"
+                fontWeight: typography.weight.medium as any,
+                color: colors.text.primary,
+                textAlign: "center",
               }}>
-                Select a cosmetic slot to customize
+                None (Remove)
               </Text>
-            </View>
-          )}
-        </View>
-      </View>
-    </View>
+            </Pressable>
+
+            {/* Cosmetic Options */}
+            {selectedSlot && getSlotCosmetics(selectedSlot).map((cosmetic) => {
+              const isEquipped = outfit.cosmetics[selectedSlot]?.itemId === cosmetic.id;
+
+              // Show color indicator for recolorable items
+              const getColorIndicator = () => {
+                if (cosmetic.maskRecolor?.r) {
+                  return (
+                    <View style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 10,
+                      backgroundColor: cosmetic.maskRecolor.r,
+                      borderWidth: 1,
+                      borderColor: colors.gray[300],
+                      marginLeft: spacing.sm,
+                    }} />
+                  );
+                }
+                return null;
+              };
+
+              // Show type indicator
+              const getTypeIndicator = () => {
+                if (cosmetic.spineSkin) {
+                  return (
+                    <View style={{
+                      backgroundColor: colors.accent.lavender,
+                      paddingHorizontal: spacing.xs,
+                      paddingVertical: 2,
+                      borderRadius: borderRadius.sm,
+                      marginLeft: spacing.sm,
+                    }}>
+                      <Text style={{
+                        fontSize: 10,
+                        color: colors.text.primary,
+                        fontWeight: typography.weight.medium as any,
+                      }}>
+                        SPINE
+                      </Text>
+                    </View>
+                  );
+                } else {
+                  return (
+                    <View style={{
+                      backgroundColor: colors.gray[300],
+                      paddingHorizontal: spacing.xs,
+                      paddingVertical: 2,
+                      borderRadius: borderRadius.sm,
+                      marginLeft: spacing.sm,
+                    }}>
+                      <Text style={{
+                        fontSize: 10,
+                        color: colors.text.secondary,
+                        fontWeight: typography.weight.medium as any,
+                      }}>
+                        LEGACY
+                      </Text>
+                    </View>
+                  );
+                }
+              };
+
+              return (
+                <Pressable
+                  key={cosmetic.id}
+                  onPress={() => handleEquipCosmetic(selectedSlot, cosmetic.id)}
+                  style={{
+                    backgroundColor: colors.background.card,
+                    padding: spacing.lg,
+                    borderRadius: borderRadius.md,
+                    marginBottom: spacing.md,
+                    borderWidth: 2,
+                    borderColor: isEquipped ? colors.primary[500] : "transparent",
+                  }}
+                >
+                  <View style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    marginBottom: spacing.xs,
+                  }}>
+                    <Text style={{
+                      fontSize: typography.size.base,
+                      fontWeight: typography.weight.medium as any,
+                      color: colors.text.primary,
+                      flex: 1,
+                    }}>
+                      {cosmetic.name}
+                    </Text>
+                    {getColorIndicator()}
+                    {getTypeIndicator()}
+                  </View>
+
+                  <View style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}>
+                    <Text style={{
+                      fontSize: typography.size.sm,
+                      color: colors.text.secondary,
+                    }}>
+                      Cost: {cosmetic.cost} acorns
+                    </Text>
+
+                    {isEquipped && (
+                      <Text style={{
+                        fontSize: typography.size.sm,
+                        color: colors.primary[500],
+                        fontWeight: typography.weight.medium as any,
+                      }}>
+                        ✓ Equipped
+                      </Text>
+                    )}
+                  </View>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+    </SafeAreaView>
   );
 }

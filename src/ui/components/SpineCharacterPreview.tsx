@@ -16,7 +16,9 @@ import {
   Physics,
 } from "@esotericsoftware/spine-core";
 import { SkeletonMesh } from "../../spine/SpineThree";
+import { LifelikeIdleNoMix } from "../../game/view/lifelikeIdle_noMix";
 import { makeMaskRecolorMaterial } from "../../spine/MaskRecolor";
+import { normalizeMaterialForSlot } from "../../spine/SpineThree";
 import { useTheme } from "../../data/hooks/useTheme";
 import { OutfitSlot, CosmeticSocket } from "../../data/types/outfitTypes";
 import { useCosmeticsStore } from "../../data/stores/cosmeticsStore";
@@ -41,6 +43,7 @@ export default function SpineCharacterPreview({
   const skeletonRef = useRef<Skeleton | null>(null);
   const skeletonDataRef = useRef<any>(null);
   const skeletonMeshRef = useRef<SkeletonMesh | null>(null);
+  const idleDriverRef = useRef<LifelikeIdleNoMix | null>(null);
 
   // Base and mask textures keyed by atlas page name (e.g., "skeleton.png")
   const pageBaseTexturesRef = useRef<Record<string, THREE.Texture>>({});
@@ -63,27 +66,44 @@ export default function SpineCharacterPreview({
     return cosmeticItem?.spineSkin || "default";
   };
 
-  const getMaskRecolor = () => {
+  const getHatMaskRecolor = () => {
     const equippedHat = outfit.cosmetics.headTop;
     if (!equippedHat?.itemId) return null;
     const cosmeticItem = catalog.find((item) => item.id === equippedHat.itemId);
     return cosmeticItem?.maskRecolor || null; // expected shape: { r?: string, g?: string, b?: string, a?: string }
   };
 
-  // ---- set/refresh material override: recolor Hat_Base only ----
-  const setupMaterialOverride = (skeletonMesh: SkeletonMesh, maskRecolor: any) => {
+  const getSkinMaskRecolor = () => {
+    const equippedSkin = outfit.cosmetics.skin;
+    if (!equippedSkin?.itemId) return null;
+    const cosmeticItem = catalog.find((item) => item.id === equippedSkin.itemId);
+    return cosmeticItem?.maskRecolor || null; // 4-channel recoloring for body parts
+  };
+
+  // ---- set/refresh material override: recolor both hats and body parts ----
+  const setupMaterialOverride = (skeletonMesh: SkeletonMesh, hatRecolor: any, skinRecolor: any) => {
     const pageMaskTextures = pageMaskTexturesRef.current;
 
-    if (!maskRecolor) {
+    if (!hatRecolor && !skinRecolor) {
       skeletonMesh.materialOverride = undefined;
       return;
     }
 
+    // Body part slots that should be recolored with skin cosmetics
+    const skinSlots = ["Tail", "R_Wing", "L_Wing", "L_Leg", "L_Arm", "R_Leg", "R_Arm", "L_Ear", "Head", "R_Ear", "Cheeks", "Nose", "Torso"];
+
     skeletonMesh.materialOverride = (slot: any, baseTex: THREE.Texture) => {
       const slotName: string = slot?.data?.name ?? "";
 
-      // Only recolor the hat base mesh (adjust if you want more parts)
-      if (slotName !== "Hat_Base") return null;
+      // Determine which recolor to apply based on slot name
+      let maskRecolor = null;
+      if (slotName === "Hat_Base" && hatRecolor) {
+        maskRecolor = hatRecolor;
+      } else if (skinSlots.includes(slotName) && skinRecolor) {
+        maskRecolor = skinRecolor;
+      }
+
+      if (!maskRecolor) return null;
 
       // Resolve attachment's page name to grab the correct mask page
       const att: any = slot.getAttachment?.();
@@ -93,14 +113,19 @@ export default function SpineCharacterPreview({
       const maskTex = pageMaskTextures[pageName];
       if (!maskTex) {
         // If there's no mask page for this atlas page, skip recolor gracefully
-        // console.warn(`No mask page found for atlas page "${pageName}" — skipping recolor for ${slotName}`);
+        console.warn(`No mask page found for atlas page "${pageName}" — skipping recolor for ${slotName}`);
         return null;
       }
 
-      // Cache per (page uuid + chosen colors)
-      const key = `${(baseTex as any).uuid}|${maskRecolor.r}|${maskRecolor.g}|${maskRecolor.b}|${maskRecolor.a}|shade|pma1`;
+      // Check if this slot should use special alphaTest handling (like pupils)
+      const isPupil = /Pupil/i.test(slotName);
+      const alphaTest = isPupil ? 0.0 : 0.0015; // Match SpineThree logic
+
+      // Cache per (page uuid + chosen colors + slot + alphaTest)
+      const key = `${(baseTex as any).uuid}|${maskRecolor.r}|${maskRecolor.g}|${maskRecolor.b}|${maskRecolor.a}|${slotName}|${alphaTest}|shade|pma1`;
       let mat = RECOLOR_CACHE.get(key);
       if (!mat) {
+
         mat = makeMaskRecolorMaterial(
           baseTex,
           maskTex,
@@ -113,13 +138,17 @@ export default function SpineCharacterPreview({
           {
             mode: "shade", // keep grayscale shading from base
             premultipliedAlpha: true,
-            alphaTest: 0.0015,
+            alphaTest,
             preserveDarkThreshold: 0.14, // keep near-black outlines unpainted
             strength: 1,
           }
         );
         RECOLOR_CACHE.set(key, mat);
+        console.log(`✅ Applied ${slotName} recolor: R=${maskRecolor.r}, G=${maskRecolor.g}, B=${maskRecolor.b}, A=${maskRecolor.a}`);
       }
+
+      // Apply material normalization for proper render pass
+      normalizeMaterialForSlot(slot, mat);
       return mat;
     };
   };
@@ -132,7 +161,8 @@ export default function SpineCharacterPreview({
     if (!skeleton || !skeletonData || !skeletonMesh) return;
 
     const skinName = getSpineSkin();
-    const maskRecolor = getMaskRecolor();
+    const hatRecolor = getHatMaskRecolor();
+    const skinRecolor = getSkinMaskRecolor();
 
     if (skinName && skinName !== "default") {
       const skin = skeletonData.findSkin(skinName);
@@ -140,14 +170,16 @@ export default function SpineCharacterPreview({
         skeleton.setSkin(skin);
         skeleton.setToSetupPose();
         skeleton.updateWorldTransform(Physics.update);
+        console.log(`✅ Applied character preview skin: ${skinName}`);
       }
     } else {
-      skeleton.setSkin(null);
-      skeleton.setSlotsToSetupPose();
+      skeleton.setSkin(skeletonData.defaultSkin);
+      skeleton.setToSetupPose();
+      skeleton.updateWorldTransform(Physics.update);
     }
 
-    setupMaterialOverride(skeletonMesh, maskRecolor);
-  }, [outfit.cosmetics.headTop, catalog]);
+    setupMaterialOverride(skeletonMesh, hatRecolor, skinRecolor);
+  }, [outfit.cosmetics.headTop, outfit.cosmetics.skin, catalog]);
 
   const onContextCreate = async (gl: any) => {
     try {
@@ -212,9 +244,15 @@ export default function SpineCharacterPreview({
       }
 
       // ---- Build Spine objects ----
-      const atlas = new TextureAtlas(atlasText, (pageName: string) => {
-        // the resolver is called with atlas page name, e.g. "skeleton.png"
-        return pageBaseTextures[pageName] || pageBaseTextures[Object.keys(pageBaseTextures)[0]];
+      const atlas = new TextureAtlas(atlasText);
+
+      // Set up texture resolver
+      atlas.pages.forEach(page => {
+        const pageName = page.name;
+        const texture = pageBaseTextures[pageName] || pageBaseTextures[Object.keys(pageBaseTextures)[0]];
+        if (texture) {
+          page.texture = texture as any;
+        }
       });
 
       const attachmentLoader = new AtlasAttachmentLoader(atlas);
@@ -225,9 +263,12 @@ export default function SpineCharacterPreview({
       skeletonRef.current = skeleton;
       skeletonDataRef.current = skeletonData;
 
-      // Anim state
+      // Set up lifelike idle animation system
       const stateData = new AnimationStateData(skeletonData);
-      const state = new AnimationState(stateData);
+      const idleDriver = new LifelikeIdleNoMix(stateData);
+      const state = idleDriver.animationState;
+
+      idleDriverRef.current = idleDriver;
 
       // Set skin initially
       const initialSkin = getSpineSkin();
@@ -241,9 +282,7 @@ export default function SpineCharacterPreview({
         skeleton.setToSetupPose();
       }
 
-      // Idle anim (if present)
-      const idle = skeletonData.findAnimation("idle");
-      if (idle) state.setAnimation(0, idle, true);
+      // The lifelike idle system will handle animation automatically
 
       // Resolve textures by page name or filename
       const resolveTexture = (pageOrFileName: string): THREE.Texture | undefined => {
@@ -252,10 +291,11 @@ export default function SpineCharacterPreview({
         return pageBaseTextures[short];
       };
 
-      // Position/scale via Spine transform (not Three)
-      const finalScale = 0.3;
+      // Position/scale via Spine transform (not Three) - adjust scale based on size
+      const scaleMultiplier = size === "small" ? 0.15 : size === "medium" ? 0.25 : 0.3;
+      const finalScale = scaleMultiplier;
       const posX = width * 0.5;
-      const posY = height * 0.4;
+      const posY = height * 0.25; // Move character lower to show hats better (lower Y = down in flipped system)
       skeleton.scaleX = finalScale;
       skeleton.scaleY = finalScale;
       skeleton.x = posX;
@@ -271,7 +311,7 @@ export default function SpineCharacterPreview({
       scene.add(mesh);
 
       // Initial recolor override
-      setupMaterialOverride(mesh, getMaskRecolor());
+      setupMaterialOverride(mesh, getHatMaskRecolor(), getSkinMaskRecolor());
 
       // Render loop
       let lastTime = Date.now() / 1000;
@@ -280,7 +320,13 @@ export default function SpineCharacterPreview({
         const delta = now - lastTime;
         lastTime = now;
 
-        mesh.update(delta);
+        // Update lifelike idle system (handles eye movements, blinking, and base idle)
+        idleDriver.update(delta);
+        skeleton.update(delta);
+        state.apply(skeleton);
+        skeleton.updateWorldTransform(Physics.update);
+        mesh.refreshMeshes();
+
         renderer.render(scene, camera);
         gl.endFrameEXP();
 

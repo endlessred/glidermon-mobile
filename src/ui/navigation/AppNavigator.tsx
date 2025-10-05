@@ -2,6 +2,7 @@
 import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { createStackNavigator } from "@react-navigation/stack";
 import { Text } from "react-native";
 import HudScreen from "../screens/HudScreen";
 import GameScreen from "../screens/GameScreen";
@@ -12,8 +13,25 @@ import EquipScreen from "../screens/EquipScreen";
 import GalleryScreen from "../screens/GalleryScreen";
 import OutfitScreen from "../screens/OutfitScreen";
 import AcornHuntScreen from "../screens/AcornHuntScreen";
+import ArcadeScreen from "../screens/ArcadeScreen";
+import UpsAndDownsScreen from "../screens/UpsAndDownsScreen";
 
 const Tab = createBottomTabNavigator();
+const ArcadeStack = createStackNavigator();
+
+function ArcadeStackNavigator() {
+  return (
+    <ArcadeStack.Navigator
+      screenOptions={{
+        headerShown: false
+      }}
+    >
+      <ArcadeStack.Screen name="ArcadeMain" component={ArcadeScreen} />
+      <ArcadeStack.Screen name="AcornHunt" component={AcornHuntScreen} />
+      <ArcadeStack.Screen name="UpsAndDowns" component={UpsAndDownsScreen} />
+    </ArcadeStack.Navigator>
+  );
+}
 
 export default function AppNavigator() {
   return (
@@ -52,12 +70,12 @@ export default function AppNavigator() {
           }}
         />
         <Tab.Screen
-          name="AcornHunt"
-          component={AcornHuntScreen}
+          name="Arcade"
+          component={ArcadeStackNavigator}
           options={{
-            tabBarLabel: ({ color }) => <Text style={{ color }}>🌰 Hunt</Text>,
-            tabBarAccessibilityLabel: "Acorn Hunt mini-game, collect acorns through turn-based battles",
-            headerTitle: 'Acorn Hunt'
+            tabBarLabel: ({ color }) => <Text style={{ color }}>🕹️ Arcade</Text>,
+            tabBarAccessibilityLabel: "Arcade mini-games, play various games to earn rewards",
+            headerTitle: 'Arcade'
           }}
         />
         <Tab.Screen
