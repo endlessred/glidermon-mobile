@@ -23,6 +23,7 @@ import { normalizeMaterialForSlot } from "../../spine/SpineThree";
 import { useTheme } from "../../data/hooks/useTheme";
 import { OutfitSlot, CosmeticSocket } from "../../data/types/outfitTypes";
 import { useCosmeticsStore } from "../../data/stores/cosmeticsStore";
+import { ensureSRGBTexture } from "../../spine/HueIndexedRecolor";
 
 // Find an attachment by (slotName, attachmentName) across default skin and all named skins.
 function getAttachmentFromAnySkin(
@@ -290,6 +291,8 @@ export default function SpineCharacterPreview({
       renderer.setSize(width, height);
       renderer.setClearColor(0x0a0a12, 0);
 
+      (renderer as any).outputColorSpace = (THREE as any).SRGBColorSpace ?? (THREE as any).sRGBEncoding;
+      renderer.toneMapping = THREE.NoToneMapping;
       // ---- Load Spine assets (atlas + json + base page(s)) ----
       const atlasRequire = require("../../assets/GliderMonSpine/skeleton.atlas");
       const jsonRequire = require("../../assets/GliderMonSpine/skeleton.json");
@@ -308,6 +311,7 @@ export default function SpineCharacterPreview({
         const baseTex: THREE.Texture = await loadAsync(basePageRequire);
         baseTex.flipY = false;
         baseTex.generateMipmaps = false; // match your pipeline (no mips)
+        ensureSRGBTexture(baseTex);
         baseTex.needsUpdate = true;
         pageBaseTextures["skeleton.png"] = baseTex;
       } catch (e) {
@@ -317,6 +321,7 @@ export default function SpineCharacterPreview({
         const data = new Uint8Array([255, 0, 255, 255, 255, 0, 255, 255, 255, 0, 255, 255, 255, 0, 255, 255]);
         const fallback = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
         fallback.flipY = false;
+        ensureSRGBTexture(fallback);
         fallback.needsUpdate = true;
         pageBaseTextures["skeleton.png"] = fallback;
       }

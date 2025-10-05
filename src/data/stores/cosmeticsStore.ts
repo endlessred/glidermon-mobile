@@ -128,10 +128,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "skin",
     spineSkin: "default", // Uses default skin with recoloring
     maskRecolor: {
-      r: "#ff69b4", // Cute pink main
-      g: "#ffb3d9", // Cute light pink bright
-      b: "#cc1466", // Cute dark pink
-      a: "#9966ff"  // Cute purple accent
+      r: "#f37ab7ff", // Cute pink main
+      g: "#ff40a0ff", // Cute light pink bright
+      b: "#e49abbff", // Cute dark pink
+      a: "#9364f1ff"  // Cute purple accent
     },
     tex: hatPackPng
   },
@@ -156,9 +156,9 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "skin",
     spineSkin: "default",
     maskRecolor: {
-      r: "#228b22", // Forest green main
-      g: "#90ee90", // Forest light green bright
-      b: "#006400", // Forest dark green
+      r: "#36c436ff", // Forest green main
+      g: "#1d5a1dff", // Forest light green bright
+      b: "#79ee79ff", // Forest dark green
       a: "#8b4513"  // Forest brown accent
     },
     tex: hatPackPng

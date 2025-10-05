@@ -9,6 +9,7 @@ import DailyCapBar from "../components/DailyCapBar";
 import { useHudVM } from "../../data/hooks/useHudVM";
 import GameCanvas from "../../game/view/GameCanvas";
 import SpineCharacter from "../../game/view/SpineCharacter";
+import { IsometricHousingThreeJS } from "../../game/housing";
 import { useTheme } from "../../data/hooks/useTheme";
 import { getGlucoseColor, getTrendIcon } from "../../styles/theme";
 import GlucoseWindTrail from "../components/GlucoseWindTrail";
@@ -128,13 +129,13 @@ export default function HudScreen() {
             {glidermonName}
           </Text>
         )}
-        {/* Replace with Spine character */}
-        <View style={{ width: 200, height: 200, overflow: 'hidden', borderRadius: 8 }}>
-          <SpineCharacter
-            x={100}
-            y={100}
-            scale={1}
-            outfit={localOutfit}
+        {/* Isometric apartment with character */}
+        <View style={{ width: 300, height: 250, overflow: 'hidden', borderRadius: 8 }}>
+          <IsometricHousingThreeJS
+            width={300}
+            height={250}
+            characterX={4}
+            characterY={4}
           />
         </View>
       </View>

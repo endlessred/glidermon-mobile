@@ -39,21 +39,26 @@ export async function loadSpineFromExpoAssets(opts: {
 
   // Use filename (page name) as the key; must match names in .atlas
   for (const a of textureAssets) {
-    const url = a.localUri ?? a.uri;
-    const key =
-      a.name || (url?.split("/").pop() ?? "").toString(); // fallback to filename
-    // THREE.TextureLoader works fine with file:// and local URIs in Expo + expo-gl
-    const tex: THREE.Texture = await new Promise((resolve, reject) => {
-      const loader = new THREE.TextureLoader();
-      loader.load(url, (t) => resolve(t), undefined, (err) => reject(err));
-    });
-    // Good defaults for sprite sheets
-    tex.flipY = false;
-    tex.generateMipmaps = true;
-    tex.needsUpdate = true;
-    pageTextures[key] = tex;
-  }
+  const url = a.localUri ?? a.uri;
+  const key = a.name || (url?.split("/").pop() ?? "").toString();
 
+  const tex: THREE.Texture = await new Promise((resolve, reject) => {
+    const loader = new THREE.TextureLoader();
+    loader.load(url, (t) => resolve(t), undefined, (err) => reject(err));
+  });
+
+  // Unified hygiene — CRITICAL lines:
+  tex.flipY = false;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.generateMipmaps = false;
+  // mark as sRGB so sampling is linearized correctly in shader
+  // @ts-ignore
+  tex.colorSpace = (THREE as any).SRGBColorSpace ?? (THREE as any).sRGBEncoding;
+  tex.needsUpdate = true;
+
+  pageTextures[key] = tex;
+}
   // 3) Build the Spine data structures
   const atlas = new TextureAtlas(atlasText, (pageName: string) => {
     // Try exact match, else any single page (useful when atlas has one page)

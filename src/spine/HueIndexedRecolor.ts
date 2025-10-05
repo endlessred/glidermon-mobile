@@ -21,6 +21,20 @@ function toColorOrDefault(c: any, defaultValue: number): THREE.Color {
   return c instanceof THREE.Color ? c : new THREE.Color(c ?? defaultValue);
 }
 
+/** Small helper so every atlas page is treated the same way. */
+export function ensureSRGBTexture(tex: THREE.Texture) {
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.generateMipmaps = false;
+  tex.flipY = false;
+  // Critical: tell Three this bitmap is authored in sRGB
+  // (available on r152+ as Texture.colorSpace)
+  // @ts-ignore
+  tex.colorSpace = (THREE as any).SRGBColorSpace ?? (THREE as any).sRGBEncoding;
+  tex.needsUpdate = true;
+}
+
 export function makeHueIndexedRecolorMaterial(
   baseMap: THREE.Texture,
   opts: HueIndexedRecolorOptions & { colors?: HueIndexedRecolorColors } = {}
@@ -42,12 +56,7 @@ export function makeHueIndexedRecolorMaterial(
   const colB = toColorOrDefault(o.colors!.blue, 0x0000ff);
   const colY = toColorOrDefault(o.colors!.yellow, 0xffff00);
 
-  // Texture hygiene
-  baseMap.wrapS = baseMap.wrapT = THREE.ClampToEdgeWrapping;
-  baseMap.minFilter = THREE.LinearFilter;
-  baseMap.magFilter = THREE.LinearFilter;
-  baseMap.generateMipmaps = false;
-  baseMap.needsUpdate = true;
+  ensureSRGBTexture(baseMap);
 
   const vert = `
     varying vec2 vUv;
@@ -57,8 +66,21 @@ export function makeHueIndexedRecolorMaterial(
     }
   `;
 
-  // Use HSV-based hue detection for better color classification
+  // NOTE: we now linearize the sampled texture and encode result to the renderer's output space.
   const frag = `
+    #ifdef GL_OES_standard_derivatives
+    #extension GL_OES_standard_derivatives : enable
+    #endif
+
+    // --- Color-space conversion helpers (portable fallback) ---
+    vec3 SRGBToLinear(vec3 srgb) {
+      return pow(srgb, vec3(2.2));
+    }
+
+    vec3 LinearToSRGB(vec3 linear) {
+      return pow(linear, vec3(1.0 / 2.2));
+    }
+
     uniform sampler2D uMap;
     uniform vec3 uColR, uColG, uColB, uColY;
     uniform float uAlphaTest, uStrength, uSatMin, uHueCosMin;
@@ -66,130 +88,103 @@ export function makeHueIndexedRecolorMaterial(
 
     varying vec2 vUv;
 
-    float luma(vec3 c){ return dot(c, vec3(0.299,0.587,0.114)); }
+    float lumaLinear(vec3 c){ return dot(c, vec3(0.299,0.587,0.114)); }
 
-    // Convert RGB to HSV for better hue detection
-    vec3 rgb2hsv(vec3 c) {
+    // Convert linear RGB to a naive HSV (s is fine for gating, not for hue precision)
+    vec3 rgb2hsv_linear(vec3 c) {
       float cmax = max(max(c.r, c.g), c.b);
       float cmin = min(min(c.r, c.g), c.b);
       float delta = cmax - cmin;
 
-      // Hue calculation
       float h = 0.0;
-      if (delta > 0.0001) {
-        if (cmax == c.r) {
-          h = mod((c.g - c.b) / delta, 6.0);
-        } else if (cmax == c.g) {
-          h = (c.b - c.r) / delta + 2.0;
-        } else {
-          h = (c.r - c.g) / delta + 4.0;
-        }
+      if (delta > 1e-5) {
+        if (cmax == c.r) h = mod((c.g - c.b) / delta, 6.0);
+        else if (cmax == c.g) h = (c.b - c.r) / delta + 2.0;
+        else h = (c.r - c.g) / delta + 4.0;
         h /= 6.0;
       }
 
-      // Saturation
-      float s = (cmax > 0.0001) ? delta / cmax : 0.0;
-
-      // Value (brightness)
+      float s = (cmax > 1e-5) ? delta / cmax : 0.0;
       float v = cmax;
-
       return vec3(h, s, v);
     }
 
     void main(){
       vec4 tex = texture2D(uMap, vUv);
+      // conservative cutout using original alpha in conjunction with global alpha
       if (tex.a <= uAlphaTest * uGlobalAlpha) discard;
 
-      float Y = luma(tex.rgb);
-      vec3 hsv = rgb2hsv(tex.rgb);
-      float hue = hsv.x;
+      // IMPORTANT: convert sRGB map sample to LINEAR for all math
+      vec3 texRGB = SRGBToLinear(tex.rgb);
+
+      float Y = lumaLinear(texRGB);
+      vec3 hsv = rgb2hsv_linear(texRGB);
       float sat = hsv.y;
 
-      // --- outline guards ---
-      // Allow blue pixels to pass through even if dark (blue has lower luma naturally)
-      bool isBlueish = tex.b > tex.r && tex.b > tex.g && tex.b > 0.1;
+      // --- outline guards (operate in linear) ---
+      bool isBlueish = texRGB.b > texRGB.r && texRGB.b > texRGB.g && texRGB.b > 0.1;
       if (Y <= uPreserveDark && !isBlueish) {
-        gl_FragColor = vec4(tex.rgb, 1.0);  // keep outlines (and other neutral areas)
+        // encode back to output space
+        gl_FragColor = vec4( LinearToSRGB(texRGB), 1.0 );
         return;
       }
       if (sat < uSatMin) {
-        gl_FragColor = vec4(tex.rgb, 1.0);  // keep low-saturation areas
+        gl_FragColor = vec4( LinearToSRGB(texRGB), 1.0 );
         return;
       }
 
-      // Use RGB-based detection instead of HSV hue (more reliable)
+      // Simple dominance in linear space
       int id = -1;
-      float maxComponent = max(max(tex.r, tex.g), tex.b);
-      float threshold = 0.2; // minimum color intensity
+      float maxComponent = max(max(texRGB.r, texRGB.g), texRGB.b);
+      float threshold = 0.05; // lower in linear
 
       if (maxComponent <= threshold) {
-        gl_FragColor = vec4(tex.rgb, 1.0);
+        gl_FragColor = vec4( LinearToSRGB(texRGB), 1.0 );
         return;
       }
 
-      if (maxComponent > threshold) {
-        // Determine dominant color channel with some tolerance
-        float tolerance = 0.1;
-
-        // Check for yellow first (needs both R and G high)
-        if (uUseYellow > 0.5 && tex.r > threshold && tex.g > threshold &&
-            tex.r > tex.b + tolerance && tex.g > tex.b + tolerance) {
-          id = 3; // Yellow
-        }
-        // Check for red (R dominant)
-        else if (tex.r > tex.g + tolerance && tex.r > tex.b + tolerance) {
-          id = 0; // Red
-        }
-        // Check for green (G dominant)
-        else if (tex.g > tex.r + tolerance && tex.g > tex.b + tolerance) {
-          id = 1; // Green
-        }
-        // Check for blue (B dominant)
-        else if (tex.b > tex.r + tolerance && tex.b > tex.g + tolerance) {
-          id = 2; // Blue
-        }
+      float tol = 0.06;
+      if (uUseYellow > 0.5 && texRGB.r > threshold && texRGB.g > threshold &&
+          texRGB.r > texRGB.b + tol && texRGB.g > texRGB.b + tol) {
+        id = 3; // Yellow
+      } else if (texRGB.r > texRGB.g + tol && texRGB.r > texRGB.b + tol) {
+        id = 0; // Red
+      } else if (texRGB.g > texRGB.r + tol && texRGB.g > texRGB.b + tol) {
+        id = 1; // Green
+      } else if (texRGB.b > texRGB.r + tol && texRGB.b > texRGB.g + tol) {
+        id = 2; // Blue
       }
 
-      // If no clear color dominance found, keep original
       if (id == -1) {
-        gl_FragColor = vec4(tex.rgb, 1.0);
+        gl_FragColor = vec4( LinearToSRGB(texRGB), 1.0 );
         return;
       }
 
+      vec3 target_srgb = (id==0) ? uColR :
+                         (id==1) ? uColG :
+                         (id==2) ? uColB : uColY;
 
-      vec3 target = (id==0) ? uColR :
-                    (id==1) ? uColG :
-                    (id==2) ? uColB : uColY;
+      // Convert palette to linear before mixing
+      vec3 target = SRGBToLinear(target_srgb);
 
-      // Special handling for blue pixels - use target color directly without shading
-      vec3 outRgb;
+      vec3 outLinear;
       if (id == 2) {
-        // Blue: use target color directly to avoid black issues
-        outRgb = mix(tex.rgb, target, uStrength);
+        // Blue: avoid double-darkening; bias toward target
+        outLinear = mix(texRGB, target, uStrength);
       } else {
-        // Other colors: normal shading
         vec3 shaded = mix(target, target * Y, uShadeMode);
-        outRgb = mix(tex.rgb, shaded, uStrength);
+        outLinear = mix(texRGB, shaded, uStrength);
       }
 
-      gl_FragColor = vec4(outRgb, 1.0); // opaque cutout
+      // Encode to output color space
+      gl_FragColor = vec4( LinearToSRGB(outLinear), 1.0 );
     }
   `;
 
-  console.log('Creating hue-indexed material with colors:', { colR, colG, colB, colY });
-
-  // Ensure colors are properly constructed
   const safeColR = new THREE.Color(colR.getHex());
   const safeColG = new THREE.Color(colG.getHex());
   const safeColB = new THREE.Color(colB.getHex());
   const safeColY = new THREE.Color(colY.getHex());
-
-  console.log('Safe colors hex values:', {
-    red: safeColR.getHexString(),
-    green: safeColG.getHexString(),
-    blue: safeColB.getHexString(),
-    yellow: safeColY.getHexString()
-  });
 
   const material = new THREE.ShaderMaterial({
     uniforms: {
@@ -209,23 +204,12 @@ export function makeHueIndexedRecolorMaterial(
     },
     vertexShader: vert,
     fragmentShader: frag,
-    transparent: false,      // ← opaque cutout (preserves Spine order)
+    transparent: false,     // opaque cutout; alpha via discard
     depthTest: true,
     depthWrite: false,
     side: THREE.DoubleSide,
-    toneMapped: false,
+    toneMapped: false,      // we’re only managing color spaces, not tone mapping
   });
-
-  console.log('Created material with uniforms:', Object.keys(material.uniforms));
-
-  // Sanity check: log final palette hex values in shader uniforms
-  const u = (material as any).uniforms;
-  console.log("Final palette hex values in shader uniforms:",
-    (u.uColR.value as THREE.Color).getHexString(),
-    (u.uColG.value as THREE.Color).getHexString(),
-    (u.uColB.value as THREE.Color).getHexString(), // <- verify not "0000ff" unless intended
-    (u.uColY.value as THREE.Color).getHexString()
-  );
 
   return material;
 }

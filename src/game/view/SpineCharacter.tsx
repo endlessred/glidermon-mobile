@@ -17,7 +17,7 @@ import {
 import { SkeletonMesh } from '../../spine/SpineThree';
 import { LifelikeIdleNoMix } from './lifelikeIdle_noMix';
 import { makeMaskRecolorMaterial } from '../../spine/MaskRecolor';
-import { makeHueIndexedRecolorMaterial } from '../../spine/HueIndexedRecolor';
+import { makeHueIndexedRecolorMaterial, ensureSRGBTexture } from '../../spine/HueIndexedRecolor';
 import { normalizeMaterialForSlot } from '../../spine/SpineThree';
 import { OutfitSlot } from '../../data/types/outfitTypes';
 import { useCosmeticsStore } from '../../data/stores/cosmeticsStore';
@@ -97,6 +97,10 @@ export default function SpineCharacter({
       const renderer = new Renderer({ gl });
       renderer.setSize(width, height);
       renderer.setClearColor(0x0a0a12, 0); // Dark blue background to match theme
+      // sRGB output (works with expo-three via cast)
+      (renderer as any).outputColorSpace =
+        (THREE as any).SRGBColorSpace ?? (THREE as any).sRGBEncoding;
+      renderer.toneMapping = THREE.NoToneMapping;
 
       console.log('📦 Loading Spine assets with complete Metro bypass...');
 
@@ -128,12 +132,12 @@ export default function SpineCharacter({
       // Use expo-three's loadAsync for more reliable texture loading
       try {
         const { loadAsync } = require('expo-three');
-        const texture = await loadAsync(textureRequire);
+        const texture: THREE.Texture = await loadAsync(textureRequire);
 
-        // Configure for Spine
-        texture.flipY = false; // Important for Spine textures
-        texture.generateMipmaps = true;
-        texture.needsUpdate = true;
+        // Configure for Spine + sRGB
+        texture.flipY = false;                // Important for Spine textures
+        texture.generateMipmaps = false;      // Avoid minification darkening on mobile
+        ensureSRGBTexture(texture);           // Marks as sRGB + sets filters/wrap + needsUpdate
 
         pageTextures[filename] = texture;
         console.log('✅ Real Spine texture loaded successfully with expo-three');
@@ -145,7 +149,7 @@ export default function SpineCharacter({
         const size = 64;
         const data = new Uint8Array(size * size * 4);
         for (let i = 0; i < data.length; i += 4) {
-          data[i] = 0;     // Red
+          data[i] = 0;       // Red
           data[i + 1] = 255; // Green
           data[i + 2] = 0;   // Blue
           data[i + 3] = 255; // Alpha
@@ -153,7 +157,7 @@ export default function SpineCharacter({
 
         const debugTexture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
         debugTexture.flipY = false;
-        debugTexture.needsUpdate = true;
+        ensureSRGBTexture(debugTexture); // tag as sRGB and apply hygiene
         pageTextures[filename] = debugTexture;
       }
 
@@ -175,15 +179,12 @@ export default function SpineCharacter({
       const stateData = new AnimationStateData(skeletonData);
       const idleDriver = new LifelikeIdleNoMix(stateData);
 
-      // Optional: customize timing ranges (uncomment to adjust)
-      // idleDriver.setBlinkRange(1.5, 4); // faster blinking
-      // idleDriver.setLookRange(2, 6);    // more frequent looks
-      // idleDriver.snapToIdleBoundary = false; // immediate start vs synced
-
       const state = idleDriver.animationState;
       console.log('Lifelike idle system initialized with random eye movements and blinking');
 
+      // Apply base pose/animation
       skeleton.setToSetupPose();
+      state.setAnimation(0, animation, true);
 
       // Apply skin from outfit if provided
       if (outfit && outfit.cosmetics.headTop?.itemId) {
@@ -207,9 +208,9 @@ export default function SpineCharacter({
       };
 
       // Use Spine's own transform system instead of Three.js transforms
-      const finalScale = scale * 0.30; // Double the size for better visibility
-      const posX = width * 0.5; // Center horizontally
-      const posY = height * 0.25; // Move down to show full character including hats (lower Y values = down with flipped Y)
+      const finalScale = scale * 0.30; // Adjusted for visibility
+      const posX = width * 0.5;        // Center horizontally
+      const posY = height * 0.25;      // Lower to show hats (Y-down)
       console.log(`🎯 SPINE TRANSFORMS [${new Date().toISOString()}]: scale=${finalScale}, pos=(${posX}, ${posY}), canvas=(${width}x${height})`);
 
       // Apply transforms to the Spine skeleton (not the Three.js mesh)
@@ -321,7 +322,7 @@ export default function SpineCharacter({
             const isShaderAttachment = SHADER_SLOT_REGEX.test(attName); // Check attachment name, not slot name
 
             // Determine which recolor to apply
-            let recolorData = null;
+            let recolorData: any = null;
 
             // Hat example (unchanged)
             if (slotName === "Hat_Base" && hatRecolor) {
@@ -380,7 +381,7 @@ export default function SpineCharacter({
                 normalizeMaterialForSlot(slot, mat);
                 console.log(`Material normalized successfully for ${slotName}`);
                 return mat;
-              } catch (error) {
+              } catch (error: any) {
                 console.error(`❌ Error creating hue-indexed material for ${slotName} (${attName}):`, error);
                 console.error('Stack trace:', error.stack);
                 return null;
@@ -426,7 +427,7 @@ export default function SpineCharacter({
           gl.endFrameEXP();
 
           rafRef.current = requestAnimationFrame(renderLoop);
-        } catch (renderError) {
+        } catch (renderError: any) {
           console.error('❌ Error in render loop:', renderError);
           console.error('Render error stack:', renderError.stack);
         }
@@ -435,7 +436,7 @@ export default function SpineCharacter({
       renderLoop();
       console.log('🎮 Spine character initialized successfully with new adapter');
 
-    } catch (err) {
+    } catch (err: any) {
       console.error('❌ Error initializing Spine:', err);
       console.error('Error stack:', err.stack);
     }
