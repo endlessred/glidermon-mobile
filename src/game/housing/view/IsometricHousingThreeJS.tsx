@@ -46,6 +46,9 @@ function makeBottomPivotPlaneFull(w: number, h: number) {
 // Name for the room container group (so we can replace it atomically)
 const ROOM_NODE_NAME = 'APARTMENT_ROOM';
 
+const HALF_WIDTH_NUDGE = -20;
+const HALF_HEIGHT_NUDGE = 0;
+
 // Build whole room into a single Group and replace previous one
 function buildApartmentScene(scene: THREE.Scene, atlas: TextureAtlas, w: number, h: number) {
   // Remove previous build, if any
@@ -60,8 +63,8 @@ function buildApartmentScene(scene: THREE.Scene, atlas: TextureAtlas, w: number,
 
   // Centered iso → screen using imported HALF_W/H
   const isoToScreenCentered = (x: number, y: number) => ({
-    x: (x - y) * HALF_W,
-    y: (x + y) * HALF_H,
+    x: (x - y) * (HALF_W + HALF_WIDTH_NUDGE),
+    y: (x + y) * (HALF_H + HALF_HEIGHT_NUDGE),
   });
 
   // Room center in screen space (center tile)
@@ -102,7 +105,7 @@ function buildApartmentScene(scene: THREE.Scene, atlas: TextureAtlas, w: number,
 
       // Tile center → “feet” is the diamond bottom (center.y + HALF_H)
       const c = isoToScreenCentered(col, row);
-      const feetY = c.y + HALF_H;
+      const feetY = c.y + (HALF_H + HALF_HEIGHT_NUDGE);
 
       mesh.position.set(placeX(c.x), placeY(feetY), 0);
       mesh.renderOrder = 1000 + Math.floor(feetY) * 10; // floors after walls
@@ -119,7 +122,7 @@ function buildApartmentScene(scene: THREE.Scene, atlas: TextureAtlas, w: number,
   for (let col = 0; col < cols; col++) {
     const m = new THREE.Mesh(wallGeom, wallMat);
     const c = isoToScreenCentered(col, -1);
-    const topEdgeY = c.y - HALF_H; // top edge of that virtual tile
+    const topEdgeY = c.y - (HALF_H + HALF_HEIGHT_NUDGE); // top edge of that virtual tile
     m.position.set(placeX(c.x), placeY(topEdgeY) - BEVEL, 0);
     m.renderOrder = 0; // draw before floors
     room.add(m);
@@ -131,7 +134,7 @@ function buildApartmentScene(scene: THREE.Scene, atlas: TextureAtlas, w: number,
   for (let row = 0; row < rows; row++) {
     const m = new THREE.Mesh(wallGeom, wallMat);
     const c = isoToScreenCentered(-1, row);
-    const topEdgeY = c.y - HALF_H;
+    const topEdgeY = c.y - (HALF_H + HALF_HEIGHT_NUDGE);
     m.position.set(placeX(c.x), placeY(topEdgeY) - BEVEL, 0);
     m.scale.x = -1;         // face inward
     m.renderOrder = 1;      // draw after back strip to avoid any corner artifact
@@ -139,8 +142,8 @@ function buildApartmentScene(scene: THREE.Scene, atlas: TextureAtlas, w: number,
   }
 
   // ---------- scale & center ----------
-  const roomW = (cols + rows - 1) * HALF_W;
-  const roomH = (cols + rows - 1) * HALF_H;
+  const roomW = (cols + rows - 1) * (HALF_W + HALF_WIDTH_NUDGE);
+  const roomH = (cols + rows - 1) * (HALF_H + HALF_HEIGHT_NUDGE);
   const scale  = Math.min((w * 0.8) / roomW, (h * 0.8) / roomH, 1);
   room.scale.set(scale, scale, scale);
 
