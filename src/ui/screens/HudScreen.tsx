@@ -132,8 +132,9 @@ export default function HudScreen() {
           <IsometricHousingThreeJS
             width={300}
             height={250}
-            characterX={4}
-            characterY={4}
+            gridColumn={1}
+            gridRow={5}
+            characterScale={0.5}
             outfit={localOutfit ?? undefined}
           />
         </View>
@@ -199,6 +200,10 @@ export default function HudScreen() {
     </ScrollView>
   );
 }
+
+
+
+
 
 
 

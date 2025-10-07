@@ -1,10 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import * as THREE from 'three';
 import { GLView } from 'expo-gl';
 import { Renderer } from 'expo-three';
 import { loadHousingTextureAtlas, TextureAtlas } from '../assets/textureAtlas';
-import { HALF_W, HALF_H, zFromFeetScreenY } from '../coords';
+import { HALF_W, HALF_H, TILE_H, zFromFeetScreenY } from '../coords';
 import {
   createSpineCharacterController,
   SpineCharacterController,
@@ -16,6 +16,8 @@ interface IsometricHousingThreeJSProps {
   height?: number;
   characterX?: number;
   characterY?: number;
+  gridColumn?: number;
+  gridRow?: number;
   characterScale?: number;
   animation?: string;
   outfit?: OutfitSlot | null;
@@ -31,10 +33,39 @@ const ROOM_NODE_NAME = 'APARTMENT_ROOM';
 const HALF_WIDTH_NUDGE = -20;
 const HALF_HEIGHT_NUDGE = 0;
 const CHARACTER_RENDER_ORDER_BASE = 2000;
-const DEFAULT_CHARACTER_SCALE = 0.32;
+const DEFAULT_CHARACTER_SCALE = 1; // scale multiplier (1 == fits default tile height)
 const FLOOR_ROWS = 8;
 const FLOOR_COLS = 8;
+const CHARACTER_DESIRED_TILE_HEIGHT = 2.4; // how many tile heights tall the character should be
 const DEBUG_HIDE_ENVIRONMENT = false;
+
+const clampTileIndex = (value: number, max: number) => Math.min(Math.max(value, 0), max);
+
+function gridToIso(column: number, row: number) {
+  const clampedColumn = clampTileIndex(column, FLOOR_COLS - 1);
+  const clampedRow = clampTileIndex(row, FLOOR_ROWS - 1);
+  return {
+    x: clampedColumn,
+    y: (FLOOR_ROWS - 1) - clampedRow,
+  };
+}
+
+
+function computeNativeCharacterHeight(mesh: THREE.Object3D): number | null {
+  try {
+    mesh.updateMatrixWorld(true);
+    const bounds = new THREE.Box3().setFromObject(mesh);
+    const height = bounds.max.y - bounds.min.y;
+    if (Number.isFinite(height) && height > 0) {
+      return height;
+    }
+  } catch (error) {
+    if (__DEV__) {
+      console.warn('Failed to compute character height', error);
+    }
+  }
+  return null;
+}
 
 type IsoFeetToSceneFn = (x: number, y: number) => { x: number; y: number; feetY: number };
 
@@ -183,8 +214,11 @@ function pickFloorKeyByRect(row: number, col: number, rows: number, cols: number
 export default function IsometricHousingThreeJS({
   width = 300,
   height = 250,
-  characterX = 3.5,
-  characterY = 3.5,
+  characterX = 7,
+  characterY = 1,
+  gridColumn,
+  gridRow,
+
   characterScale = DEFAULT_CHARACTER_SCALE,
   animation = 'idle',
   outfit,
@@ -197,17 +231,27 @@ export default function IsometricHousingThreeJS({
   const isoFeetToSceneRef = useRef<IsoFeetToSceneFn | null>(null);
   const roomRef = useRef<THREE.Group | null>(null);
   const roomScaleRef = useRef(1);
+  const nativeCharacterHeightRef = useRef<number | null>(null);
   const spineRef = useRef<SpineCharacterController | null>(null);
   const lastTimeRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
   const missingLogRef = useRef(false);
   const frameLogRef = useRef(false);
   const invalidTransformLogRef = useRef(false);
+  const lastLoggedTileRef = useRef<{ x: number; y: number; gridColumn?: number | null; gridRow?: number | null } | null>(null);
 
-  const characterPosRef = useRef({ x: characterX, y: characterY });
+  const resolveIsoPosition = useCallback(() => {
+    if (gridColumn != null && gridRow != null) {
+      return gridToIso(gridColumn, gridRow);
+    }
+    return { x: characterX, y: characterY };
+  }, [characterX, characterY, gridColumn, gridRow]);
+
+  const characterPosRef = useRef(resolveIsoPosition());
   useEffect(() => {
-    characterPosRef.current = { x: characterX, y: characterY };
-  }, [characterX, characterY]);
+    characterPosRef.current = resolveIsoPosition();
+    lastLoggedTileRef.current = null;
+  }, [resolveIsoPosition]);
 
   const scaleRef = useRef(characterScale);
   useEffect(() => {
@@ -227,6 +271,7 @@ export default function IsometricHousingThreeJS({
     outfitRef.current = outfit ?? undefined;
     if (spineRef.current) {
       spineRef.current.applyOutfit(outfitRef.current);
+      nativeCharacterHeightRef.current = computeNativeCharacterHeight(spineRef.current.mesh);
     }
   }, [outfit]);
 
@@ -257,15 +302,51 @@ export default function IsometricHousingThreeJS({
 
       controller.update(deltaSeconds);
 
-      const target = isoFeetToScene(characterPosRef.current.x, characterPosRef.current.y);
+      const currentIsoTile = characterPosRef.current;
+      const target = isoFeetToScene(currentIsoTile.x, currentIsoTile.y);
+      if (__DEV__) {
+        const last = lastLoggedTileRef.current;
+        const gridDebug = gridColumn != null && gridRow != null ? { column: gridColumn, row: gridRow } : undefined;
+        const hasGridChanged = gridDebug
+          ? !last || last.gridColumn !== gridDebug.column || last.gridRow !== gridDebug.row
+          : false;
+        if (!last || last.x !== currentIsoTile.x || last.y !== currentIsoTile.y || hasGridChanged) {
+          console.log('Housing target iso', { iso: currentIsoTile, grid: gridDebug, target });
+          lastLoggedTileRef.current = {
+            x: currentIsoTile.x,
+            y: currentIsoTile.y,
+            gridColumn: gridDebug?.column ?? null,
+            gridRow: gridDebug?.row ?? null,
+          };
+        }
+      }
       const roomScale = roomScaleRef.current || 1;
-      const desiredWorldScale = scaleRef.current;
+      let nativeHeight = nativeCharacterHeightRef.current;
+      if ((!nativeHeight || nativeHeight <= 0) && spineRef.current) {
+        nativeHeight = computeNativeCharacterHeight(spineRef.current.mesh);
+        nativeCharacterHeightRef.current = nativeHeight;
+      }
+      if (!nativeHeight || nativeHeight <= 0) {
+        if (__DEV__ && !invalidTransformLogRef.current) {
+          console.warn('Housing character missing native height', { nativeHeight });
+          invalidTransformLogRef.current = true;
+        }
+        return;
+      }
+
+      const scaleMultiplier = scaleRef.current > 0 ? scaleRef.current : DEFAULT_CHARACTER_SCALE;
+      const desiredTileHeight = CHARACTER_DESIRED_TILE_HEIGHT * scaleMultiplier;
+      const desiredWorldHeight = TILE_H * desiredTileHeight;
+      const desiredWorldScale = desiredWorldHeight / nativeHeight;
       const appliedLocalScale = desiredWorldScale / roomScale;
       const feet = controller.getFeetLocalPosition();
 
       if (!Number.isFinite(appliedLocalScale)) {
         if (__DEV__ && !invalidTransformLogRef.current) {
           console.warn('Housing character scale invalid', {
+            nativeHeight,
+            desiredTileHeight,
+            desiredWorldHeight,
             desiredWorldScale,
             roomScale,
             appliedLocalScale,
@@ -349,12 +430,12 @@ export default function IsometricHousingThreeJS({
       }
 
       if (__DEV__) {
-        console.log('Housing character renderOrder', {
-          meshOrder,
-          desiredOrder,
-          maxRoomOrder,
-          sortFeetY,
-        });
+        // console.log('Housing character renderOrder', {
+        //   meshOrder,
+        //   desiredOrder,
+        //   maxRoomOrder,
+        //   sortFeetY,
+        // });
       }
     } catch (err) {
       console.error('Housing update error', err);
@@ -398,6 +479,7 @@ export default function IsometricHousingThreeJS({
       });
 
       controller.mesh.frustumCulled = false;
+      nativeCharacterHeightRef.current = computeNativeCharacterHeight(controller.mesh);
       room.add(controller.mesh);
 
       rendererRef.current = renderer;
@@ -449,6 +531,36 @@ export default function IsometricHousingThreeJS({
     </View>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
