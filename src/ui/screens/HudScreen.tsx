@@ -7,8 +7,6 @@ import AcornBadge from "../components/AcornBadge";
 import LevelBar from "../components/LevelBar";
 import DailyCapBar from "../components/DailyCapBar";
 import { useHudVM } from "../../data/hooks/useHudVM";
-import GameCanvas from "../../game/view/GameCanvas";
-import SpineCharacter from "../../game/view/SpineCharacter";
 import { IsometricHousingThreeJS } from "../../game/housing";
 import { useTheme } from "../../data/hooks/useTheme";
 import { getGlucoseColor, getTrendIcon } from "../../styles/theme";
@@ -136,6 +134,7 @@ export default function HudScreen() {
             height={250}
             characterX={4}
             characterY={4}
+            outfit={localOutfit ?? undefined}
           />
         </View>
       </View>
@@ -200,3 +199,6 @@ export default function HudScreen() {
     </ScrollView>
   );
 }
+
+
+
