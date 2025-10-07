@@ -1,0 +1,20 @@
+﻿{
+  "id": "startingApartment",
+  "theme": "Brown1",
+  "assets": [
+    "FloorTiles/Brown1/WoodFloor_CornerBottom.png",
+    "FloorTiles/Brown1/WoodFloor_CornerLeft.png",
+    "FloorTiles/Brown1/WoodFloor_CornerRight.png",
+    "FloorTiles/Brown1/WoodFloor_CornerTop.png",
+    "FloorTiles/Brown1/WoodFloor_SideBottomLeft.png",
+    "FloorTiles/Brown1/WoodFloor_SideBottomRight.png",
+    "FloorTiles/Brown1/WoodFloor_SideTopLeft.png",
+    "FloorTiles/Brown1/WoodFloor_SideTopRight.png",
+    "FloorTiles/Brown1/WoodFloor_Sides1.png",
+    "FloorTiles/Brown1/WoodFloor_Sides2.png",
+    "WallTiles/Brown1/WoodWall_Sides1.png",
+    "WallTiles/Brown1/WoodWall_Sides2.png",
+    "WallTiles/Brown1/WoodWall_EndWallTop.png",
+    "WallTiles/Brown1/WoodWall_EndWallBottom.png"
+  ]
+}

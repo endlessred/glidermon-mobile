@@ -3,8 +3,13 @@ import { View } from 'react-native';
 import * as THREE from 'three';
 import { GLView } from 'expo-gl';
 import { Renderer } from 'expo-three';
-import { loadHousingTextureAtlas, TextureAtlas } from '../assets/textureAtlas';
-import { HALF_W, HALF_H, TILE_H, zFromFeetScreenY } from '../coords';
+import {
+  DEFAULT_HOUSING_ROOM_ID,
+  HousingRoomId,
+  loadHousingTextureAtlas,
+  TextureAtlas,
+} from '../assets/textureAtlas';
+import { HALF_W, HALF_H, TILE_W, TILE_H, TILE_SKIRT, WALL_W, WALL_H, WALL_SKIRT, zFromFeetScreenY } from '../coords';
 import {
   createSpineCharacterController,
   SpineCharacterController,
@@ -21,6 +26,7 @@ interface IsometricHousingThreeJSProps {
   characterScale?: number;
   animation?: string;
   outfit?: OutfitSlot | null;
+  roomId?: HousingRoomId;
 }
 
 function makeBottomPivotPlaneFull(w: number, h: number) {
@@ -107,8 +113,8 @@ function buildApartmentScene(
     return { x: placeX(c.x), y: placeY(feetY), feetY };
   };
 
-  const floorGeom = makeBottomPivotPlaneFull(500, 500);
-  const wallGeom = makeBottomPivotPlaneFull(500, 1000);
+    const floorGeom = makeBottomPivotPlaneFull(TILE_W, TILE_H + TILE_SKIRT);
+    const wallGeom = makeBottomPivotPlaneFull(WALL_W, WALL_H + WALL_SKIRT);
 
   const makeMaterial = (tex: THREE.Texture, colorFallback: number) => {
     tex.flipY = false;
@@ -222,6 +228,7 @@ export default function IsometricHousingThreeJS({
   characterScale = DEFAULT_CHARACTER_SCALE,
   animation = 'idle',
   outfit,
+  roomId = DEFAULT_HOUSING_ROOM_ID,
 }: IsometricHousingThreeJSProps) {
   const catalog = useCosmeticsStore((state) => state.catalog);
 
@@ -465,7 +472,7 @@ export default function IsometricHousingThreeJS({
       camera.lookAt(0, 0, 0);
       camera.updateProjectionMatrix();
 
-      const atlas = await loadHousingTextureAtlas();
+      const atlas = await loadHousingTextureAtlas({ roomId });
       const { room, isoFeetToScene, roomScale } = buildApartmentScene(scene, atlas, w, h);
       console.log('Housing scene meshes', room.children.length);
       isoFeetToSceneRef.current = isoFeetToScene;
@@ -531,6 +538,12 @@ export default function IsometricHousingThreeJS({
     </View>
   );
 }
+
+
+
+
+
+
 
 
 

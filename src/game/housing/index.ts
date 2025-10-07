@@ -10,4 +10,5 @@ export * from './coords';
 export { roomSmallTemplate } from './templates/room_s';
 
 // Asset loading
-export { loadHousingTextureAtlas } from './assets/textureAtlas';
+export { DEFAULT_HOUSING_ROOM_ID, loadHousingTextureAtlas } from './assets/textureAtlas';
+export type { HousingRoomId, LoadHousingTextureAtlasOptions, TextureAtlas } from './assets/textureAtlas';

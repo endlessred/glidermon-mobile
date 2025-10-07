@@ -1,49 +1,42 @@
 # IsometricHousingThreeJS Usage
 
-IsometricHousingThreeJS is the Three.js-backed housing scene that renders the isometric apartment, the Spine character, and handles the per-frame updates required to keep them synchronised. This document explains how to consume the component and how its positioning/scaling props work.
+`IsometricHousingThreeJS` renders the apartment scene and the Spine character using Three.js. This guide explains how to consume the component and how the positioning/scaling props behave.
 
-## Importing the component
+## Import
 
-`	sx
+```tsx
 import { IsometricHousingThreeJS } from "../../game/housing";
-`
+```
 
-IsometricHousingThreeJS is exported from src/game/housing/index.ts, so the index barrel can be used from most React components (for example, HudScreen).
+The component is re-exported from `src/game/housing/index.ts`, so most screens can import it from the housing barrel (see `HudScreen` for an example).
 
 ## Props
 
 | Prop | Type | Default | Description |
 | ---- | ---- | ------- | ----------- |
-| width | 
-umber | 300 | Canvas width in pixels. |
-| height | 
-umber | 250 | Canvas height in pixels. |
-| characterX | 
-umber | 3.5 | **Optional** raw isometric X coordinate (see below). Ignored if gridColumn/gridRow are provided. |
-| characterY | 
-umber | 3.5 | **Optional** raw isometric Y coordinate (see below). Ignored if gridColumn/gridRow are provided. |
-| gridColumn | 
-umber | undefined | Column index in the housing grid (0 == left wall, 7 == right wall). When set together with gridRow, the component converts the pair into isometric coordinates for you. |
-| gridRow | 
-umber | undefined | Row index in the housing grid (0 == front / open edge, 7 == back wall). |
-| characterScale | 
-umber | 1 | Multiplier applied on top of the default character height (which is configured as 2.4 tile heights). |
-| nimation | string | 'idle' | Name of the Spine animation to play. |
-| outfit | OutfitSlot \| null | undefined | Outfit data applied to the Spine character. |
+| `width` | `number` | `300` | Canvas width in pixels. |
+| `height` | `number` | `250` | Canvas height in pixels. |
+| `characterX` | `number` | `3.5` | *Legacy* raw isometric X axis (south-east). Ignored when `gridColumn`/`gridRow` are provided. |
+| `characterY` | `number` | `3.5` | *Legacy* raw isometric Y axis (south-west). Ignored when `gridColumn`/`gridRow` are provided. |
+| `gridColumn` | `number` | `undefined` | Apartment column (0 = left wall, 7 = right wall). Preferred API. |
+| `gridRow` | `number` | `undefined` | Apartment row (0 = front/open edge, 7 = back wall). Preferred API. |
+| `characterScale` | `number` | `1` | Multiplier applied to the default character height (2.4 tile heights). |
+| `animation` | `string` | `'idle'` | Spine animation track name. |
+| `outfit` | `OutfitSlot \| null` | `undefined` | Outfit applied to the Spine skeleton. |
 
-### Choosing between coordinates
+### Coordinate systems
 
-- **Grid coordinates** (gridColumn, gridRow) are the recommended API. Think of them as (column, row) inside an 8×8 room: column increases as you move from the left wall to the right wall, row increases as you move from the open front edge towards the back wall. The component clamps values to [0, 7] before projecting them into the isometric plane.
-- **Raw isometric coordinates** (characterX, characterY) remain for legacy support. They describe the two diagonal axes of the diamond (south-east and south-west). These are harder to reason about, so prefer the grid props whenever possible.
-- When both sets are supplied, gridColumn/gridRow win. Leaving them undefined makes the component fall back to the raw isometric values, preserving previous behaviour.
+- `gridColumn`/`gridRow` are the recommended inputs. They describe an 8×8 Cartesian grid. The component clamps them into range and converts them into the diagonal isometric axes internally.
+- `characterX`/`characterY` remain for backwards compatibility. They directly map onto the two diagonals of the diamond (south-east and south-west). They are harder to reason about, so prefer the grid props where possible.
+- When both sets are supplied, the grid props win. Omitting them preserves the old behaviour based on `characterX`/`characterY`.
 
 ### Scaling
 
-The component measures the Spine mesh once it has loaded to determine the character’s native height. characterScale multiplies the default target height of 2.4 tiles (defined as CHARACTER_DESIRED_TILE_HEIGHT). For example, characterScale={0.5} renders the avatar at half the usual size.
+Once the Spine mesh loads, the component measures its native height. `characterScale` multiplies the default target height of 2.4 tiles (`CHARACTER_DESIRED_TILE_HEIGHT`). For example, `characterScale={0.5}` renders the avatar at half of the default size.
 
 ## Example
 
-`	sx
+```tsx
 <IsometricHousingThreeJS
   width={300}
   height={250}
@@ -53,20 +46,20 @@ The component measures the Spine mesh once it has loaded to determine the charac
   animation="idle"
   outfit={localOutfit ?? undefined}
 />
-`
+```
 
-This positions the character near the front-right of the apartment and renders them at 75?% of the default height.
+This places the character near the front-right corner and scales them to 75?% of the baseline height.
 
 ## Debug logging
 
-In development (__DEV__), the component logs coordinate changes once per update:
+In development (`__DEV__`) the component emits one log when the resolved coordinates change:
 
-`
+```
 Housing target iso { iso: { x, y }, grid: { column, row }, target: { x, y, feetY } }
-`
+```
 
-This helps confirm the resolved grid/iso values. The log resets when the grid props or fallback isometric props change.
+The log resets when either the grid props or the legacy isometric props change.
 
 ---
 
-For additional implementation notes, see the inline comments in src/game/housing/view/IsometricHousingThreeJS.tsx and the broader system overview in docs/HOUSING_AND_ISO.md.
+See `docs/HOUSING_AND_ISO.md` and `src/game/housing/view/IsometricHousingThreeJS.tsx` for additional implementation details.
