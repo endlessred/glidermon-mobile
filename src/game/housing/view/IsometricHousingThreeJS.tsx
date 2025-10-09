@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View } from 'react-native';
+import { View, TouchableOpacity, Text } from 'react-native';
 import * as THREE from 'three';
 import { GLView } from 'expo-gl';
 import { Renderer } from 'expo-three';
@@ -187,6 +187,7 @@ export default function IsometricHousingThreeJS({
   const catalog = useCosmeticsStore((state) => state.catalog);
 
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isZoomedIn, setIsZoomedIn] = useState(false);
   const initializedRef = useRef(false);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const isoFeetToSceneRef = useRef<IsoFeetToSceneFn | null>(null);
@@ -197,6 +198,8 @@ export default function IsometricHousingThreeJS({
   const spineRef = useRef<SpineCharacterController | null>(null);
   const lastTimeRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
+  const cameraRef = useRef<THREE.OrthographicCamera | null>(null);
+  const characterPositionRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const missingLogRef = useRef(false);
   const frameLogRef = useRef(false);
   const invalidTransformLogRef = useRef(false);
@@ -214,6 +217,46 @@ export default function IsometricHousingThreeJS({
     characterPosRef.current = resolveIsoPosition();
     lastLoggedTileRef.current = null;
   }, [resolveIsoPosition]);
+
+  // Function to update camera based on zoom state
+  const updateCameraForZoom = useCallback((camera: THREE.OrthographicCamera, zoomedIn: boolean, charPos: { x: number; y: number }) => {
+    if (zoomedIn) {
+      // Zoomed in view centered on character (backed up a bit more)
+      camera.position.set(charPos.x, charPos.y + 200, 10);
+      camera.lookAt(charPos.x, charPos.y + 200, 0);
+
+      // Adjust camera frustum for zoom (larger viewing area)
+      const aspect = width / height;
+      const baseSize = 300; // Increased from 200 to back up the view
+      camera.left = -baseSize * aspect;
+      camera.right = baseSize * aspect;
+      camera.top = baseSize;
+      camera.bottom = -baseSize;
+    } else {
+      // Apartment overview - restore original apartment view
+      camera.position.set(0, 1200, 10);
+      camera.lookAt(0, 1200, 0);
+
+      // Use original camera frustum values for full apartment view
+      const zoomFactor = 12;
+      const aspect = width / height;
+      const w = width;
+      const h = height;
+      camera.left = (-w / 2) * zoomFactor;
+      camera.right = (w / 2) * zoomFactor;
+      camera.top = (h / 2) * zoomFactor;
+      camera.bottom = (-h / 2) * zoomFactor;
+    }
+    camera.updateProjectionMatrix();
+  }, [width, height]);
+
+  // Effect to update camera when zoom state changes
+  useEffect(() => {
+    const camera = cameraRef.current;
+    if (camera) {
+      updateCameraForZoom(camera, isZoomedIn, characterPositionRef.current);
+    }
+  }, [isZoomedIn, updateCameraForZoom]);
 
   const scaleRef = useRef(characterScale);
   useEffect(() => {
@@ -441,6 +484,14 @@ export default function IsometricHousingThreeJS({
       sk.x = calculatedX;
       sk.y = calculatedY;
 
+      // Update character position reference for camera tracking
+      characterPositionRef.current = { x: calculatedX, y: calculatedY };
+
+      // Update camera if we're in zoomed mode
+      if (isZoomedIn && cameraRef.current) {
+        updateCameraForZoom(cameraRef.current, true, { x: calculatedX, y: calculatedY });
+      }
+
       if (__DEV__) {
         console.log('Character positioning calculation:', {
           tileId,
@@ -583,10 +634,11 @@ export default function IsometricHousingThreeJS({
         0.1,
         2000
       );
-      // Move camera up to show the full apartment
-      camera.position.set(0, 1400, 10); // Move camera up by 100 units
-      camera.lookAt(0, 1400, 0); // Look at a point higher up as well
-      camera.updateProjectionMatrix();
+      // Store camera reference for zoom controls
+      cameraRef.current = camera;
+
+      // Set initial camera position for apartment view
+      updateCameraForZoom(camera, false, { x: 0, y: 0 });
 
       console.log('Housing: About to build apartment scene');
       let room, roomScale, getAnchor;
@@ -660,6 +712,25 @@ export default function IsometricHousingThreeJS({
             backgroundColor: 'rgba(26, 28, 44, 0.4)',
           }}
         />
+      )}
+      {/* Zoom toggle button */}
+      {isLoaded && (
+        <TouchableOpacity
+          style={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            borderRadius: 16,
+          }}
+          onPress={() => setIsZoomedIn(!isZoomedIn)}
+        >
+          <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>
+            {isZoomedIn ? '🏠 Overview' : '🔍 Zoom In'}
+          </Text>
+        </TouchableOpacity>
       )}
     </View>
   );
