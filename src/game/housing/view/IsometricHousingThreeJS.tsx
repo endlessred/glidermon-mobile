@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, TouchableOpacity, Text } from 'react-native';
 import * as THREE from 'three';
+import { Physics } from '@esotericsoftware/spine-core';
 import { GLView } from 'expo-gl';
 import { Renderer } from 'expo-three';
 import {
@@ -370,7 +371,7 @@ export default function IsometricHousingThreeJS({
         sk.y = 0;
         sk.scaleX = 0.5;
         sk.scaleY = 0.5;
-        sk.updateWorldTransform({ update(){}, reset(){}, pose(){} } as any);
+        sk.updateWorldTransform(Physics.update);
         controller.mesh.refreshMeshes();
         return;
       }
@@ -525,7 +526,7 @@ export default function IsometricHousingThreeJS({
 
       // Update skeleton and refresh meshes
       try {
-        sk.updateWorldTransform({ update(){}, reset(){}, pose(){} } as any);
+        sk.updateWorldTransform(Physics.update);
         controller.mesh.refreshMeshes();
       } catch (error) {
         if (__DEV__) {

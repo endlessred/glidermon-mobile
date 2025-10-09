@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Asset } from 'expo-asset';
+import { Physics } from '@esotericsoftware/spine-core';
 import { loadSpineFromExpoAssets } from '../../../spine/loaders';
 import { AnchorMap, Anchor, boneNameToTileId } from '../anchors';
 import { placeX, placeY } from '../isoPlacement';
@@ -60,9 +61,8 @@ export async function loadRoomSkeleton(): Promise<LoadedRoom> {
     slot.setToSetupPose();
   }
 
-  // NOTE: Spine 4.2 requires a physics object; create a minimal no-op object:
-  const physics = { update: () => {}, reset: () => {}, pose: () => {} } as any;
-  skeleton.updateWorldTransform(physics);
+  // Use proper Spine physics for the room skeleton
+  skeleton.updateWorldTransform(Physics.update);
 
   // Build mesh (so you can show the walls / back layer if you kept them in)
   const { SkeletonMesh } = require('../../../spine/SpineThree');
