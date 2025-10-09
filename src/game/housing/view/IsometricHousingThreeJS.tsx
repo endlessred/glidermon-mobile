@@ -6,10 +6,10 @@ import { Renderer } from 'expo-three';
 import {
   DEFAULT_HOUSING_ROOM_ID,
   HousingRoomId,
-  loadHousingTextureAtlas,
-  TextureAtlas,
 } from '../assets/textureAtlas';
-import { HALF_W, HALF_H, TILE_W, TILE_H, TILE_SKIRT, WALL_W, WALL_H, WALL_SKIRT, zFromFeetScreenY } from '../coords';
+import { TILE_H, zFromFeetScreenY } from '../coords';
+import { loadRoomSkeleton, LoadedRoom } from '../rooms/RoomLoader';
+import { AnchorMap, Anchor, renderOrderFromFeetY } from '../anchors';
 import {
   createSpineCharacterController,
   SpineCharacterController,
@@ -29,20 +29,13 @@ interface IsometricHousingThreeJSProps {
   roomId?: HousingRoomId;
 }
 
-function makeBottomPivotPlaneFull(w: number, h: number) {
-  const geom = new THREE.PlaneGeometry(w, h, 1, 1);
-  geom.translate(0, h / 2, 0);
-  return geom;
-}
 
 const ROOM_NODE_NAME = 'APARTMENT_ROOM';
-const HALF_WIDTH_NUDGE = -20;
-const HALF_HEIGHT_NUDGE = 0;
 const CHARACTER_RENDER_ORDER_BASE = 2000;
 const DEFAULT_CHARACTER_SCALE = 1; // scale multiplier (1 == fits default tile height)
 const FLOOR_ROWS = 8;
 const FLOOR_COLS = 8;
-const CHARACTER_DESIRED_TILE_HEIGHT = 2.4; // how many tile heights tall the character should be
+const CHARACTER_DESIRED_TILE_HEIGHT = 1.5; // how many tile heights tall the character should be
 const DEBUG_HIDE_ENVIRONMENT = false;
 
 const clampTileIndex = (value: number, max: number) => Math.min(Math.max(value, 0), max);
@@ -76,146 +69,107 @@ function computeNativeCharacterHeight(mesh: THREE.Object3D): number | null {
 type IsoFeetToSceneFn = (x: number, y: number) => { x: number; y: number; feetY: number };
 
 type ApartmentBuild = {
-  room: THREE.Group;
-  isoFeetToScene: IsoFeetToSceneFn;
+  room: LoadedRoom;
   roomScale: number;
+  getAnchor: (id: string) => Anchor | null;
 };
 
-const BEVEL = 170;
 
 
 
-function buildApartmentScene(
+async function buildApartmentScene(
   scene: THREE.Scene,
-  atlas: TextureAtlas,
   w: number,
   h: number
-): ApartmentBuild {
+): Promise<ApartmentBuild> {
+  if (__DEV__) {
+    console.log('buildApartmentScene: Starting', { w, h });
+  }
+
   const old = scene.getObjectByName(ROOM_NODE_NAME);
   if (old) scene.remove(old);
 
-  const room = new THREE.Group();
-  room.name = ROOM_NODE_NAME;
-  scene.add(room);
+  // Load room skeleton
+  const room = await loadRoomSkeleton();
+  room.mesh.name = ROOM_NODE_NAME;
+  scene.add(room.mesh);
 
-  const isoToScreenCentered = (x: number, y: number) => ({
-    x: (x - y) * (HALF_W + HALF_WIDTH_NUDGE),
-    y: (x + y) * (HALF_H + HALF_HEIGHT_NUDGE),
+  // Compute room scale to fit - use reasonable scale
+  const roomW = 3292.51; // from skeleton.json width
+  const roomH = 2584.54; // from skeleton.json height
+  const roomScale = Math.min((w * 0.6) / roomW, (h * 0.6) / roomH, 0.8); // Better scale for apartment
+  room.mesh.scale.set(roomScale, roomScale, 1);
+
+  // Center the room mesh (the skeleton origin might be offset)
+  const roomCenterX = -1667.59 + (roomW / 2); // skeleton x + half width
+  const roomCenterY = -182.05 + (roomH / 2);  // skeleton y + half height
+  room.mesh.position.set(-roomCenterX * roomScale, -roomCenterY * roomScale, 0);
+
+  if (__DEV__) {
+    // Check room mesh bounds and position
+    room.mesh.updateMatrixWorld(true);
+    const bounds = new THREE.Box3().setFromObject(room.mesh);
+    console.log('buildApartmentScene: Room loaded', {
+      roomScale,
+      roomW,
+      roomH,
+      canvasW: w,
+      canvasH: h,
+      meshVisible: room.mesh.visible,
+      anchorsCount: room.anchors.size,
+      meshPosition: { x: room.mesh.position.x, y: room.mesh.position.y, z: room.mesh.position.z },
+      meshScale: { x: room.mesh.scale.x, y: room.mesh.scale.y, z: room.mesh.scale.z },
+      meshBounds: {
+        min: { x: bounds.min.x, y: bounds.min.y, z: bounds.min.z },
+        max: { x: bounds.max.x, y: bounds.max.y, z: bounds.max.z }
+      }
+    });
+  }
+
+  // Function to read a tile id → anchor in SCENE space (after scale)
+  const getAnchor = (id: string): Anchor | null => {
+    const a = room.anchors.get(id);
+    if (!a) return null;
+    // apply same scale as mesh
+    return {
+      ...a,
+      sceneX: a.sceneX * roomScale,
+      sceneY: a.sceneY * roomScale,
+    };
+  };
+
+  if (DEBUG_HIDE_ENVIRONMENT) {
+    room.mesh.visible = false;
+  }
+
+  // Make sure room is visible and set render order
+  room.mesh.visible = true;
+  room.mesh.renderOrder = 0;
+
+  // Force room mesh materials to be visible
+  room.mesh.traverse((child: THREE.Object3D) => {
+    if ((child as any).isMesh && (child as any).material) {
+      child.visible = true;
+      child.renderOrder = 0;
+      // Ensure materials are opaque and visible
+      const material = (child as any).material;
+      if (material.transparent !== undefined) {
+        material.transparent = true;
+        material.opacity = 1.0;
+      }
+      if (material.depthTest !== undefined) {
+        material.depthTest = false;
+      }
+      if (material.depthWrite !== undefined) {
+        material.depthWrite = false;
+      }
+      material.needsUpdate = true;
+    }
   });
 
-  const roomCtr = isoToScreenCentered((FLOOR_COLS - 1) / 2, (FLOOR_ROWS - 1) / 2);
-  const placeX = (sx: number) => sx - roomCtr.x;
-  const placeY = (sy: number) => roomCtr.y - sy;
-
-  const isoFeetToScene: IsoFeetToSceneFn = (x: number, y: number) => {
-    const c = isoToScreenCentered(x, y);
-    const feetY = c.y + (HALF_H + HALF_HEIGHT_NUDGE);
-    return { x: placeX(c.x), y: placeY(feetY), feetY };
-  };
-
-    const floorGeom = makeBottomPivotPlaneFull(TILE_W, TILE_H + TILE_SKIRT);
-    const wallGeom = makeBottomPivotPlaneFull(WALL_W, WALL_H + WALL_SKIRT);
-
-  const makeMaterial = (tex: THREE.Texture, colorFallback: number) => {
-    tex.flipY = false;
-    tex.wrapS = THREE.ClampToEdgeWrapping;
-    tex.wrapT = THREE.ClampToEdgeWrapping;
-    tex.generateMipmaps = false;
-    tex.minFilter = THREE.LinearFilter;
-    tex.magFilter = THREE.LinearFilter;
-    tex.needsUpdate = true;
-    return new THREE.MeshBasicMaterial({
-      map: tex,
-      color: colorFallback,
-      transparent: true,
-      depthTest: false,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-    });
-  };
-
-  const wallTex = atlas['wall_wood_sides1'];
-
-  for (let row = 0; row < FLOOR_ROWS; row++) {
-    for (let col = 0; col < FLOOR_COLS; col++) {
-      const key = pickFloorKeyByRect(row, col, FLOOR_ROWS, FLOOR_COLS);
-      const tex = atlas[key] ?? atlas['floor_wood_sides2'] ?? atlas['floor_wood_sides1'];
-      if (!tex) continue;
-      const mesh = new THREE.Mesh(floorGeom, makeMaterial(tex, 0x7d5a3c));
-      mesh.name = `floor_${row}_${col}`;
-      const c = isoToScreenCentered(col, row);
-      const feetY = c.y + (HALF_H + HALF_HEIGHT_NUDGE);
-      mesh.position.set(placeX(c.x), placeY(feetY), 0);
-      mesh.renderOrder = 1000 + Math.floor(feetY) * 10;
-      room.add(mesh);
-    }
-  }
-
-  if (wallTex) {
-    const wallMat = makeMaterial(wallTex, 0x6d6863);
-    for (let col = 0; col < FLOOR_COLS; col++) {
-      const m = new THREE.Mesh(wallGeom, wallMat);
-      const c = isoToScreenCentered(col, -1);
-      const topEdgeY = c.y - (HALF_H + HALF_HEIGHT_NUDGE);
-      m.position.set(placeX(c.x), placeY(topEdgeY) - BEVEL, 0);
-      m.renderOrder = 0;
-      room.add(m);
-    }
-
-    for (let row = 0; row < FLOOR_ROWS; row++) {
-      const m = new THREE.Mesh(wallGeom, wallMat);
-      const c = isoToScreenCentered(-1, row);
-      const topEdgeY = c.y - (HALF_H + HALF_HEIGHT_NUDGE);
-      m.position.set(placeX(c.x), placeY(topEdgeY) - BEVEL, 0);
-      m.scale.x = -1;
-      m.renderOrder = 1;
-      room.add(m);
-    }
-  }
-
-  if (room.children.length === 0) {
-    const placeholder = new THREE.Mesh(
-      new THREE.PlaneGeometry(300, 200),
-      new THREE.MeshBasicMaterial({ color: 0x2c2f44, side: THREE.DoubleSide })
-    );
-    placeholder.position.set(0, -40, 0);
-    room.add(placeholder);
-  }
-
-  const roomW = (FLOOR_COLS + FLOOR_ROWS - 1) * (HALF_W + HALF_WIDTH_NUDGE);
-  const roomH = (FLOOR_COLS + FLOOR_ROWS - 1) * (HALF_H + HALF_HEIGHT_NUDGE);
-  const scale = Math.min((w * 0.8) / roomW, (h * 0.8) / roomH, 1);
-  room.scale.set(scale, scale, scale);
-
-  room.userData.isoFeetToScene = isoFeetToScene;
-  
-  if (DEBUG_HIDE_ENVIRONMENT) {
-    room.children.forEach((child) => {
-      child.visible = false;
-    });
-  }
-
-  return { room, isoFeetToScene, roomScale: scale };
+  return { room, roomScale, getAnchor };
 }
 
-function pickFloorKeyByRect(row: number, col: number, rows: number, cols: number): string {
-  const atTop = row === 0;
-  const atBottom = row === rows - 1;
-  const atLeft = col === 0;
-  const atRight = col === cols - 1;
-
-  if (atTop && atLeft) return 'floor_wood_corner_left';
-  if (atTop && atRight) return 'floor_wood_corner_top';
-  if (atBottom && atRight) return 'floor_wood_corner_right';
-  if (atBottom && atLeft) return 'floor_wood_corner_bottom';
-
-  if (atTop) return (col & 1) ? 'floor_wood_side_top_right' : 'floor_wood_side_top_left';
-  if (atBottom) return (col & 1) ? 'floor_wood_side_bottom_right' : 'floor_wood_side_bottom_left';
-  if (atLeft) return (row & 1) ? 'floor_wood_side_top_left' : 'floor_wood_side_bottom_left';
-  if (atRight) return (row & 1) ? 'floor_wood_side_top_right' : 'floor_wood_side_bottom_right';
-
-  return 'floor_wood_sides2';
-}
 
 export default function IsometricHousingThreeJS({
   width = 300,
@@ -238,6 +192,7 @@ export default function IsometricHousingThreeJS({
   const isoFeetToSceneRef = useRef<IsoFeetToSceneFn | null>(null);
   const roomRef = useRef<THREE.Group | null>(null);
   const roomScaleRef = useRef(1);
+  const getAnchorRef = useRef<((id: string) => Anchor | null) | null>(null);
   const nativeCharacterHeightRef = useRef<number | null>(null);
   const spineRef = useRef<SpineCharacterController | null>(null);
   const lastTimeRef = useRef<number | null>(null);
@@ -293,13 +248,13 @@ export default function IsometricHousingThreeJS({
   const updateCharacterForFrame = (deltaSeconds: number) => {
     try {
       const controller = spineRef.current;
-      const isoFeetToScene = isoFeetToSceneRef.current;
+      const getAnchor = getAnchorRef.current;
       const room = roomRef.current;
-      if (!controller || !isoFeetToScene || !room) {
+      if (!controller || !getAnchor || !room) {
         if (__DEV__ && !missingLogRef.current) {
           console.log('Housing update missing deps', {
             hasController: !!controller,
-            hasIso: !!isoFeetToScene,
+            hasGetAnchor: !!getAnchor,
             hasRoom: !!room,
           });
           missingLogRef.current = true;
@@ -309,19 +264,91 @@ export default function IsometricHousingThreeJS({
 
       controller.update(deltaSeconds);
 
-      const currentIsoTile = characterPosRef.current;
-      const target = isoFeetToScene(currentIsoTile.x, currentIsoTile.y);
+      // Convert grid coordinates directly to tile ID using skeleton bone naming
+      let tileId: string;
+      if (gridColumn != null && gridRow != null) {
+        // Grid coordinates: gridRow 0-7 maps to rows A-H, gridColumn 0-7 maps to columns 1-8
+        const tileRow = String.fromCharCode(65 + gridRow); // A, B, C, etc.
+        const tileCol = gridColumn + 1; // 1, 2, 3, etc.
+        tileId = `${tileRow}${tileCol}`;
+
+        // Revert to original F2 target
+        console.log('Using original tileId:', tileId);
+      } else {
+        // Fallback to old conversion for characterX/characterY props
+        const currentIsoTile = characterPosRef.current;
+        const tileRow = String.fromCharCode(65 + currentIsoTile.y);
+        const tileCol = currentIsoTile.x + 1;
+        tileId = `${tileRow}${tileCol}`;
+      }
+
+      if (__DEV__ && !frameLogRef.current) {
+        console.log('Housing character position lookup', {
+          gridColumn, gridRow, tileId,
+          method: gridColumn != null && gridRow != null ? 'direct-grid' : 'iso-conversion'
+        });
+
+        // Debug: Show detailed anchor coordinate information
+        const getAnchorFn = getAnchorRef.current;
+        if (getAnchorFn) {
+          console.log('Target anchor F2:', getAnchorFn('F2'));
+          console.log('All tile anchors A1-H8:', {
+            'Row F': {
+              F1: getAnchorFn('F1'),
+              F2: getAnchorFn('F2'),
+              F3: getAnchorFn('F3'),
+              F4: getAnchorFn('F4')
+            },
+            'Column 2': {
+              E2: getAnchorFn('E2'),
+              F2: getAnchorFn('F2'),
+              G2: getAnchorFn('G2'),
+              H2: getAnchorFn('H2')
+            },
+            'Problem Area G3-G4': {
+              G3: getAnchorFn('G3'),
+              G4: getAnchorFn('G4')
+            }
+          });
+        }
+      }
+
+      const anchor = getAnchor(tileId);
+      if (!anchor) {
+        if (__DEV__) {
+          console.warn('Housing no anchor found for tile', {
+            tileId, gridColumn, gridRow,
+            availableAnchors: getAnchorRef.current ? 'function available' : 'no function'
+          });
+        }
+        // Try fallback position at center
+        const sk = controller.skeleton;
+        sk.x = 0;
+        sk.y = 0;
+        sk.scaleX = 0.5;
+        sk.scaleY = 0.5;
+        sk.updateWorldTransform({ update(){}, reset(){}, pose(){} } as any);
+        controller.mesh.refreshMeshes();
+        return;
+      }
+
       if (__DEV__) {
         const last = lastLoggedTileRef.current;
         const gridDebug = gridColumn != null && gridRow != null ? { column: gridColumn, row: gridRow } : undefined;
         const hasGridChanged = gridDebug
           ? !last || last.gridColumn !== gridDebug.column || last.gridRow !== gridDebug.row
           : false;
-        if (!last || last.x !== currentIsoTile.x || last.y !== currentIsoTile.y || hasGridChanged) {
-          console.log('Housing target iso', { iso: currentIsoTile, grid: gridDebug, target });
+
+        // For direct grid mode, use grid coordinates; for fallback, use iso coordinates
+        const currentCoords = gridColumn != null && gridRow != null
+          ? { x: gridColumn, y: gridRow }
+          : characterPosRef.current;
+
+        if (!last || last.x !== currentCoords.x || last.y !== currentCoords.y || hasGridChanged) {
+          console.log('Housing target anchor', { coords: currentCoords, tileId, anchor, grid: gridDebug });
           lastLoggedTileRef.current = {
-            x: currentIsoTile.x,
-            y: currentIsoTile.y,
+            x: currentCoords.x,
+            y: currentCoords.y,
             gridColumn: gridDebug?.column ?? null,
             gridRow: gridDebug?.row ?? null,
           };
@@ -348,6 +375,10 @@ export default function IsometricHousingThreeJS({
       const appliedLocalScale = desiredWorldScale / roomScale;
       const feet = controller.getFeetLocalPosition();
 
+      if (__DEV__) {
+        console.log('Raw feet position from controller:', feet);
+      }
+
       if (!Number.isFinite(appliedLocalScale)) {
         if (__DEV__ && !invalidTransformLogRef.current) {
           console.warn('Housing character scale invalid', {
@@ -363,44 +394,109 @@ export default function IsometricHousingThreeJS({
         return;
       }
 
-      const posX = target.x - feet.x * appliedLocalScale;
-      const posY = target.y - feet.y * appliedLocalScale;
-      const targetZ = zFromFeetScreenY(target.y);
+      // Position character using the Character bone (feet position)
+      const sk = controller.skeleton;
 
-      if (!Number.isFinite(posX) || !Number.isFinite(posY)) {
+      // Validate all values before applying
+      if (!Number.isFinite(anchor.spineX) || !Number.isFinite(anchor.spineY) ||
+          !Number.isFinite(feet.x) || !Number.isFinite(feet.y) ||
+          !Number.isFinite(appliedLocalScale) || appliedLocalScale <= 0) {
+        if (__DEV__) {
+          console.error('Housing: Invalid values detected', {
+            anchor: anchor,
+            feet: feet,
+            appliedLocalScale: appliedLocalScale
+          });
+        }
+        return;
+      }
+
+      // Make character much smaller
+      const finalScale = appliedLocalScale * 0.4; // Reduce character size
+      sk.scaleX = finalScale;
+      sk.scaleY = finalScale;
+
+      // The anchor coordinates are already in the room skeleton's local space
+      // Since character is a child of room mesh, we can use anchor.spineX/Y directly
+      const roomMesh = roomRef.current;
+      if (!roomMesh) {
+        if (__DEV__) {
+          console.error('Housing: Room mesh not available');
+        }
+        return;
+      }
+
+      // Position character at anchor, adjusted by feet offset
+      // Add offset to center character on tile instead of at bottom vertex
+      // Scale the offset based on room scale to maintain proper proportions
+      const baseTileCenterOffsetX = 0; // Adjust this value to center horizontally
+      const baseTileCenterOffsetY = 500; // Move up from bottom vertex to tile center (increased for visibility)
+
+      const scaledOffsetX = baseTileCenterOffsetX * roomScale;
+      const scaledOffsetY = baseTileCenterOffsetY * roomScale;
+
+      const calculatedX = anchor.spineX - feet.x * finalScale + scaledOffsetX;
+      const calculatedY = anchor.spineY - feet.y * finalScale + scaledOffsetY;
+
+      sk.x = calculatedX;
+      sk.y = calculatedY;
+
+      if (__DEV__) {
+        console.log('Character positioning calculation:', {
+          tileId,
+          anchor: { id: anchor.id, spineX: anchor.spineX, spineY: anchor.spineY },
+          feet: { x: feet.x, y: feet.y },
+          finalScale,
+          feetOffset: { x: feet.x * finalScale, y: feet.y * finalScale },
+          calculation: {
+            x: `${anchor.spineX} - ${feet.x * finalScale} + ${scaledOffsetX} = ${calculatedX}`,
+            y: `${anchor.spineY} - ${feet.y * finalScale} + ${scaledOffsetY} = ${calculatedY}`
+          },
+          tileOffset: { baseX: baseTileCenterOffsetX, baseY: baseTileCenterOffsetY, scaledX: scaledOffsetX, scaledY: scaledOffsetY },
+          result: { x: calculatedX, y: calculatedY }
+        });
+      }
+
+      // Validate final position before applying
+      if (!Number.isFinite(sk.x) || !Number.isFinite(sk.y)) {
         if (__DEV__ && !invalidTransformLogRef.current) {
           console.warn('Housing character position invalid', {
-            target,
+            anchor,
             feet,
             appliedLocalScale,
-            posX,
-            posY,
+            skX: sk.x,
+            skY: sk.y,
           });
           invalidTransformLogRef.current = true;
         }
         return;
       }
 
+      // Update skeleton and refresh meshes
+      try {
+        sk.updateWorldTransform({ update(){}, reset(){}, pose(){} } as any);
+        controller.mesh.refreshMeshes();
+      } catch (error) {
+        if (__DEV__) {
+          console.error('Housing: Error updating skeleton transform', error);
+        }
+        return;
+      }
+
       const mesh = controller.mesh;
-      mesh.position.set(posX, posY, targetZ);
-      mesh.scale.set(appliedLocalScale, appliedLocalScale, appliedLocalScale);
-      mesh.updateMatrix();
-      mesh.matrixWorldNeedsUpdate = true;
 
       if (invalidTransformLogRef.current) {
         invalidTransformLogRef.current = false;
       }
 
-      const sortFeetY = target.feetY ?? target.y;
+      const sortFeetY = anchor.sceneY;
       const roomChildren = room.children;
       const maxRoomOrder = roomChildren.reduce((max, child) => {
         if (child === mesh) return max;
         const order = child.renderOrder ?? 0;
         return order > max ? order : max;
       }, 0);
-      const desiredOrder = CHARACTER_RENDER_ORDER_BASE + Math.floor(sortFeetY) * 10;
-      const meshOrder = Math.max(desiredOrder, maxRoomOrder + 10);
-      mesh.renderOrder = meshOrder;
+      mesh.renderOrder = renderOrderFromFeetY(CHARACTER_RENDER_ORDER_BASE, sortFeetY, 5);
 
       const baseOrder = mesh.renderOrder;
       mesh.traverse((obj) => {
@@ -426,12 +522,21 @@ export default function IsometricHousingThreeJS({
       });
 
       if (__DEV__ && !frameLogRef.current) {
+        // Check if Character bone exists and its position
+        const characterBone = controller.characterBone;
         console.log('Housing character placement', {
-          target,
+          anchor,
+          tileId,
           roomScale,
           appliedLocalScale,
-          posX,
-          posY,
+          finalScale,
+          skeletonX: sk.x,
+          skeletonY: sk.y,
+          feet: feet,
+          renderOrder: mesh.renderOrder,
+          anchorSpineX: anchor.spineX,
+          anchorSpineY: anchor.spineY,
+          directSpineCoords: true
         });
         frameLogRef.current = true;
       }
@@ -467,17 +572,38 @@ export default function IsometricHousingThreeJS({
 
       const scene = new THREE.Scene();
       scene.background = new THREE.Color(0x1a1c2c);
-      const camera = new THREE.OrthographicCamera(-w / 2, w / 2, h / 2, -h / 2, 0.1, 2000);
-      camera.position.set(0, 0, 10);
-      camera.lookAt(0, 0, 0);
+
+      // Zoom out the camera to show more of the apartment
+      const zoomFactor = 4; // Zoom out by this factor
+      const camera = new THREE.OrthographicCamera(
+        (-w / 2) * zoomFactor,
+        (w / 2) * zoomFactor,
+        (h / 2) * zoomFactor,
+        (-h / 2) * zoomFactor,
+        0.1,
+        2000
+      );
+      // Move camera up to show the full apartment
+      camera.position.set(0, 1400, 10); // Move camera up by 100 units
+      camera.lookAt(0, 1400, 0); // Look at a point higher up as well
       camera.updateProjectionMatrix();
 
-      const atlas = await loadHousingTextureAtlas({ roomId });
-      const { room, isoFeetToScene, roomScale } = buildApartmentScene(scene, atlas, w, h);
-      console.log('Housing scene meshes', room.children.length);
-      isoFeetToSceneRef.current = isoFeetToScene;
-      roomRef.current = room;
+      console.log('Housing: About to build apartment scene');
+      let room, roomScale, getAnchor;
+      try {
+        const result = await buildApartmentScene(scene, w, h);
+        room = result.room;
+        roomScale = result.roomScale;
+        getAnchor = result.getAnchor;
+        console.log('Housing room loaded with', room.anchors.size, 'anchors');
+      } catch (error) {
+        console.error('Housing: Failed to build apartment scene', error);
+        throw error;
+      }
+
+      roomRef.current = room.mesh;
       roomScaleRef.current = roomScale;
+      getAnchorRef.current = getAnchor;
 
       const controller = await createSpineCharacterController({
         animation: animationRef.current,
@@ -487,7 +613,7 @@ export default function IsometricHousingThreeJS({
 
       controller.mesh.frustumCulled = false;
       nativeCharacterHeightRef.current = computeNativeCharacterHeight(controller.mesh);
-      room.add(controller.mesh);
+      room.mesh.add(controller.mesh);
 
       rendererRef.current = renderer;
       spineRef.current = controller;

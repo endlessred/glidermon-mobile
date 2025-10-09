@@ -356,7 +356,9 @@ export async function createSpineCharacterController(
       if (!characterBone) {
         return { x: 0, y: 0 };
       }
-      return { x: characterBone.worldX, y: characterBone.worldY };
+      // Return the local position of the character bone relative to the skeleton origin
+      // Use the bone's local setup position, not world coordinates
+      return { x: characterBone.x, y: characterBone.y };
     },
   };
 }
