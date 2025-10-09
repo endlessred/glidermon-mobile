@@ -19,13 +19,15 @@ export async function loadRoomSkeleton(): Promise<LoadedRoom> {
 
   const atlasModule = require('../../../assets/Apartment/skeleton.atlas');
   const jsonModule = require('../../../assets/Apartment/skeleton.json');
-  const textureModule = require('../../../assets/Apartment/skeleton.png');
+  const textureModule1 = require('../../../assets/Apartment/skeleton.png');
+  const textureModule2 = require('../../../assets/Apartment/skeleton_2.png');
 
   if (__DEV__) {
     console.log('RoomLoader: Asset modules loaded', {
       hasAtlas: !!atlasModule,
       hasJson: !!jsonModule,
-      hasTexture: !!textureModule,
+      hasTexture1: !!textureModule1,
+      hasTexture2: !!textureModule2,
     });
   }
 
@@ -34,7 +36,7 @@ export async function loadRoomSkeleton(): Promise<LoadedRoom> {
     const result = await loadSpineFromExpoAssets({
       atlasModule,
       jsonModule,
-      textureModules: [textureModule],
+      textureModules: [textureModule1, textureModule2],
       defaultMix: 0, // room is static
     });
     skeleton = result.skeleton;

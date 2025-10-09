@@ -1,11 +1,11 @@
 {
 "skeleton": {
-	"hash": "dvtONgoHKe4",
+	"hash": "7qN9CLNuiME",
 	"spine": "4.2.43",
-	"x": -1667.59,
-	"y": -182.05,
-	"width": 3292.51,
-	"height": 2584.54,
+	"x": -2602.44,
+	"y": -1349.69,
+	"width": 4523.9,
+	"height": 6144,
 	"images": "../Housing/",
 	"audio": "./audio"
 },
@@ -91,6 +91,8 @@
 	{ "name": "H8", "parent": "H7", "x": -197.11, "y": -110.77 }
 ],
 "slots": [
+	{ "name": "Sky", "bone": "root", "attachment": "Sky" },
+	{ "name": "Tree", "bone": "root", "attachment": "Tree" },
 	{ "name": "LeftBack8", "bone": "LeftBackWall", "attachment": "ApartmentWalls/WoodPaneling_EndWallTop" },
 	{ "name": "LeftBack7", "bone": "LeftBackWall", "attachment": "ApartmentWalls/WoodPaneling_Sides2" },
 	{ "name": "LeftBack6", "bone": "LeftBackWall", "attachment": "ApartmentWalls/WoodPaneling_Sides2" },
@@ -423,6 +425,12 @@
 			},
 			"RightBack8": {
 				"ApartmentWalls/WoodPaneling_EndWallBottom": { "x": 1082.11, "y": -125.53, "scaleX": -1, "width": 500, "height": 1000 }
+			},
+			"Sky": {
+				"Sky": { "x": -126.54, "y": 1300.75, "scaleX": 4, "scaleY": 4, "width": 1024, "height": 1024 }
+			},
+			"Tree": {
+				"Tree": { "x": -554.44, "y": 1722.31, "scaleX": 4, "scaleY": 4, "width": 1024, "height": 1536 }
 			}
 		}
 	}
