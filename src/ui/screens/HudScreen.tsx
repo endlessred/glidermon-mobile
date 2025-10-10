@@ -7,13 +7,13 @@ import AcornBadge from "../components/AcornBadge";
 import LevelBar from "../components/LevelBar";
 import DailyCapBar from "../components/DailyCapBar";
 import { useHudVM } from "../../data/hooks/useHudVM";
-import { IsometricHousingThreeJS } from "../../game/housing";
 import { useTheme } from "../../data/hooks/useTheme";
 import { getGlucoseColor, getTrendIcon } from "../../styles/theme";
 import GlucoseWindTrail from "../components/GlucoseWindTrail";
 import { useGlucoseHistory } from "../../data/hooks/useGlucoseHistory";
 import { useComplimentShower } from "../components/ComplimentShower";
 import { useActiveLocalOutfit } from "../../data/stores/outfitStore";
+import { IsometricHousingThreeJS } from "../../game/housing";
 
 export default function HudScreen() {
   const { width } = useWindowDimensions();
@@ -127,13 +127,13 @@ export default function HudScreen() {
             {glidermonName}
           </Text>
         )}
-        {/* Isometric apartment with character */}
+        {/* Isometric room with character at B3 */}
         <View style={{ width: 300, height: 250, overflow: 'hidden', borderRadius: 8 }}>
           <IsometricHousingThreeJS
             width={300}
             height={250}
             gridColumn={1}
-            gridRow={5}
+            gridRow={1}
             characterScale={0.5}
             outfit={localOutfit ?? undefined}
           />

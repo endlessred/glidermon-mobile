@@ -33,7 +33,8 @@
       "Bash(npx expo r:*)",
       "WebFetch(domain:github.com)",
       "Bash(npx tsc:*)",
-      "Bash(pnpm:*)"
+      "Bash(pnpm:*)",
+      "Bash(node:*)"
     ],
     "deny": [],
     "ask": []

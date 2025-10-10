@@ -1,149 +1,81 @@
 import * as THREE from 'three';
 import { Asset } from 'expo-asset';
-import { Physics } from '@esotericsoftware/spine-core';
+import { Physics } from '@esotericsoftware/spine-core';   // ← named import (match controller)
 import { loadSpineFromExpoAssets } from '../../../spine/loaders';
-import { AnchorMap, Anchor, boneNameToTileId } from '../anchors';
+import { AnchorMap, boneNameToTileId } from '../anchors';
 import { placeX, placeY } from '../isoPlacement';
 
 export type LoadedRoom = {
   skeleton: import('@esotericsoftware/spine-core').Skeleton;
-  mesh: any; // your SkeletonMesh type
+  state: import('@esotericsoftware/spine-core').AnimationState;
+  mesh: any;
   anchors: AnchorMap;
 };
 
-// Load a room skeleton (no physics needed; static)
 export async function loadRoomSkeleton(): Promise<LoadedRoom> {
-  if (__DEV__) {
-    console.log('RoomLoader: Starting to load room skeleton');
-  }
+  const atlasModule = require('../../../assets/Room/Room.atlas');
+  const jsonModule = require('../../../assets/Room/Room.json');
+  const textureModule1  = require('../../../assets/Room/Room.png');
+  const textureModule2  = require('../../../assets/Room/Room_2.png');
+  const textureModule3  = require('../../../assets/Room/Room_3.png');
+  const textureModule4  = require('../../../assets/Room/Room_4.png');
+  const textureModule5  = require('../../../assets/Room/Room_5.png');
+  const textureModule6  = require('../../../assets/Room/Room_6.png');
+  const textureModule7  = require('../../../assets/Room/Room_7.png');
+  const textureModule8  = require('../../../assets/Room/Room_8.png');
+  const textureModule9  = require('../../../assets/Room/Room_9.png');
+  const textureModule10 = require('../../../assets/Room/Room_10.png');
+  const textureModule11 = require('../../../assets/Room/Room_11.png');
+  const textureModule12 = require('../../../assets/Room/Room_12.png');
 
-  const atlasModule = require('../../../assets/Apartment/skeleton.atlas');
-  const jsonModule = require('../../../assets/Apartment/skeleton.json');
-  const textureModule1 = require('../../../assets/Apartment/skeleton.png');
-  const textureModule2 = require('../../../assets/Apartment/skeleton_2.png');
+  const result = await loadSpineFromExpoAssets({
+    atlasModule,
+    jsonModule,
+    textureModules: [
+      textureModule1, textureModule2, textureModule3, textureModule4,
+      textureModule5, textureModule6, textureModule7, textureModule8,
+      textureModule9, textureModule10, textureModule11, textureModule12
+    ],
+    defaultMix: 0,
+  });
 
-  if (__DEV__) {
-    console.log('RoomLoader: Asset modules loaded', {
-      hasAtlas: !!atlasModule,
-      hasJson: !!jsonModule,
-      hasTexture1: !!textureModule1,
-      hasTexture2: !!textureModule2,
-    });
-  }
+  const skeleton = result.skeleton;
+  const state    = result.state;
+  const resolveTexture = result.resolveTexture;
 
-  let skeleton, state, resolveTexture;
-  try {
-    const result = await loadSpineFromExpoAssets({
-      atlasModule,
-      jsonModule,
-      textureModules: [textureModule1, textureModule2],
-      defaultMix: 0, // room is static
-    });
-    skeleton = result.skeleton;
-    state = result.state;
-    resolveTexture = result.resolveTexture;
-  } catch (error) {
-    console.error('RoomLoader: Failed to load spine assets', error);
-    throw error;
-  }
-
-  if (__DEV__) {
-    console.log('RoomLoader: Spine assets loaded', {
-      skeletonBones: skeleton.bones?.length ?? 0,
-      skeletonSlots: skeleton.slots?.length ?? 0,
-    });
-  }
-
-  // ensure setup pose (so all bones are at authored transforms)
+  // Setup pose
   skeleton.setToSetupPose();
-
-  // Make sure all slots have their setup attachments
   for (let i = 0; i < skeleton.slots.length; i++) {
-    const slot = skeleton.slots[i];
-    slot.setToSetupPose();
+    skeleton.slots[i].setToSetupPose();
   }
 
-  // Use proper Spine physics for the room skeleton
-  skeleton.updateWorldTransform(Physics.update);
+  // ✅ Match controller: pass the Physics OBJECT (not .update) to satisfy TS/runtime
+  const PHYSICS: any = Physics as any;
+  try {
+    // Optional pre-tick to stabilize constraints at load; harmless if no-op
+    if (PHYSICS && typeof PHYSICS.update === 'function') {
+      PHYSICS.update(skeleton, 0);
+    }
+  } catch {}
+  skeleton.updateWorldTransform(PHYSICS);
 
-  // Build mesh (so you can show the walls / back layer if you kept them in)
+  // Build mesh
   const { SkeletonMesh } = require('../../../spine/SpineThree');
   const mesh = new SkeletonMesh(skeleton, state, resolveTexture);
   mesh.frustumCulled = false;
-
-  // Force refresh meshes to ensure textures are applied
   mesh.refreshMeshes();
 
-  if (__DEV__) {
-    console.log('RoomLoader: SkeletonMesh created', {
-      meshChildren: mesh.children?.length ?? 0,
-      meshVisible: mesh.visible,
-      hasResolveTexture: !!resolveTexture,
-    });
-
-    // Check if mesh has materials and attachments
-    console.log('RoomLoader: Skeleton slots with attachments:');
-    for (let i = 0; i < skeleton.slots.length; i++) {
-      const slot = skeleton.slots[i];
-      const attachment = slot.getAttachment();
-      if (attachment) {
-        console.log(`  Slot ${slot.data.name}: ${attachment.name || 'unnamed'}`);
-      }
-    }
-
-    mesh.traverse((child: any) => {
-      if (child.isMesh && child.material) {
-        console.log('RoomLoader: Found mesh child', {
-          name: child.name,
-          visible: child.visible,
-          materialType: child.material.type,
-          hasMap: !!(child.material.map),
-          hasGeometry: !!(child.geometry),
-          vertexCount: child.geometry?.attributes?.position?.count ?? 0,
-        });
-      }
-    });
-  }
-
-  // Scan tile bones
+  // Anchors from bones
   const anchors: AnchorMap = new Map();
-  const bones = skeleton.bones ?? [];
-  for (const b of bones) {
+  for (const b of skeleton.bones ?? []) {
     const id = boneNameToTileId((b as any)?.data?.name || (b as any)?.name || '');
     if (!id) continue;
-
-    const ax = b.worldX;
-    const ay = b.worldY;
-
-    // Validate bone world coordinates
-    if (!Number.isFinite(ax) || !Number.isFinite(ay)) {
-      if (__DEV__) {
-        console.warn(`RoomLoader: Invalid bone coordinates for ${id}:`, { ax, ay });
-      }
-      continue;
-    }
-
-    const sx = placeX(ax);
-    const sy = placeY(ay);
-
-    // Validate scene coordinates
-    if (!Number.isFinite(sx) || !Number.isFinite(sy)) {
-      if (__DEV__) {
-        console.warn(`RoomLoader: Invalid scene coordinates for ${id}:`, { sx, sy });
-      }
-      continue;
-    }
-
+    const ax = b.worldX, ay = b.worldY;
+    if (!Number.isFinite(ax) || !Number.isFinite(ay)) continue;
+    const sx = placeX(ax), sy = placeY(ay);
+    if (!Number.isFinite(sx) || !Number.isFinite(sy)) continue;
     anchors.set(id, { id, spineX: ax, spineY: ay, sceneX: sx, sceneY: sy });
   }
 
-  if (__DEV__) {
-    console.log('RoomLoader: Room loading complete', {
-      anchorsFound: anchors.size,
-      sampleAnchors: Array.from(anchors.entries()).slice(0, 3),
-      meshChildren: mesh.children?.length ?? 0,
-    });
-  }
-
-  return { skeleton, mesh, anchors };
+  return { skeleton, state, mesh, anchors };
 }
