@@ -9,7 +9,7 @@ export class RoomBuilder {
   }
 
   applyRoomLayout(config: RoomLayoutConfig): void {
-    if (__DEV__) {
+    if (__DEV__ && false) {
       console.log('RoomBuilder: Applying room layout', config.name);
     }
 
@@ -34,7 +34,7 @@ export class RoomBuilder {
     const physicsUpdate = (Physics as any)?.update;
     this.skeleton.updateWorldTransform(typeof physicsUpdate === "function" ? physicsUpdate : undefined);
 
-    if (__DEV__) {
+    if (__DEV__ && false) {
       console.log('RoomBuilder: Room layout applied successfully');
     }
   }
@@ -84,7 +84,7 @@ export class RoomBuilder {
     // For now, just log the furniture items
     config.furniture?.forEach(furnitureConfig => {
       if (__DEV__) {
-        console.log(`RoomBuilder: Furniture ${furnitureConfig.furniture.asset} at ${furnitureConfig.tileId}`);
+        // console.log(`RoomBuilder: Furniture ${furnitureConfig.furniture.asset} at ${furnitureConfig.tileId}`);
       }
     });
   }
@@ -165,7 +165,7 @@ export class RoomBuilder {
     if (targetAttachment) {
       slot.setAttachment(targetAttachment as any);
       if (__DEV__) {
-        console.log(`RoomBuilder: Set ${slot.data.name} to ${attachmentPath}`);
+        // console.log(`RoomBuilder: Set ${slot.data.name} to ${attachmentPath}`);
       }
     } else {
       if (__DEV__) {
@@ -281,7 +281,7 @@ export class RoomBuilder {
             }
 
             const afterAttachment = slot.getAttachment();
-            if (__DEV__) {
+            if (__DEV__ && false) {
               console.log(`RoomBuilder: Hiding slot ${tileId} (outside ${dimensions.width}x${dimensions.height})`, {
                 hadAttachment: !!beforeAttachment,
                 beforeName: beforeAttachment?.name || 'none',
@@ -349,7 +349,7 @@ export class RoomBuilder {
             }
           }
 
-          if (__DEV__) {
+          if (__DEV__ && false) {
             console.log(`RoomBuilder: Hiding wall slot ${wallId} (outside ${dimensions.width}x${dimensions.height})`, {
               hadAttachment: !!beforeAttachment,
               beforeName: beforeAttachment?.name || 'none'
@@ -382,7 +382,7 @@ export class RoomBuilder {
     }
 
     if (__DEV__) {
-      console.log('RoomBuilder: Found wall slots:', wallSlots);
+      // console.log('RoomBuilder: Found wall slots:', wallSlots);
     }
 
     return wallSlots;

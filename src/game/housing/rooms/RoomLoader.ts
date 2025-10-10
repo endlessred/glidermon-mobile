@@ -58,7 +58,7 @@ export async function loadRoomSkeleton(): Promise<LoadedRoom> {
       const leafEntry = state.setAnimation(0, 'LeafWind', true);
       // Slightly randomize timing for natural wind variation
       leafEntry.trackTime = Math.random() * leafWindAnim.duration;
-      if (__DEV__) {
+      if (__DEV__ && false) {
         console.log('RoomLoader: Set LeafWind animation on track 0', {
           duration: leafWindAnim.duration,
           startTime: leafEntry.trackTime,
@@ -73,7 +73,7 @@ export async function loadRoomSkeleton(): Promise<LoadedRoom> {
       const treeEntry = state.setAnimation(1, 'TreeTopWind', true);
       // Offset timing for more natural layered wind effect
       treeEntry.trackTime = Math.random() * treeTopWindAnim.duration;
-      if (__DEV__) {
+      if (__DEV__ && false) {
         console.log('RoomLoader: Set TreeTopWind animation on track 1', {
           duration: treeTopWindAnim.duration,
           startTime: treeEntry.trackTime,
@@ -88,7 +88,7 @@ export async function loadRoomSkeleton(): Promise<LoadedRoom> {
       const vinesEntry = state.setAnimation(2, 'VinesWind', true);
       // Different starting point for vine movement
       vinesEntry.trackTime = Math.random() * vinesWindAnim.duration;
-      if (__DEV__) {
+      if (__DEV__ && false) {
         console.log('RoomLoader: Set VinesWind animation on track 2', {
           duration: vinesWindAnim.duration,
           startTime: vinesEntry.trackTime,
@@ -97,19 +97,19 @@ export async function loadRoomSkeleton(): Promise<LoadedRoom> {
       }
     }
 
-    if (__DEV__) {
+    if (__DEV__ && false) {
       console.log('RoomLoader: All wind animations set up successfully on layered tracks');
 
       // Debug: log some skeleton structure info
-      console.log('RoomLoader: Skeleton has', skeleton.bones.length, 'bones and', skeleton.slots.length, 'slots');
+      // console.log('RoomLoader: Skeleton has', skeleton.bones.length, 'bones and', skeleton.slots.length, 'slots');
 
       // Log first few bones to see what's available
       const boneNames = skeleton.bones.slice(0, 10).map(b => b.data.name);
-      console.log('RoomLoader: First 10 bones:', boneNames);
+      // console.log('RoomLoader: First 10 bones:', boneNames);
 
       // Log animation info
       const animNames = skeleton.data.animations.map(a => a.name);
-      console.log('RoomLoader: Available animations:', animNames);
+      // console.log('RoomLoader: Available animations:', animNames);
     }
   } catch (error) {
     if (__DEV__) {

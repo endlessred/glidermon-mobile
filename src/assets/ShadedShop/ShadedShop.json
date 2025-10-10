@@ -1,0 +1,88 @@
+{
+"skeleton": {
+	"hash": "KuyZ7Q/0C+M",
+	"spine": "4.2.43",
+	"x": -3495.1,
+	"y": -1119.49,
+	"width": 7680,
+	"height": 5196.77,
+	"images": "",
+	"audio": "./audio"
+},
+"bones": [
+	{ "name": "root" },
+	{ "name": "Luma", "parent": "root", "x": -531.99, "y": 1176.51 },
+	{ "name": "Sable", "parent": "root", "x": 505.62, "y": 939.17 },
+	{ "name": "Character", "parent": "root", "x": -695.28, "y": 688.83 }
+],
+"slots": [
+	{ "name": "Sky", "bone": "root", "attachment": "Sky" },
+	{ "name": "Branch", "bone": "root", "color": "c7c7c7ff", "attachment": "Branch" },
+	{ "name": "ShadedShop", "bone": "root", "attachment": "ShadedShop" },
+	{ "name": "WallDecor_Painting2Frame3_FantasyWood", "bone": "root", "attachment": "WallDecor_Painting2Frame3_FantasyWood" },
+	{ "name": "WallDecor_PosterBand", "bone": "root", "attachment": "WallDecor_PosterBand" },
+	{ "name": "WallDecor_HatAndScarf_Purple", "bone": "root", "attachment": "WallDecor_HatAndScarf_Purple" },
+	{ "name": "WallDecor_LeafGarland_Green3", "bone": "root", "attachment": "WallDecor_LeafGarland_Green1" },
+	{ "name": "WallDecor_LeafGarland_Green2", "bone": "root", "attachment": "WallDecor_LeafGarland_Green1" },
+	{ "name": "WallDecor_LeafGarland_Green1", "bone": "root", "attachment": "WallDecor_LeafGarland_Green1" },
+	{ "name": "WallDecor_FoxMask_Yellow", "bone": "root", "attachment": "WallDecor_FoxMask_Yellow" },
+	{ "name": "WallDecor_Mask_Olive", "bone": "root", "attachment": "WallDecor_Mask_Olive" },
+	{ "name": "WallDecor_NeonSign_On_WarmLight", "bone": "root", "attachment": "WallDecor_NeonSign_On_WarmLight" }
+],
+"skins": [
+	{
+		"name": "default",
+		"attachments": {
+			"Branch": {
+				"Branch": { "x": 344.9, "y": 1517.28, "scaleX": 5, "scaleY": 5, "width": 1536, "height": 1024 }
+			},
+			"ShadedShop": {
+				"ShadedShop": { "x": -26.62, "y": 1526.63, "scaleX": 3, "scaleY": 3, "width": 1024, "height": 1024 }
+			},
+			"Sky": {
+				"Sky": { "x": -73.96, "y": 1440.51, "scaleX": 5, "scaleY": 5, "width": 1024, "height": 1024 }
+			},
+			"WallDecor_FoxMask_Yellow": {
+				"WallDecor_FoxMask_Yellow": { "color": "888888ff", "x": 433.5, "y": 1778.22, "scaleX": -1, "width": 500, "height": 1000 }
+			},
+			"WallDecor_HatAndScarf_Purple": {
+				"WallDecor_HatAndScarf_Purple": { "x": -189.34, "y": 2170.33, "width": 500, "height": 1000 }
+			},
+			"WallDecor_LeafGarland_Green1": {
+				"WallDecor_LeafGarland_Green1": { "x": -1325.7, "y": 1632.73, "width": 500, "height": 1000 }
+			},
+			"WallDecor_LeafGarland_Green2": {
+				"WallDecor_LeafGarland_Green1": { "x": -1134.45, "y": 1742.23, "width": 500, "height": 1000 }
+			},
+			"WallDecor_LeafGarland_Green3": {
+				"WallDecor_LeafGarland_Green1": { "x": -934.2, "y": 1849.11, "width": 500, "height": 1000 }
+			},
+			"WallDecor_Mask_Olive": {
+				"WallDecor_Mask_Olive": { "color": "767676ff", "x": 236.6, "y": 1860.97, "scaleX": -1, "width": 500, "height": 1000 }
+			},
+			"WallDecor_NeonSign_On_WarmLight": {
+				"WallDecor_NeonSign_On_WarmLight": {
+					"type": "mesh",
+					"uvs": [ 1, 1, 0, 1, 0, 0, 1, 0 ],
+					"triangles": [ 1, 2, 3, 1, 3, 0 ],
+					"vertices": [ 914.41, 902.32, 1414.41, 902.32, 1414.41, 1902.32, 914.41, 1902.32 ],
+					"hull": 4,
+					"edges": [ 0, 2, 2, 4, 4, 6, 0, 6 ],
+					"width": 500,
+					"height": 1000
+				},
+				"WallDecor_NeonSign_On_WarmLight2": { "type": "linkedmesh", "path": "WallDecor_NeonSign_Off_WarmLight", "parent": "WallDecor_NeonSign_On_WarmLight", "width": 500, "height": 1000 }
+			},
+			"WallDecor_Painting2Frame3_FantasyWood": {
+				"WallDecor_Painting2Frame3_FantasyWood": { "x": -349.31, "y": 2406.4, "width": 500, "height": 1000 }
+			},
+			"WallDecor_PosterBand": {
+				"WallDecor_PosterBand": { "color": "5f5f5fff", "x": 898.76, "y": 2040.26, "scaleX": -1, "width": 500, "height": 1000 }
+			}
+		}
+	}
+],
+"animations": {
+	"animation": {}
+}
+}

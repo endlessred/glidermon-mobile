@@ -83,7 +83,7 @@ async function buildApartmentScene(
   h: number,
   roomConfigName: string = 'cozy4x4'
 ): Promise<ApartmentBuild> {
-  if (__DEV__) console.log('buildApartmentScene: Starting room', { w, h, roomConfigName });
+  if (__DEV__ && false) console.log('buildApartmentScene: Starting room', { w, h, roomConfigName });
 
   const old = scene.getObjectByName(ROOM_NODE_NAME);
   if (old) scene.remove(old);
@@ -194,7 +194,7 @@ async function buildApartmentScene(
 
   // Wall slots should now be handled at the Spine level like floor tiles
 
-  if (__DEV__) {
+  if (__DEV__ && false) {
     console.log('buildApartmentScene: Applied 4x4 room configuration', {
       roomConfigName: roomConfig.name,
       dimensions: roomConfig.dimensions,
@@ -212,7 +212,7 @@ async function buildApartmentScene(
   const roomCenterY = -1000.42 + (roomH / 2);  // Room.json y + half height
   room.mesh.position.set(-roomCenterX * roomScale, -roomCenterY * roomScale, 0);
 
-  if (__DEV__) {
+  if (__DEV__ && false) {
     room.mesh.updateMatrixWorld(true);
     const bounds = new THREE.Box3().setFromObject(room.mesh);
     console.log('buildApartmentScene: Room loaded', {
@@ -392,7 +392,7 @@ export default function IsometricHousingThreeJS({
 
         // Reduced logging since animations are working
         if (__DEV__ && Math.random() < 0.001) {
-          console.log(`Housing: Setting up ${animName} animation`);
+          // console.log(`Housing: Setting up ${animName} animation`);
         }
 
         if (animation) {
@@ -445,7 +445,7 @@ export default function IsometricHousingThreeJS({
               (child as any).refreshMeshes();
               foundMesh = true;
               if (__DEV__) {
-                console.log('Housing: Refreshing room mesh (child object)');
+                // console.log('Housing: Refreshing room mesh (child object)');
               }
               break;
             }
@@ -467,7 +467,7 @@ export default function IsometricHousingThreeJS({
         // Debug: Find all bone names to see what the wind animations should target
         if (__DEV__ && Math.random() < 0.002) {
           const allBoneNames = roomSk.bones.map((bone: any) => bone.data.name);
-          console.log('Housing: All bone names in skeleton:', allBoneNames);
+          // console.log('Housing: All bone names in skeleton:', allBoneNames);
 
           // Also check if any bones have moved from their setup pose
           const movedBones = roomSk.bones.filter((bone: any) =>
@@ -477,17 +477,17 @@ export default function IsometricHousingThreeJS({
           );
 
           if (movedBones.length > 0) {
-            console.log('Housing: Bones that have moved from setup pose:', movedBones.slice(0, 5).map((bone: any) => ({
-              name: bone.data.name,
-              currentX: bone.x,
-              setupX: bone.data.x,
-              currentY: bone.y,
-              setupY: bone.data.y,
-              currentRotation: bone.rotation,
-              setupRotation: bone.data.rotation
-            })));
+            // console.log('Housing: Bones that have moved from setup pose:', movedBones.slice(0, 5).map((bone: any) => ({
+            //   name: bone.data.name,
+            //   currentX: bone.x,
+            //   setupX: bone.data.x,
+            //   currentY: bone.y,
+            //   setupY: bone.data.y,
+            //   currentRotation: bone.rotation,
+            //   setupRotation: bone.data.rotation
+            // })));
           } else {
-            console.log('Housing: No bones have moved from setup pose - animations may not be targeting existing bones');
+            // console.log('Housing: No bones have moved from setup pose - animations may not be targeting existing bones');
           }
         }
       }
@@ -689,7 +689,7 @@ controller.mesh.refreshMeshes();
       cameraRef.current = camera;
       updateCameraForZoom(camera, false, { x: 0, y: 0 });
 
-      console.log('Housing: About to build apartment scene');
+      // console.log('Housing: About to build apartment scene');
       let room, roomScale, getAnchor;
       try {
         const result = await buildApartmentScene(scene, w, h, roomConfig);
