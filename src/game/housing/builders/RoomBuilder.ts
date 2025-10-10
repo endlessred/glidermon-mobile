@@ -13,11 +13,17 @@ export class RoomBuilder {
       console.log('RoomBuilder: Applying room layout', config.name);
     }
 
+    // First, hide all slots outside the room dimensions
+    this.hideOutsideSlots(config.dimensions);
+
     // Apply floor configurations
     this.applyFloorLayout(config);
 
-    // Apply wall configurations
+    // Apply wall configurations (but only for walls within room dimensions)
     this.applyWallLayout(config);
+
+    // Hide wall slots that are outside the room dimensions
+    this.hideWallsOutsideRoom(config.dimensions);
 
     // Apply furniture configurations
     if (config.furniture) {
@@ -94,10 +100,11 @@ export class RoomBuilder {
   }
 
   private applyDefaultWall(defaultWall: { set: string; variant: string }): void {
-    // Apply to all wall slots
+    // Apply to all wall slots with intelligent variant selection
     const wallSlots = this.getWallSlots();
     wallSlots.forEach(wallId => {
-      this.setWallSlot(wallId, defaultWall.set as WallSetName, defaultWall.variant as WallVariant);
+      const variant = this.determineWallVariant(wallId);
+      this.setWallSlot(wallId, defaultWall.set as WallSetName, variant);
     });
   }
 
@@ -192,30 +199,193 @@ export class RoomBuilder {
     const isLeftCol = col === 1;
     const isRightCol = col === maxCol;
 
-    // Corner tiles (dark outlines on outside edges of isometric diamond)
-    if (isTopRow && isLeftCol) return 'CornerTop';      // Top corner of diamond
-    if (isTopRow && isRightCol) return 'CornerRight';   // Right corner of diamond
-    if (isBottomRow && isRightCol) return 'CornerBottom'; // Bottom corner of diamond
-    if (isBottomRow && isLeftCol) return 'CornerLeft';  // Left corner of diamond
+    // Corner tiles for isometric diamond view
+    if (isTopRow && isLeftCol) return 'CornerTop';        // A1 - Top corner of diamond
+    if (isTopRow && isRightCol) return 'CornerLeft';      // A4 - Left corner of diamond (from our view)
+    if (isBottomRow && isRightCol) return 'CornerBottom'; // D4 - Bottom corner of diamond
+    if (isBottomRow && isLeftCol) return 'CornerRight';   // D1 - Right corner of diamond (from our view)
 
-    // Edge tiles (dark outlines on the specified sides)
-    if (isTopRow) return 'SideTopLeft';     // Top edge - outline on top-left
-    if (isRightCol) return 'SideTopRight'; // Right edge - outline on top-right
-    if (isBottomRow) return 'SideBottomRight'; // Bottom edge - outline on bottom-right
-    if (isLeftCol) return 'SideBottomLeft'; // Left edge - outline on bottom-left
+    // Edge tiles for isometric diamond view
+    if (isTopRow) return 'SideTopLeft';        // A2, A3 - Top-left edge
+    if (isRightCol) return 'SideBottomLeft';   // B4, C4 - Left edge (from our view)
+    if (isBottomRow) return 'SideBottomRight'; // D2, D3 - Bottom-right edge
+    if (isLeftCol) return 'SideTopRight';      // B1, C1 - Right edge (from our view)
 
     // Interior tiles (completely surrounded by other tiles)
     return 'Sides2'; // No outlines - interior tile
   }
 
+  private determineWallVariant(wallId: string): WallVariant {
+    const match = wallId.match(/(\w+)(\d+)$/);
+    if (!match) {
+      return 'Sides2'; // Fallback
+    }
+
+    const wallType = match[1]; // e.g., "LeftBack", "RightBack"
+    const wallIndex = parseInt(match[2]); // 1-8
+
+    if (wallType === 'LeftBack') {
+      // LeftBack5,6,7,8 for 4x4 room (from bottom to top in isometric view)
+      switch (wallIndex) {
+        case 5: return 'EndWallBottom'; // Bottom end
+        case 6: return 'Sides2';        // Middle (no outlines)
+        case 7: return 'Sides2';        // Middle (no outlines)
+        case 8: return 'EndWallTop';    // Top end
+        default: return 'Sides2';
+      }
+    } else if (wallType === 'RightBack') {
+      // RightBack1,2,3,4 for 4x4 room (flipped horizontally, so 1 is top, 4 is bottom)
+      switch (wallIndex) {
+        case 1: return 'EndWallTop';    // Top end (flipped)
+        case 2: return 'Sides2';        // Middle (no outlines)
+        case 3: return 'Sides2';        // Middle (no outlines)
+        case 4: return 'EndWallBottom'; // Bottom end (flipped)
+        default: return 'Sides2';
+      }
+    }
+
+    return 'Sides2'; // Fallback for other wall types
+  }
+
+  private hideOutsideSlots(dimensions: { width: number; height: number }): void {
+    // Hide all floor and wall slots outside the specified dimensions
+    const maxRow = String.fromCharCode(65 + dimensions.height - 1); // A + height - 1
+    const maxCol = dimensions.width;
+
+    // Generate all possible tile IDs (A1-H8) and hide those outside our dimensions
+    for (let rowIndex = 0; rowIndex < 8; rowIndex++) {
+      const row = String.fromCharCode(65 + rowIndex); // A, B, C, D, E, F, G, H
+      for (let col = 1; col <= 8; col++) {
+        const tileId = `${row}${col}`;
+
+        // If this tile is outside our room dimensions, hide it
+        if (rowIndex >= dimensions.height || col > dimensions.width) {
+          const slot = this.skeleton.findSlot(tileId);
+          if (slot) {
+            const beforeAttachment = slot.getAttachment();
+            // Multiple approaches to completely hide the slot
+            slot.setAttachment(null); // Remove any attachment
+
+            // Safely set transparency
+            try {
+              if ((slot as any).color) {
+                (slot as any).color.a = 0; // Make it transparent
+              }
+              if ((slot as any).darkColor) {
+                (slot as any).darkColor.a = 0; // Also hide dark color
+              }
+            } catch (error) {
+              if (__DEV__) {
+                console.warn(`Failed to set slot transparency for ${tileId}:`, error);
+              }
+            }
+
+            const afterAttachment = slot.getAttachment();
+            if (__DEV__) {
+              console.log(`RoomBuilder: Hiding slot ${tileId} (outside ${dimensions.width}x${dimensions.height})`, {
+                hadAttachment: !!beforeAttachment,
+                beforeName: beforeAttachment?.name || 'none',
+                afterAttachment: !!afterAttachment,
+                afterName: afterAttachment?.name || 'none',
+                slotVisible: (slot as any).color?.a !== 0
+              });
+            }
+          }
+        }
+      }
+    }
+
+  }
+
+  private hideWallsOutsideRoom(dimensions: { width: number; height: number }): void {
+    // Hide wall slots that don't correspond to the actual room dimensions
+    // Wall naming convention: walls go from left to right
+    // - LeftBack: higher numbers (5,6,7,8) are on the left
+    // - RightBack: lower numbers (1,2,3,4) are on the right
+    const wallSlots = this.getWallSlots();
+    const roomSize = dimensions.width; // Assuming square rooms for now
+
+    wallSlots.forEach(wallId => {
+      let shouldHide = false;
+
+      const match = wallId.match(/(\w+)(\d+)$/);
+      if (match) {
+        const wallType = match[1]; // e.g., "LeftBack", "RightBack"
+        const wallIndex = parseInt(match[2]); // 1-8
+
+        if (wallType === 'LeftBack') {
+          // For LeftBack walls, show the rightmost walls for the room size
+          // For 4x4 room: show LeftBack5, LeftBack6, LeftBack7, LeftBack8
+          const minLeftIndex = 8 - roomSize + 1; // For 4x4: 8-4+1 = 5
+          if (wallIndex < minLeftIndex) {
+            shouldHide = true;
+          }
+        } else if (wallType === 'RightBack') {
+          // For RightBack walls, show the leftmost walls for the room size
+          // For 4x4 room: show RightBack1, RightBack2, RightBack3, RightBack4
+          if (wallIndex > roomSize) {
+            shouldHide = true;
+          }
+        }
+      }
+
+      if (shouldHide) {
+        const slot = this.skeleton.findSlot(wallId);
+        if (slot) {
+          const beforeAttachment = slot.getAttachment();
+          slot.setAttachment(null);
+
+          // Safely set transparency
+          try {
+            if ((slot as any).color) {
+              (slot as any).color.a = 0;
+            }
+            if ((slot as any).darkColor) {
+              (slot as any).darkColor.a = 0;
+            }
+          } catch (error) {
+            if (__DEV__) {
+              console.warn(`Failed to set wall slot transparency for ${wallId}:`, error);
+            }
+          }
+
+          if (__DEV__) {
+            console.log(`RoomBuilder: Hiding wall slot ${wallId} (outside ${dimensions.width}x${dimensions.height})`, {
+              hadAttachment: !!beforeAttachment,
+              beforeName: beforeAttachment?.name || 'none'
+            });
+          }
+        }
+      }
+    });
+  }
+
   private getWallSlots(): string[] {
-    // Return common wall slot IDs - this could be made configurable
-    return [
-      'LeftBack1', 'LeftBack2', 'LeftBack3', 'LeftBack4',
-      'RightBack1', 'RightBack2', 'RightBack3', 'RightBack4',
-      'LeftFront1', 'LeftFront2', 'LeftFront3', 'LeftFront4',
-      'RightFront1', 'RightFront2', 'RightFront3', 'RightFront4'
-    ];
+    // Dynamically find all wall slots in the skeleton
+    const wallSlots: string[] = [];
+
+    for (let i = 0; i < this.skeleton.slots.length; i++) {
+      const slot = this.skeleton.slots[i];
+      const slotName = slot.data.name;
+
+      // Check if this slot name looks like a wall slot
+      // Wall slots typically contain "Wall", "Back", "Front", "Left", "Right", etc.
+      if (slotName && (
+        slotName.includes('Wall') ||
+        slotName.includes('Back') ||
+        slotName.includes('Front') ||
+        slotName.includes('Left') ||
+        slotName.includes('Right')
+      )) {
+        wallSlots.push(slotName);
+      }
+    }
+
+    if (__DEV__) {
+      console.log('RoomBuilder: Found wall slots:', wallSlots);
+    }
+
+    return wallSlots;
   }
 
   // Utility method to validate room configuration

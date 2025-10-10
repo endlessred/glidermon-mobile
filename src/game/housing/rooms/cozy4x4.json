@@ -1,0 +1,47 @@
+{
+  "name": "Cozy 4x4 Room",
+  "dimensions": {
+    "width": 4,
+    "height": 4
+  },
+  "defaultFloor": {
+    "set": "YellowCarpet",
+    "variant": "Sides2"
+  },
+  "defaultWall": {
+    "set": "Brown1WoodPaneling",
+    "variant": "Sides1"
+  },
+  "floors": [
+    {
+      "tileId": "B2",
+      "floor": {
+        "set": "RedCarpet",
+        "variant": "Sides2"
+      }
+    },
+    {
+      "tileId": "C2",
+      "floor": {
+        "set": "RedCarpet",
+        "variant": "Sides2"
+      }
+    },
+    {
+      "tileId": "B3",
+      "floor": {
+        "set": "RedCarpet",
+        "variant": "Sides2"
+      }
+    },
+    {
+      "tileId": "C3",
+      "floor": {
+        "set": "RedCarpet",
+        "variant": "Sides2"
+      }
+    }
+  ],
+  "walls": [],
+  "furniture": []
+}

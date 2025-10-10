@@ -9,7 +9,7 @@ import {
   HousingRoomId,
 } from '../assets/textureAtlas';
 import { TILE_H, zFromFeetScreenY } from '../coords';
-import { loadRoomSkeleton, LoadedRoom } from '../rooms/RoomLoader';
+import { loadRoomSkeleton, LoadedRoom, loadRoomConfig } from '../rooms/RoomLoader';
 import { AnchorMap, Anchor, renderOrderFromFeetY } from '../anchors';
 import {
   createSpineCharacterController,
@@ -32,6 +32,7 @@ interface IsometricHousingThreeJSProps {
   animation?: string;
   outfit?: OutfitSlot | null;
   roomId?: HousingRoomId;
+  roomConfig?: string; // Name of room config to load from JSON
 }
 
 const ROOM_NODE_NAME = 'COZY_4X4_ROOM';
@@ -74,28 +75,15 @@ type ApartmentBuild = {
   roomBuilder: RoomBuilder;
 };
 
-// Create a cozy 4x4 room configuration for the HUD
-const create4x4CozyRoom = (): RoomLayoutConfig => ({
-  name: 'Cozy 4x4 Room',
-  dimensions: { width: 4, height: 4 },
-  defaultFloor: { set: 'YellowCarpet', variant: 'Sides2' },
-  defaultWall: { set: 'Brown1WoodPaneling', variant: 'Sides1' },
-  floors: [
-    { tileId: 'B2', floor: { set: 'RedCarpet', variant: 'Sides2' } },
-    { tileId: 'C2', floor: { set: 'RedCarpet', variant: 'Sides2' } },
-    { tileId: 'B3', floor: { set: 'RedCarpet', variant: 'Sides2' } },
-    { tileId: 'C3', floor: { set: 'RedCarpet', variant: 'Sides2' } },
-  ],
-  walls: [],
-  furniture: []
-});
+// Room configuration is now loaded from JSON files
 
 async function buildApartmentScene(
   scene: THREE.Scene,
   w: number,
-  h: number
+  h: number,
+  roomConfigName: string = 'cozy4x4'
 ): Promise<ApartmentBuild> {
-  if (__DEV__) console.log('buildApartmentScene: Starting 4x4 cozy room', { w, h });
+  if (__DEV__) console.log('buildApartmentScene: Starting room', { w, h, roomConfigName });
 
   const old = scene.getObjectByName(ROOM_NODE_NAME);
   if (old) scene.remove(old);
@@ -105,10 +93,114 @@ async function buildApartmentScene(
   room.mesh.name = ROOM_NODE_NAME;
   scene.add(room.mesh);
 
-  // Create room builder and apply 4x4 configuration
+  // Create room builder and apply configuration from JSON
   const roomBuilder = new RoomBuilder(room.skeleton);
-  const roomConfig = create4x4CozyRoom();
+  const roomConfig = loadRoomConfig(roomConfigName);
   roomBuilder.applyRoomLayout(roomConfig);
+
+  // Re-setup wind animations AFTER room layout is applied
+  if (__DEV__) {
+    console.log('Re-setting up wind animations after room layout');
+  }
+
+  try {
+    // Re-setup the 3 wind animations that may have been cleared
+    const skeleton = room.skeleton;
+    const state = room.state;
+
+    // Track 0: LeafWind animation
+    const leafWindAnim = skeleton.data.findAnimation('LeafWind');
+    if (leafWindAnim) {
+      const leafEntry = state.setAnimation(0, 'LeafWind', true);
+      leafEntry.trackTime = Math.random() * leafWindAnim.duration;
+      if (__DEV__) {
+        console.log('Re-set LeafWind animation on track 0');
+      }
+    }
+
+    // Track 1: TreeTopWind animation
+    const treeTopWindAnim = skeleton.data.findAnimation('TreeTopWind');
+    if (treeTopWindAnim) {
+      const treeEntry = state.setAnimation(1, 'TreeTopWind', true);
+      treeEntry.trackTime = Math.random() * treeTopWindAnim.duration;
+      if (__DEV__) {
+        console.log('Re-set TreeTopWind animation on track 1');
+      }
+    }
+
+    // Track 2: VinesWind animation
+    const vinesWindAnim = skeleton.data.findAnimation('VinesWind');
+    if (vinesWindAnim) {
+      const vinesEntry = state.setAnimation(2, 'VinesWind', true);
+      vinesEntry.trackTime = Math.random() * vinesWindAnim.duration;
+      if (__DEV__) {
+        console.log('Re-set VinesWind animation on track 2');
+      }
+    }
+  } catch (error) {
+    if (__DEV__) {
+      console.warn('Failed to re-setup wind animations:', error);
+    }
+  }
+
+  if (__DEV__) {
+    // Check animation state before mesh rebuild
+    console.log('Before mesh rebuild - animation tracks:', room.state.tracks.length);
+    for (let i = 0; i < room.state.tracks.length; i++) {
+      const track = room.state.tracks[i];
+      if (track) {
+        console.log(`Track ${i}:`, track.animation?.name);
+      }
+    }
+  }
+
+  // Force mesh to fully rebuild by creating new SkeletonMesh
+  const oldMesh = room.mesh;
+  const oldResolveTexture = (oldMesh as any).resolveTexture;
+
+  // Remove old mesh from scene
+  scene.remove(oldMesh);
+
+  // Dispose old mesh
+  if (typeof oldMesh.dispose === 'function') {
+    oldMesh.dispose();
+  }
+
+  // Rebuild mesh from scratch with updated skeleton
+  const { SkeletonMesh } = require('../../../spine/SpineThree');
+  const newMesh = new SkeletonMesh(room.skeleton, room.state, oldResolveTexture);
+  newMesh.name = ROOM_NODE_NAME;
+  newMesh.frustumCulled = false;
+
+  // Update room reference to new mesh and add to scene
+  room.mesh = newMesh;
+  scene.add(newMesh);
+
+  // Force skeleton update and mesh refresh
+  const PHYSICS: any = (Physics as any);
+  room.skeleton.updateWorldTransform(PHYSICS);
+  newMesh.refreshMeshes();
+
+  if (__DEV__) {
+    // Check animation state after mesh rebuild
+    console.log('After mesh rebuild - animation tracks:', room.state.tracks.length);
+    for (let i = 0; i < room.state.tracks.length; i++) {
+      const track = room.state.tracks[i];
+      if (track) {
+        console.log(`Track ${i}:`, track.animation?.name);
+      }
+    }
+  }
+
+  // Wall slots should now be handled at the Spine level like floor tiles
+
+  if (__DEV__) {
+    console.log('buildApartmentScene: Applied 4x4 room configuration', {
+      roomConfigName: roomConfig.name,
+      dimensions: roomConfig.dimensions,
+      floorsConfigured: roomConfig.floors.length,
+    });
+  }
 
   // Scale & position room
   const roomW = 4202.88; // from Room.json width
@@ -175,6 +267,7 @@ export default function IsometricHousingThreeJS({
   animation = 'idle',
   outfit,
   roomId = DEFAULT_HOUSING_ROOM_ID,
+  roomConfig = 'cozy4x4',
 }: IsometricHousingThreeJSProps) {
   const catalog = useCosmeticsStore((state) => state.catalog);
 
@@ -270,17 +363,134 @@ export default function IsometricHousingThreeJS({
     rendererRef.current?.dispose();
   }, []);
 
+  // Helper to ensure wind animations stay active
+  const ensureWindAnimationsActive = (roomSt: any, roomSk: any) => {
+    const windAnimations = ['LeafWind', 'TreeTopWind', 'VinesWind'];
+
+    // Debug occasionally (animations are working, reduce noise)
+    if (__DEV__ && Math.random() < 0.001) {
+      console.log('ensureWindAnimationsActive check:', {
+        totalTracks: roomSt.tracks.length,
+        trackStates: roomSt.tracks.map((track: any, i: number) => ({
+          index: i,
+          hasTrack: !!track,
+          animation: track?.animation?.name,
+          isComplete: track?.isComplete?.() || false
+        }))
+      });
+    }
+
+    for (let trackIndex = 0; trackIndex < 3; trackIndex++) {
+      const track = roomSt.tracks[trackIndex];
+      const animName = windAnimations[trackIndex];
+
+      // Check if track is empty or animation is complete
+      if (!track || track.isComplete()) {
+        // Debug: check what animations are available
+        const availableAnimations = roomSk.data.animations.map((a: any) => a.name);
+        const animation = roomSk.data.findAnimation(animName);
+
+        // Reduced logging since animations are working
+        if (__DEV__ && Math.random() < 0.001) {
+          console.log(`Housing: Setting up ${animName} animation`);
+        }
+
+        if (animation) {
+          try {
+            const entry = roomSt.setAnimation(trackIndex, animName, true);
+
+            // Reduced logging - we know animations are setting up correctly
+
+            if (entry) {
+              entry.trackTime = Math.random() * animation.duration;
+            }
+          } catch (error) {
+            if (__DEV__) {
+              console.error(`Housing: Error setting animation ${animName}:`, error);
+            }
+          }
+        } else {
+          if (__DEV__) {
+            console.warn(`Housing: Could not find animation ${animName} to restart`);
+          }
+        }
+      }
+    }
+  };
+
   const updateCharacterForFrame = (deltaSeconds: number) => {
     try {
       // FIRST: advance room animation + physics every frame
       const roomSk = roomSkeletonRef.current;
-const roomSt = roomStateRef.current;
-if (roomSk && roomSt) {
-  roomSt.update(deltaSeconds);
-roomSt.apply(roomSk);
-const PHYSICS: any = Physics as any;       // ← object, not .update
-roomSk.updateWorldTransform(PHYSICS);
-}
+      const roomSt = roomStateRef.current;
+      const roomObj = roomRef.current;
+      if (roomSk && roomSt && roomObj) {
+        roomSt.update(deltaSeconds);
+        roomSt.apply(roomSk);
+        roomSk.update(deltaSeconds);  // Add skeleton update step
+        const PHYSICS: any = Physics as any;
+        roomSk.updateWorldTransform(PHYSICS);
+
+        // Find and refresh the room's SkeletonMesh FIRST
+        let foundMesh = false;
+        if ((roomObj as any).refreshMeshes) {
+          // Room itself is the SkeletonMesh
+          (roomObj as any).refreshMeshes();
+          foundMesh = true;
+          // Mesh refresh working - reduced logging
+        } else if (roomObj.children) {
+          // Look for SkeletonMesh in children
+          for (const child of roomObj.children) {
+            if ((child as any).refreshMeshes) {
+              (child as any).refreshMeshes();
+              foundMesh = true;
+              if (__DEV__) {
+                console.log('Housing: Refreshing room mesh (child object)');
+              }
+              break;
+            }
+          }
+        }
+
+        if (__DEV__ && !foundMesh) {
+          console.warn('Housing: Could not find SkeletonMesh to refresh for room animations', {
+            roomObjType: roomObj.constructor.name,
+            hasRefreshMeshes: !!(roomObj as any).refreshMeshes,
+            childrenCount: roomObj.children?.length || 0,
+            childrenTypes: roomObj.children?.map((c: any) => c.constructor.name) || []
+          });
+        }
+
+        // Ensure wind animations keep playing AFTER mesh refresh
+        ensureWindAnimationsActive(roomSt, roomSk);
+
+        // Debug: Find all bone names to see what the wind animations should target
+        if (__DEV__ && Math.random() < 0.002) {
+          const allBoneNames = roomSk.bones.map((bone: any) => bone.data.name);
+          console.log('Housing: All bone names in skeleton:', allBoneNames);
+
+          // Also check if any bones have moved from their setup pose
+          const movedBones = roomSk.bones.filter((bone: any) =>
+            Math.abs(bone.x - bone.data.x) > 0.01 ||
+            Math.abs(bone.y - bone.data.y) > 0.01 ||
+            Math.abs(bone.rotation - bone.data.rotation) > 0.01
+          );
+
+          if (movedBones.length > 0) {
+            console.log('Housing: Bones that have moved from setup pose:', movedBones.slice(0, 5).map((bone: any) => ({
+              name: bone.data.name,
+              currentX: bone.x,
+              setupX: bone.data.x,
+              currentY: bone.y,
+              setupY: bone.data.y,
+              currentRotation: bone.rotation,
+              setupRotation: bone.data.rotation
+            })));
+          } else {
+            console.log('Housing: No bones have moved from setup pose - animations may not be targeting existing bones');
+          }
+        }
+      }
 
       // THEN: character controller
       const controller = spineRef.current;
@@ -313,12 +523,6 @@ roomSk.updateWorldTransform(PHYSICS);
         tileId = `${tileRow}${tileCol}`;
       }
 
-      if (__DEV__ && !frameLogRef.current) {
-        console.log('Housing character position lookup', {
-          gridColumn, gridRow, tileId,
-          method: gridColumn != null && gridRow != null ? 'direct-grid' : 'iso-conversion'
-        });
-      }
 
       const anchor = getAnchor(tileId);
       if (!anchor) {
@@ -488,7 +692,7 @@ controller.mesh.refreshMeshes();
       console.log('Housing: About to build apartment scene');
       let room, roomScale, getAnchor;
       try {
-        const result = await buildApartmentScene(scene, w, h);
+        const result = await buildApartmentScene(scene, w, h, roomConfig);
         room = result.room;
         roomScale = result.roomScale;
         getAnchor = result.getAnchor;

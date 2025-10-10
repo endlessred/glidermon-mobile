@@ -1,0 +1,26 @@
+{
+  "name": "Basic 3x3 Room",
+  "dimensions": {
+    "width": 3,
+    "height": 3
+  },
+  "defaultFloor": {
+    "set": "StripedFloor2",
+    "variant": "Sides2"
+  },
+  "defaultWall": {
+    "set": "Brown1WoodPaneling",
+    "variant": "Sides1"
+  },
+  "floors": [
+    {
+      "tileId": "B2",
+      "floor": {
+        "set": "YellowCarpet",
+        "variant": "Sides2"
+      }
+    }
+  ],
+  "walls": [],
+  "furniture": []
+}
