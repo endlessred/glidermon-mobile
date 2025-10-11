@@ -8,27 +8,58 @@ const _origUpdate = (Skeleton.prototype as any).updateWorldTransform as (
   physics: any
 ) => void;
 
+// Create a standardized physics object that works across versions
+const STANDARD_PHYSICS = {
+  update: Physics.update || (() => {}),
+  reset: Physics.reset || (() => {}),
+  pose: Physics.pose || (() => {}),
+  translate: Physics.translate || (() => {}),
+  rotate: Physics.rotate || (() => {}),
+};
+
 // Replace with a tolerant wrapper
 (Skeleton.prototype as any).updateWorldTransform = function patchedUpdateWorldTransform(arg?: any) {
-  // Preferred default: the Physics object exported by the runtime.
-  let phys: any = Physics as any;
+  // Determine what physics object to use
+  let physicsArg: any = STANDARD_PHYSICS;
 
-  // If the caller passed something that looks like a Physics object (has an .update fn), trust it.
-  if (arg && typeof arg === 'object' && typeof arg.update === 'function') {
-    phys = arg;
+  // If the caller passed Physics.update (function), wrap it in an object
+  if (typeof arg === 'function') {
+    physicsArg = {
+      update: arg,
+      reset: () => {},
+      pose: () => {},
+      translate: () => {},
+      rotate: () => {},
+    };
   }
-
-  // If the caller passed the *function* (Physics.update), ignore it and use the object.
-  // If they passed undefined or nothing, we still use the object above.
+  // If the caller passed a proper Physics object, use it
+  else if (arg && typeof arg === 'object' && typeof arg.update === 'function') {
+    physicsArg = arg;
+  }
+  // For undefined/null/other, use our standard physics object
 
   try {
-    return _origUpdate.call(this, phys);
+    return _origUpdate.call(this, physicsArg);
   } catch (e) {
-    // As a last resort, attempt calling with undefined (older runtimes tolerate it)
+    // Fallback strategies for different Spine versions
+    console.warn('Physics updateWorldTransform failed, trying fallbacks:', e);
+
+    // Try with just the Physics object itself
     try {
-      return _origUpdate.call(this, undefined);
-    } catch {
-      // swallow — prevents hard crash during early init
+      return _origUpdate.call(this, Physics);
+    } catch (e2) {
+      // Try with undefined (older versions)
+      try {
+        return _origUpdate.call(this, undefined);
+      } catch (e3) {
+        // Last resort: call without arguments if the method signature allows it
+        try {
+          return _origUpdate.call(this);
+        } catch (e4) {
+          console.error('All physics fallbacks failed:', { e, e2, e3, e4 });
+          // Don't throw - just skip physics update to prevent crashes
+        }
+      }
     }
   }
 };

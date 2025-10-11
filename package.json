@@ -15,8 +15,8 @@
   "dependencies": {
     "@babel/runtime": "^7.28.3",
     "@esotericsoftware/spine-canvaskit": "4.2.92",
-    "@esotericsoftware/spine-core": "4.2.93",
-    "@esotericsoftware/spine-threejs": "^4.2.93",
+    "@esotericsoftware/spine-core": "4.2.43",
+    "@esotericsoftware/spine-threejs": "^4.2.43",
     "@esotericsoftware/spine-ts": "^4.2.13",
     "@expo/metro-runtime": "~3.2.3",
     "@react-native-async-storage/async-storage": "^2.2.0",

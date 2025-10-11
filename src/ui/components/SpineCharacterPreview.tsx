@@ -18,6 +18,7 @@ import {
 import { SkeletonMesh } from "../../spine/SpineThree";
 import { LifelikeIdleNoMix } from "../../game/view/lifelikeIdle_noMix";
 import { makeMaskRecolorMaterial } from "../../spine/MaskRecolor";
+import { applySubtleWindGusts } from "../../../utils/spinePhysics";
 import { makeHueIndexedRecolorMaterial } from "../../spine/HueIndexedRecolor";
 import { normalizeMaterialForSlot } from "../../spine/SpineThree";
 import { useTheme } from "../../data/hooks/useTheme";
@@ -168,7 +169,7 @@ export default function SpineCharacterPreview({
         }
 
         // Keep our attachment switches; just recompute world transforms
-        skeleton.updateWorldTransform(Physics.update);
+        skeleton.updateWorldTransform(Physics);
 
         // Verify the switches stuck
         console.log('🔎 Preview: Verifying attachment switches:');
@@ -264,7 +265,7 @@ export default function SpineCharacterPreview({
       if (skin) {
         skeleton.setSkin(skin);
         skeleton.setToSetupPose();
-        skeleton.updateWorldTransform(Physics.update);
+        skeleton.updateWorldTransform(Physics);
         console.log(`✅ Applied character preview skin: ${skinName}`);
       }
     } else {
@@ -409,6 +410,13 @@ export default function SpineCharacterPreview({
         idleDriver.update(delta);
         skeleton.update(delta);
         state.apply(skeleton);
+
+        // Apply wind gusts to make physics visible
+        const currentTime = now;
+        applySubtleWindGusts(skeleton, currentTime);
+
+        // Update physics before world transform
+        // Physics.update is a constant, not a function - pass it to updateWorldTransform
         skeleton.updateWorldTransform(Physics.update);
         mesh.refreshMeshes();
 

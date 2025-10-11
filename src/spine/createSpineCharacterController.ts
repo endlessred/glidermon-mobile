@@ -13,6 +13,7 @@ import { makeHueIndexedRecolorMaterial } from "./HueIndexedRecolor";
 import { LifelikeIdleNoMix } from "../game/view/lifelikeIdle_noMix";
 import { OutfitSlot } from "../data/types/outfitTypes";
 import { CosmeticItem } from "../data/stores/cosmeticsStore";
+import { applySubtleWindGusts } from "../../utils/spinePhysics";
 
 export type SpineCharacterControllerOptions = {
   animation?: string;
@@ -46,14 +47,8 @@ const DEFAULT_CHARACTER_BONE = "Character";
 const PHYSICS: any = Physics as any;
 
 function updateWorldXform(skeleton: Skeleton, dt = 0) {
-  if (PHYSICS && typeof PHYSICS.update === "function") {
-    try {
-      PHYSICS.update(skeleton, dt);
-    } catch {
-      // no-op if physics not compiled in
-    }
-  }
-  skeleton.updateWorldTransform(PHYSICS);
+  // Physics.update is a constant, not a function - pass it directly to updateWorldTransform
+  skeleton.updateWorldTransform(PHYSICS.update);
 }
 
 // Use a simple string[] so .includes(slotName) accepts any string without TS errors
@@ -341,6 +336,11 @@ export async function createSpineCharacterController(
       idleDriver.update(deltaSeconds);
       skeleton.update(deltaSeconds);
       state.apply(skeleton);
+
+      // Apply wind gusts to make physics visible
+      const currentTime = performance.now() / 1000; // Convert to seconds
+      applySubtleWindGusts(skeleton, currentTime);
+
       updateWorldXform(skeleton, deltaSeconds);
       mesh.refreshMeshes();
       characterBone = skeleton.findBone(characterBoneName) || undefined;

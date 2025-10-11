@@ -31,8 +31,8 @@ export class RoomBuilder {
     }
 
     // Update skeleton to reflect changes
-    const physicsUpdate = (Physics as any)?.update;
-    this.skeleton.updateWorldTransform(typeof physicsUpdate === "function" ? physicsUpdate : undefined);
+    const PHYSICS = (Physics as any);
+    this.skeleton.updateWorldTransform(PHYSICS.update);
 
     if (__DEV__ && false) {
       console.log('RoomBuilder: Room layout applied successfully');

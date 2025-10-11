@@ -1,5 +1,5 @@
 // App.tsx
-import './src/spine/spinePhysicsShim';
+// import './src/spine/spinePhysicsShim'; // Temporarily removed to debug physics issues
 import React, { useState, useEffect } from "react";
 import { Platform, SafeAreaView, View, Text, Pressable, AppState } from "react-native";
 import { useProgressionStore } from "./src/data/stores/progressionStore";

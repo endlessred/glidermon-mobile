@@ -178,7 +178,7 @@ async function buildApartmentScene(
 
   // Force skeleton update and mesh refresh
   const PHYSICS: any = (Physics as any);
-  room.skeleton.updateWorldTransform(PHYSICS);
+  room.skeleton.updateWorldTransform(PHYSICS.update);
   newMesh.refreshMeshes();
 
   if (__DEV__) {
@@ -429,7 +429,7 @@ export default function IsometricHousingThreeJS({
         roomSt.apply(roomSk);
         roomSk.update(deltaSeconds);  // Add skeleton update step
         const PHYSICS: any = Physics as any;
-        roomSk.updateWorldTransform(PHYSICS);
+        roomSk.updateWorldTransform(PHYSICS.update);
 
         // Find and refresh the room's SkeletonMesh FIRST
         let foundMesh = false;
@@ -537,7 +537,7 @@ export default function IsometricHousingThreeJS({
         sk.scaleX = 0.5; sk.scaleY = 0.5;
         const physicsMaybe: any = (spine as any)?.Physics;     // ← object, not .update
 const PHYSICS: any = Physics as any;       // ← object, not .update
-sk.updateWorldTransform(PHYSICS);
+sk.updateWorldTransform(PHYSICS.update);
 controller.mesh.refreshMeshes();
         
         return;
@@ -613,8 +613,8 @@ controller.mesh.refreshMeshes();
       }
 
       try {
-        const physicsUpdate = (spine as any)?.Physics?.update;
-        sk.updateWorldTransform(typeof physicsUpdate === "function" ? physicsUpdate : undefined);
+        const PHYSICS = (spine as any)?.Physics;
+        sk.updateWorldTransform(PHYSICS?.update);
         controller.mesh.refreshMeshes();
       } catch (error) {
         if (__DEV__) console.error('Housing: Error updating skeleton transform', error);

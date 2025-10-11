@@ -119,13 +119,8 @@ export async function loadRoomSkeleton(): Promise<LoadedRoom> {
 
   // ✅ Match controller: pass the Physics OBJECT (not .update) to satisfy TS/runtime
   const PHYSICS: any = Physics as any;
-  try {
-    // Optional pre-tick to stabilize constraints at load; harmless if no-op
-    if (PHYSICS && typeof PHYSICS.update === 'function') {
-      PHYSICS.update(skeleton, 0);
-    }
-  } catch {}
-  skeleton.updateWorldTransform(PHYSICS);
+  // Physics.update is a constant, not a function - skip the pre-tick since it's not needed
+  skeleton.updateWorldTransform(PHYSICS.update);
 
   // Build mesh
   const { SkeletonMesh } = require('../../../spine/SpineThree');

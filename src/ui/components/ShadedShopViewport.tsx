@@ -7,6 +7,7 @@ import { GLView } from 'expo-gl';
 import { Renderer } from 'expo-three';
 import { loadSpineFromExpoAssets } from '../../spine/loaders';
 import { SkeletonMesh } from '../../spine/SpineThree';
+import { applySubtleWindGusts } from '../../../utils/spinePhysics';
 
 interface ShadedShopViewportProps {
   width?: number;
@@ -94,6 +95,9 @@ export default function ShadedShopViewport({
   const skeletonMeshRef = useRef<SkeletonMesh | null>(null);
   const sableMeshRef = useRef<SkeletonMesh | null>(null);
   const lumaMeshRef = useRef<SkeletonMesh | null>(null);
+  const skeletonRef = useRef<spine.Skeleton | null>(null);
+  const sableSkeletonRef = useRef<spine.Skeleton | null>(null);
+  const lumaSkeletonRef = useRef<spine.Skeleton | null>(null);
   const lastTimeRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
   const cameraRef = useRef<THREE.OrthographicCamera | null>(null);
@@ -198,6 +202,9 @@ export default function ShadedShopViewport({
       // Load ShadedShop spine scene
       const { skeleton, state, resolveTexture } = await loadShadedShopSpine();
 
+      // Store skeleton reference for physics
+      skeletonRef.current = skeleton;
+
       // Setup skeleton pose
       skeleton.setToSetupPose();
       for (let i = 0; i < skeleton.slots.length; i++) {
@@ -210,6 +217,9 @@ export default function ShadedShopViewport({
 
       // Load Sable character
       const sableResult = await loadSableCharacter();
+
+      // Store Sable skeleton reference for physics
+      sableSkeletonRef.current = sableResult.skeleton;
 
       // Setup Sable pose
       sableResult.skeleton.setToSetupPose();
@@ -371,13 +381,16 @@ export default function ShadedShopViewport({
       }
 
       // Update world transform after setting position/scale and animations
-      sableSkeleton.updateWorldTransform();
+      sableSkeleton.updateWorldTransform(Physics.update);
 
       // Set mesh to higher render order to appear in front
       sableMesh.renderOrder = 1000;
 
       // Load Luma character
       const lumaResult = await loadLumaCharacter();
+
+      // Store Luma skeleton reference for physics
+      lumaSkeletonRef.current = lumaResult.skeleton;
 
       // Setup Luma pose
       lumaResult.skeleton.setToSetupPose();
@@ -436,7 +449,7 @@ export default function ShadedShopViewport({
       }
 
       // Update world transform after setting position/scale and animations
-      lumaSkeleton.updateWorldTransform();
+      lumaSkeleton.updateWorldTransform(Physics.update);
 
       // Set mesh to higher render order to appear in front
       lumaMesh.renderOrder = 1001; // Slightly higher than Sable
@@ -473,6 +486,18 @@ export default function ShadedShopViewport({
           const last = lastTimeRef.current ?? now;
           const deltaSeconds = Math.min((now - last) / 1000, 1 / 15);
           lastTimeRef.current = now;
+
+          // Apply wind effects to all shop characters
+          const currentTime = now / 1000;
+          if (skeletonRef.current) {
+            applySubtleWindGusts(skeletonRef.current, currentTime);
+          }
+          if (sableSkeletonRef.current) {
+            applySubtleWindGusts(sableSkeletonRef.current, currentTime);
+          }
+          if (lumaSkeletonRef.current) {
+            applySubtleWindGusts(lumaSkeletonRef.current, currentTime);
+          }
 
           if (skeletonMeshRef.current) {
             skeletonMeshRef.current.update(deltaSeconds);
