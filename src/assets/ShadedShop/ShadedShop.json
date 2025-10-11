@@ -1,6 +1,6 @@
 {
 "skeleton": {
-	"hash": "KuyZ7Q/0C+M",
+	"hash": "eK6kwBogPwQ",
 	"spine": "4.2.43",
 	"x": -3495.1,
 	"y": -1119.49,
@@ -11,7 +11,7 @@
 },
 "bones": [
 	{ "name": "root" },
-	{ "name": "Luma", "parent": "root", "x": -531.99, "y": 1176.51 },
+	{ "name": "Luma", "parent": "root", "x": -914.61, "y": 1035.18 },
 	{ "name": "Sable", "parent": "root", "x": 505.62, "y": 939.17 },
 	{ "name": "Character", "parent": "root", "x": -695.28, "y": 688.83 }
 ],

@@ -17,7 +17,7 @@ import { setMaskRecolorOpaque } from "./MaskRecolor";
 import { updateHueIndexedRecolorAlpha } from "./HueIndexedRecolor";
 
 /** Slots that should NOT use alphaTest (tiny/soft details) */
-const PUPIL_SLOT_REGEX = /(^|[_-])(L|R)?_?Pupil$/i;
+const PUPIL_SLOT_REGEX = /(^|[_-])(L|R)?_?Pupin$/i;
 
 /** Slots that use hue-indexed recolor (have "Shader" in name) */
 const SHADER_SLOT_REGEX = /Shader$/i;

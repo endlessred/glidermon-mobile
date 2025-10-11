@@ -59,6 +59,28 @@ async function loadSableCharacter() {
   }
 }
 
+// Load Luma character separately
+async function loadLumaCharacter() {
+  try {
+    // Load the Luma assets
+    const atlasModule = require('../../assets/Luma/Luma.atlas');
+    const jsonModule = require('../../assets/Luma/Luma.json');
+    const textureModule = require('../../assets/Luma/Luma.png');
+
+    const result = await loadSpineFromExpoAssets({
+      atlasModule,
+      jsonModule,
+      textureModules: [textureModule],
+      defaultMix: 0,
+    });
+
+    return result;
+  } catch (error) {
+    console.error('Failed to load Luma character:', error);
+    throw error;
+  }
+}
+
 
 export default function ShadedShopViewport({
   width = 300,
@@ -71,6 +93,7 @@ export default function ShadedShopViewport({
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const skeletonMeshRef = useRef<SkeletonMesh | null>(null);
   const sableMeshRef = useRef<SkeletonMesh | null>(null);
+  const lumaMeshRef = useRef<SkeletonMesh | null>(null);
   const lastTimeRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
   const cameraRef = useRef<THREE.OrthographicCamera | null>(null);
@@ -353,8 +376,74 @@ export default function ShadedShopViewport({
       // Set mesh to higher render order to appear in front
       sableMesh.renderOrder = 1000;
 
+      // Load Luma character
+      const lumaResult = await loadLumaCharacter();
+
+      // Setup Luma pose
+      lumaResult.skeleton.setToSetupPose();
+      for (let i = 0; i < lumaResult.skeleton.slots.length; i++) {
+        lumaResult.skeleton.slots[i].setToSetupPose();
+      }
+
+      // Create Luma mesh
+      const lumaMesh = new SkeletonMesh(lumaResult.skeleton, lumaResult.state, lumaResult.resolveTexture);
+      lumaMesh.frustumCulled = false;
+
+      // Position Luma using the SAME coordinate system as the ShadedShop scene
+      const lumaBoneX = -914.61; // from ShadedShop.json Luma bone (updated position)
+      const lumaBoneY = 1035.18; // from ShadedShop.json Luma bone (updated position)
+
+      // Use skeleton transforms instead of mesh transforms (critical for Spine!)
+      const lumaSkeleton = lumaResult.skeleton;
+
+      // Apply the SAME scale as the shop scene but 5x larger (matching Sable)
+      const lumaScale = scale * 5; // 5 times larger
+      lumaSkeleton.scaleX = lumaScale;
+      lumaSkeleton.scaleY = lumaScale;
+
+      // Position Luma at the Luma bone coordinates within the ShadedShop coordinate space
+      lumaSkeleton.x = lumaBoneX;
+      lumaSkeleton.y = lumaBoneY;
+
+      // Apply animations to Luma using Spine track system
+      const lumaState = lumaResult.state;
+      try {
+        // Track 0: Idle animation (looping idle animation)
+        const lumaIdleAnimation = lumaSkeleton.data.findAnimation('Idle');
+        if (lumaIdleAnimation) {
+          lumaState.setAnimation(0, 'Idle', true); // Loop the animation
+          console.log('Applied Idle animation to Luma on track 0');
+        } else {
+          console.warn('Idle animation not found in Luma skeleton');
+        }
+
+        // Track 1: Counter animation (looping counter animation)
+        const lumaCounterAnimation = lumaSkeleton.data.findAnimation('Counter');
+        if (lumaCounterAnimation) {
+          lumaState.setAnimation(1, 'Counter', true); // Loop the animation
+          console.log('Applied Counter animation to Luma on track 1');
+        } else {
+          console.warn('Counter animation not found in Luma skeleton');
+        }
+
+        // Debug: List all available animations if any are missing
+        if (!lumaIdleAnimation || !lumaCounterAnimation) {
+          const availableLumaAnimations = lumaSkeleton.data.animations.map(anim => anim.name);
+          console.log('Available Luma animations:', availableLumaAnimations);
+        }
+      } catch (error) {
+        console.error('Error applying Luma animations:', error);
+      }
+
+      // Update world transform after setting position/scale and animations
+      lumaSkeleton.updateWorldTransform();
+
+      // Set mesh to higher render order to appear in front
+      lumaMesh.renderOrder = 1001; // Slightly higher than Sable
+
       scene.add(skeletonMesh);
       scene.add(sableMesh);
+      scene.add(lumaMesh);
 
       // Debug box removed - touch detection is working!
 
@@ -375,6 +464,7 @@ export default function ShadedShopViewport({
       rendererRef.current = renderer;
       skeletonMeshRef.current = skeletonMesh;
       sableMeshRef.current = sableMesh;
+      lumaMeshRef.current = lumaMesh;
       lastTimeRef.current = null;
 
       const render = () => {
@@ -390,6 +480,10 @@ export default function ShadedShopViewport({
 
           if (sableMeshRef.current) {
             sableMeshRef.current.update(deltaSeconds);
+          }
+
+          if (lumaMeshRef.current) {
+            lumaMeshRef.current.update(deltaSeconds);
           }
 
           renderer.render(scene, camera);
