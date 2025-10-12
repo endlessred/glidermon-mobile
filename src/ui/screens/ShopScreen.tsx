@@ -4,13 +4,28 @@ import { useCosmeticsStore } from "../../data/stores/cosmeticsStore";
 import { useProgressionStore } from "../../data/stores/progressionStore";
 import { useToastStore } from "../../data/stores/toastStore";
 import { useTheme } from "../../data/hooks/useTheme";
+import { useAmbientConversations } from "../../data/hooks/useAmbientConversations";
 import HatPreview from "../components/HatPreview";
 import ShadedShopViewport from "../components/ShadedShopViewport";
+import AmbientConversationDisplay from "../components/AmbientConversation";
 
 export default function ShopScreen() {
   const { width, height } = useWindowDimensions();
   const { colors, spacing, borderRadius, typography } = useTheme();
   const [showStore, setShowStore] = useState(false);
+
+  // Ambient conversations
+  const {
+    currentConversation,
+    isVisible: isConversationVisible,
+    endConversation,
+    triggerConversation,
+  } = useAmbientConversations({
+    context: "ShadedShop",
+    enabled: !showStore, // Only show conversations when store is closed
+    minInterval: 20000, // 20 seconds
+    maxInterval: 60000, // 1 minute
+  });
 
   // Cosmetics
   const catalog      = useCosmeticsStore(s => s.catalog) || [];
@@ -69,6 +84,32 @@ export default function ShopScreen() {
         height={height}
         onSableTap={handleSableTap}
       />
+
+      {/* Ambient Conversations */}
+      {currentConversation && (
+        <AmbientConversationDisplay
+          conversation={currentConversation}
+          visible={isConversationVisible}
+          onComplete={endConversation}
+        />
+      )}
+
+      {/* Debug: Manual conversation trigger (remove in production) */}
+      {__DEV__ && !showStore && (
+        <TouchableOpacity
+          style={{
+            position: 'absolute',
+            top: 100,
+            right: 20,
+            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+            padding: 10,
+            borderRadius: 20,
+          }}
+          onPress={triggerConversation}
+        >
+          <Text style={{ color: '#fff', fontSize: 12 }}>💬 Trigger Chat</Text>
+        </TouchableOpacity>
+      )}
 
       {/* Store overlay */}
       {showStore && (

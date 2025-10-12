@@ -8,7 +8,6 @@ export function setGlobalWind(skeleton: Skeleton, windValue: number) {
     console.warn('No physics constraints found on skeleton');
     return;
   }
-  console.log(`Setting wind to ${windValue} on ${pcs.length} physics constraints`);
   for (const c of pcs) c.wind = windValue;
 }
 

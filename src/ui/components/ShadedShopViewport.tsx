@@ -355,7 +355,6 @@ export default function ShadedShopViewport({
           // Set up interval-based blinking (2-6 seconds between blinks)
           const triggerBlink = () => {
             sableState.setAnimation(3, 'Blink', false); // Don't loop, play once
-            console.log('Triggered blink animation on track 3');
 
             // Schedule next blink after current animation finishes + random interval
             const blinkDuration = blinkAnimation.duration * 1000; // Convert to milliseconds
