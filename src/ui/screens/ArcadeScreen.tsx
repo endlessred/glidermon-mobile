@@ -5,12 +5,12 @@ import {
   StyleSheet,
   TouchableOpacity,
   SafeAreaView,
-  ScrollView,
-  Dimensions
+  ScrollView
 } from 'react-native';
 import { useTheme } from '../../data/hooks/useTheme';
 import AcornHuntScreen from './AcornHuntScreen';
 import UpsAndDownsScreen from './UpsAndDownsScreen';
+import HarmonyDriftScreen from './HarmonyDriftScreen';
 
 interface MinigameCardProps {
   title: string;
@@ -27,7 +27,7 @@ const MinigameCard: React.FC<MinigameCardProps> = ({
   onPress,
   disabled = false
 }) => {
-  const { colors, typography, spacing } = useTheme();
+  const { colors, typography } = useTheme();
 
   return (
     <TouchableOpacity
@@ -55,16 +55,16 @@ const MinigameCard: React.FC<MinigameCardProps> = ({
         </Text>
       </View>
       <View style={[styles.arrow, { backgroundColor: '#0ea5e9' }]}>
-        <Text style={styles.arrowText}>▶</Text>
+        <Text style={styles.arrowText}>{">"}</Text>
       </View>
     </TouchableOpacity>
   );
 };
 
-type ArcadeScreen = 'menu' | 'acornhunt' | 'upsanddowns';
+type ArcadeScreen = 'menu' | 'acornhunt' | 'upsanddowns' | 'harmonydrift';
 
 export default function ArcadeScreen() {
-  const { colors, typography, spacing } = useTheme();
+  const { colors, typography } = useTheme();
   const [currentScreen, setCurrentScreen] = useState<ArcadeScreen>('menu');
 
   const handleAcornHunt = () => {
@@ -73,6 +73,10 @@ export default function ArcadeScreen() {
 
   const handleUpsAndDowns = () => {
     setCurrentScreen('upsanddowns');
+  };
+
+  const handleHarmonyDrift = () => {
+    setCurrentScreen('harmonydrift');
   };
 
   const handleBack = () => {
@@ -110,6 +114,21 @@ export default function ArcadeScreen() {
     );
   }
 
+  if (currentScreen === 'harmonydrift') {
+    return (
+      <HarmonyDriftScreen
+        navigation={{
+          goBack: handleBack,
+          navigate: (screen: string) => {
+            if (screen === 'Arcade') {
+              handleBack();
+            }
+          }
+        }}
+      />
+    );
+  }
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background.primary }]}>
       <ScrollView
@@ -129,21 +148,28 @@ export default function ArcadeScreen() {
           <MinigameCard
             title="Acorn Hunt"
             description="Strategic turn-based battles to collect acorns"
-            icon="🌰"
+            icon="AH"
             onPress={handleAcornHunt}
           />
 
           <MinigameCard
             title="Ups and Downs"
             description="Navigate your glider through obstacles by managing insulin levels"
-            icon="🪂"
+            icon="UD"
             onPress={handleUpsAndDowns}
+          />
+
+          <MinigameCard
+            title="Harmony Drift"
+            description="Card-based balance duel to steady glucose drift"
+            icon="HD"
+            onPress={handleHarmonyDrift}
           />
         </View>
 
         <View style={styles.comingSoon}>
           <Text style={[{ fontSize: typography.size?.base || 16 }, { color: colors.text?.tertiary || '#78716c', textAlign: 'center' }]}>
-            More games coming soon! 🎮
+            More games coming soon!
           </Text>
         </View>
       </ScrollView>
@@ -200,15 +226,17 @@ const styles = StyleSheet.create({
     marginRight: 16,
   },
   iconText: {
-    fontSize: 28,
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#10b981',
   },
   gameInfo: {
     flex: 1,
+    gap: 4,
   },
   gameTitle: {
     fontSize: 18,
     fontWeight: '600',
-    marginBottom: 4,
   },
   arrow: {
     width: 32,
@@ -218,13 +246,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   arrowText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: 'bold',
+    color: '#fff',
+    fontSize: 16,
   },
   comingSoon: {
-    marginTop: 48,
-    padding: 24,
-    alignItems: 'center',
+    marginTop: 32,
+    padding: 20,
+    borderRadius: 16,
+    backgroundColor: 'rgba(15, 118, 110, 0.08)',
   },
 });
