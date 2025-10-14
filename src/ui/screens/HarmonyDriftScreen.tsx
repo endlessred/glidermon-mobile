@@ -9,6 +9,7 @@ import {
   TextStyle,
   useWindowDimensions,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../data/hooks/useTheme";
 import SpineCharacterPortrait from "../components/SpineCharacterPortrait";
 import { EmotionType } from "../../data/types/conversation";
@@ -149,16 +150,36 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
 
   const earnVirtuAcorns = useVirtuAcornStore((s) => s.earn);
 
+  // Safe fallback for safe area insets
+  let insets;
+  try {
+    insets = useSafeAreaInsets();
+  } catch {
+    insets = { top: 0, bottom: 0, left: 0, right: 0 };
+  }
+  const isSmallScreen = screenWidth < 350;
+  const isNarrowScreen = screenWidth < 400;
+
   const padLg = spacing.lg ?? 16;
   const padMd = spacing.md ?? 12;
   const padSm = spacing.sm ?? 8;
-  const meterWidth = 68;
-  const meterHeight = Math.min(240, screenHeight * 0.28);
+
+  // Responsive meter sizing
+  const meterWidth = Math.max(58, Math.min(68, screenWidth * 0.18));
+  const meterHeight = Math.max(180, Math.min(240, screenHeight * 0.28));
   const pointerPadding = 18;
 
+  // Improved board width calculation for small screens
   const availableBoardWidth = screenWidth - padLg * 2 - meterWidth - padLg;
-  const boardWidth = Math.max(Math.min(availableBoardWidth, 520), 280);
+  const minBoardWidth = isSmallScreen ? 240 : 280;
+  const maxBoardWidth = isNarrowScreen ? 400 : 520;
+  const boardWidth = Math.max(Math.min(availableBoardWidth, maxBoardWidth), minBoardWidth);
   const boardHeight = Math.min(boardWidth * 0.62, screenHeight * 0.4);
+
+  // Responsive sizing values
+  const portraitSize = isSmallScreen ? 120 : 150;
+  const portraitHeight = isSmallScreen ? 160 : 200;
+  const handCardWidth = isNarrowScreen ? 120 : 140;
 
   const opponentId = state.opponent ?? selectedOpponent ?? "sable";
   const opponentName = opponentId === "luma" ? "Luma" : "Sable";
@@ -222,7 +243,9 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
 
   const handleSlotPress = (slotId: string) => {
     if (!selectedCard) return;
-    const resolution = playPlayerCard(selectedCard, slotId);
+    // Extract the actual card ID from the unique key (format: "cardId-index")
+    const actualCardId = selectedCard.split('-')[0];
+    const resolution = playPlayerCard(actualCardId, slotId);
     if (resolution) setSelectedCard(null);
   };
 
@@ -239,6 +262,7 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
   const handlePlayAgain = () => {
     endMatch();
   };
+
   const HarmonyCard = ({
     data,
     variant,
@@ -255,15 +279,110 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
     widthOverride?: number;
   }) => {
     const accent = typeAccent(data.type, colors.primary?.[400] || "#38bdf8");
-    const cardWidth = widthOverride ?? (variant === "hand" ? 140 : 110);
-    const shellHeight = variant === "hand" ? 206 : 164;
-    const artHeight = variant === "hand" ? 88 : 68;
-    const nameFont = variant === "hand" ? 16 : 14;
-    const padding = variant === "hand" ? padLg : Math.max(8, padMd);
+    const cardWidth = widthOverride ?? (variant === "hand" ? handCardWidth : 110);
+    const shellHeight = variant === "hand" ? (isNarrowScreen ? 186 : 206) : 80; // Much shorter for board
+    const artHeight = variant === "hand" ? (isNarrowScreen ? 78 : 88) : 68;
+    const nameFont = variant === "hand" ? (isNarrowScreen ? 13 : 14) : 10;
+    const flavorFont = variant === "hand" ? (isNarrowScreen ? 10 : 11) : 10;
+    const padding = 6;
     const value = valueOverride ?? data.value;
     const prefix = value > 0 ? "+" : "";
     const valueText = variant === "hand" ? `${prefix}${Math.round(value)}` : `${prefix}${value.toFixed(1)}`;
     const artGlyph = resolveCardArt(data.artAsset, data.type);
+
+    // Rarity colors for card borders - Harmony Drift palette
+    const rarityColors = {
+      Common: ["#9BBE9C", "#C7C6E6"], // Sage green to lavender mist
+      Uncommon: ["#F1C27D", "#9BBE9C"], // Amber gold to sage green
+      Rare: ["#C7C6E6", "#F1C27D"], // Lavender mist to amber gold
+      Epic: ["#344B40", "#9BBE9C"], // Deep moss to sage green
+      Legendary: ["#F1C27D", "#344B40"], // Amber gold to deep moss
+    };
+    const [rarityDark, rarityLight] = rarityColors[data.rarity] || rarityColors.Common;
+
+    // Board cards use a completely different horizontal layout
+    if (variant === "board") {
+      return (
+        <View
+          style={[
+            styles.boardCard,
+            {
+              width: cardWidth,
+              height: shellHeight,
+              transform: [{ scale: isSelected ? 1.05 : 1 }],
+            },
+          ]}
+        >
+          {/* Board card glow for selected */}
+          {isSelected && (
+            <View style={[
+              StyleSheet.absoluteFill,
+              {
+                borderRadius: 12,
+                backgroundColor: accent,
+                opacity: 0.2,
+                transform: [{ scale: 1.1 }],
+              }
+            ]} />
+          )}
+
+          <Canvas style={StyleSheet.absoluteFill}>
+            {/* Board card background */}
+            <RoundedRect x={0} y={0} width={cardWidth} height={shellHeight} r={12}>
+              <LinearGradient
+                start={vec(0, 0)}
+                end={vec(cardWidth, shellHeight)}
+                colors={[rarityDark, rarityLight]}
+              />
+            </RoundedRect>
+            <RoundedRect x={2} y={2} width={cardWidth - 4} height={shellHeight - 4} r={10}>
+              <LinearGradient
+                start={vec(0, 0)}
+                end={vec(0, shellHeight)}
+                colors={["#F5F1E9", "#ffffff"]}
+              />
+            </RoundedRect>
+          </Canvas>
+
+          {/* Horizontal layout for board cards */}
+          <View style={styles.boardCardContent}>
+            {/* Left: Type icon and art */}
+            <View style={styles.boardCardLeft}>
+              <View style={[styles.boardCardTypeIcon, { backgroundColor: `${accent}25` }]}>
+                <Text style={[styles.boardCardTypeText, { color: accent }]}>{TYPE_EMOJI[data.type]}</Text>
+              </View>
+              <Text style={styles.boardCardArt}>{artGlyph}</Text>
+            </View>
+
+            {/* Center: Name */}
+            <View style={styles.boardCardCenter}>
+              <Text
+                style={[styles.boardCardName, { color: "#344B40" }]}
+                numberOfLines={2}
+                adjustsFontSizeToFit
+                minimumFontScale={0.7}
+              >
+                {data.name}
+              </Text>
+            </View>
+
+            {/* Right: Value */}
+            <View style={[styles.boardCardValue, { backgroundColor: accent }]}>
+              <Text style={styles.boardCardValueText}>{valueText}</Text>
+            </View>
+          </View>
+
+          {/* Footnote */}
+          {footnote && (
+            <View style={styles.boardCardFootnote}>
+              <Text style={[styles.boardCardFootnoteText, { color: accent }]} numberOfLines={1}>
+                {footnote}
+              </Text>
+            </View>
+          )}
+        </View>
+      );
+    }
 
     return (
       <View
@@ -272,48 +391,249 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
           {
             width: cardWidth,
             height: shellHeight,
-            padding,
-            borderColor: isSelected ? accent : "#e7e0ce",
-            backgroundColor: colors.background?.secondary || "#fbf6ec",
-            shadowColor: accent,
-            shadowOpacity: isSelected ? 0.28 : 0.16,
-            elevation: isSelected ? 5 : 2,
             transform: [{ scale: isSelected ? 1.05 : 1 }],
           },
         ]}
       >
-        <View style={[styles.cardHeader, { backgroundColor: `${accent}1A`, borderColor: `${accent}33` }]}>
-          <Text style={[styles.cardTypeText, { color: accent }]}>{TYPE_EMOJI[data.type]}</Text>
-          <View
-            style={[styles.cardValueBadge, { borderColor: `${accent}AA`, backgroundColor: colors.background?.primary || "#ffffff" }]}
-          >
-            <Text style={[styles.cardValueText, { color: accent }]}>{valueText}</Text>
+        {/* Outer glow for selected cards */}
+        {isSelected && (
+          <View style={[
+            StyleSheet.absoluteFill,
+            {
+              borderRadius: 16,
+              backgroundColor: accent,
+              opacity: 0.2,
+              transform: [{ scale: 1.1 }],
+            }
+          ]} />
+        )}
+
+        {/* Main card background with gradient border */}
+        <Canvas style={StyleSheet.absoluteFill}>
+          <RoundedRect x={0} y={0} width={cardWidth} height={shellHeight} r={16}>
+            <LinearGradient
+              start={vec(0, 0)}
+              end={vec(cardWidth, shellHeight)}
+              colors={[rarityDark, rarityLight]}
+            />
+          </RoundedRect>
+          <RoundedRect x={3} y={3} width={cardWidth - 6} height={shellHeight - 6} r={13}>
+            <LinearGradient
+              start={vec(0, 0)}
+              end={vec(0, shellHeight)}
+              colors={["#F5F1E9", "#F1C27D08"]} // Parchment beige with subtle amber tint
+            />
+          </RoundedRect>
+
+          {/* Paper texture overlay - subtle dots pattern */}
+          {Array.from({ length: 8 }).map((_, i) => (
+            <Circle
+              key={i}
+              cx={(i * 23 + 15) % (cardWidth - 10) + 8}
+              cy={15 + (Math.floor(i / 4) * 25)}
+              r={0.5}
+              color="rgba(52,75,64,0.06)" // Deep moss, very subtle
+            />
+          ))}
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Circle
+              key={`row2-${i}`}
+              cx={(i * 27 + 22) % (cardWidth - 10) + 8}
+              cy={shellHeight - 45 + (Math.floor(i / 3) * 15)}
+              r={0.4}
+              color="rgba(155,190,156,0.08)" // Sage green, very subtle
+            />
+          ))}
+
+          {/* Subtle edge highlight for tactile feel */}
+          <RoundedRect
+            x={2} y={2}
+            width={cardWidth - 4}
+            height={shellHeight - 4}
+            r={14}
+            style="stroke"
+            strokeWidth={0.5}
+            color="rgba(241,194,125,0.3)" // Amber gold highlight
+          />
+        </Canvas>
+
+        {/* Card content */}
+        <View style={styles.cardContent}>
+          {/* Header with type and value */}
+          <View style={styles.cardHeaderNew}>
+            <View style={[styles.cardTypeIcon, { backgroundColor: `${accent}25` }]}>
+              <Text style={[styles.cardTypeIconText, { color: accent }]}>{TYPE_EMOJI[data.type]}</Text>
+            </View>
+            <View style={[styles.cardValueGem, { backgroundColor: accent }]}>
+              <Text style={styles.cardValueGemText}>{valueText}</Text>
+            </View>
           </View>
-        </View>
-        <View
-          style={[styles.cardArt, {
-            height: artHeight,
-            borderColor: `${accent}3D`,
-            backgroundColor: variant === "hand" ? "rgba(255,255,255,0.18)" : "rgba(214,211,209,0.32)",
-          }]}
-        >
-          <Text style={{ fontSize: variant === "hand" ? 40 : 32 }}>{artGlyph}</Text>
-        </View>
-        <View style={{ flexGrow: 1, width: "100%" }}>
-          <Text style={[styles.cardName, { color: colors.text?.primary || "#1c1917", fontSize: nameFont }]} numberOfLines={2}>
-            {data.name}
-          </Text>
-          {variant === "hand" && data.flavor && (
-            <Text style={[styles.cardFlavor, { color: colors.text?.secondary || "#44403c" }]} numberOfLines={2}>
-              {data.flavor}
+
+          {/* Art section with overlaid name banner */}
+          <View style={[styles.cardArtNew, { height: artHeight }]}>
+            <Canvas style={StyleSheet.absoluteFill}>
+              <RoundedRect x={0} y={0} width={cardWidth - 12} height={artHeight} r={8}>
+                <RadialGradient
+                  c={vec((cardWidth - 12) / 2, artHeight / 2)}
+                  r={artHeight * 0.7}
+                  colors={[`${accent}15`, `${accent}08`]}
+                />
+              </RoundedRect>
+            </Canvas>
+
+            {/* Art emoji */}
+            <Text style={[styles.cardArtEmoji, { fontSize: variant === "hand" ? 36 : 28 }]}>
+              {artGlyph}
             </Text>
+
+            {/* Ornate name banner */}
+            <View style={styles.cardNameBanner}>
+              <Canvas style={StyleSheet.absoluteFill}>
+                {/* Main banner background */}
+                <RoundedRect
+                  x={6}
+                  y={artHeight - 26}
+                  width={cardWidth - 24}
+                  height={24}
+                  r={12}
+                >
+                  <LinearGradient
+                    start={vec(0, 0)}
+                    end={vec(cardWidth - 24, 24)}
+                    colors={["#F5F1E9", "#ffffff"]} // Parchment to white
+                  />
+                </RoundedRect>
+
+                {/* Ornate border */}
+                <RoundedRect
+                  x={6} y={artHeight - 26}
+                  width={cardWidth - 24} height={24}
+                  r={12}
+                  style="stroke"
+                  strokeWidth={1.5}
+                  color="#344B40" // Deep moss border
+                />
+
+                {/* Inner decorative line */}
+                <RoundedRect
+                  x={8} y={artHeight - 24}
+                  width={cardWidth - 28} height={20}
+                  r={10}
+                  style="stroke"
+                  strokeWidth={0.5}
+                  color="#C7C6E6" // Lavender mist
+                />
+
+                {/* Decorative corner flourishes */}
+                <Circle cx={12} cy={artHeight - 14} r={1.5} color="#F1C27D" />
+                <Circle cx={cardWidth - 24} cy={artHeight - 14} r={1.5} color="#F1C27D" />
+
+                {/* Central ornamental dot */}
+                <Circle cx={cardWidth / 2 - 6} cy={artHeight - 14} r={0.8} color="#9BBE9C" />
+
+                {/* Side decorative lines */}
+                <RoundedRect
+                  x={cardWidth / 2 - 18} y={artHeight - 15}
+                  width={12} height={0.5}
+                  r={0.25}
+                  color="#F1C27D"
+                  opacity={0.7}
+                />
+                <RoundedRect
+                  x={cardWidth / 2 + 0} y={artHeight - 15}
+                  width={12} height={0.5}
+                  r={0.25}
+                  color="#F1C27D"
+                  opacity={0.7}
+                />
+              </Canvas>
+              <Text
+                style={[styles.cardNameBannerText, {
+                  fontSize: nameFont,
+                  lineHeight: nameFont + 2,
+                  color: "#344B40", // Deep moss for high contrast
+                }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.7}
+              >
+                {data.name}
+              </Text>
+            </View>
+          </View>
+
+          {/* Ornate flavor text section */}
+          {variant === "hand" && data.flavor && (
+            <View style={styles.cardFlavorSection}>
+              <Canvas style={StyleSheet.absoluteFill}>
+                {/* Ornate text background */}
+                <RoundedRect x={2} y={2} width={cardWidth - 16} height={variant === "hand" ? 48 : 32} r={8}>
+                  <LinearGradient
+                    start={vec(0, 0)}
+                    end={vec(cardWidth - 16, variant === "hand" ? 48 : 32)}
+                    colors={["#ffffff", "#F5F1E9"]} // White to parchment for high contrast
+                  />
+                </RoundedRect>
+
+                {/* Inner ornate frame */}
+                <RoundedRect
+                  x={4} y={4}
+                  width={cardWidth - 20}
+                  height={variant === "hand" ? 44 : 28}
+                  r={6}
+                  style="stroke"
+                  strokeWidth={1}
+                  color="#C7C6E6" // Lavender mist
+                />
+
+                {/* Decorative corner elements */}
+                <Circle cx={8} cy={8} r={1.5} color="#9BBE9C" />
+                <Circle cx={cardWidth - 12} cy={8} r={1.5} color="#9BBE9C" />
+                <Circle cx={8} cy={variant === "hand" ? 46 : 30} r={1.5} color="#9BBE9C" />
+                <Circle cx={cardWidth - 12} cy={variant === "hand" ? 46 : 30} r={1.5} color="#9BBE9C" />
+
+                {/* Central filigree line */}
+                <RoundedRect
+                  x={cardWidth / 2 - 15}
+                  y={variant === "hand" ? 26 : 18}
+                  width={30}
+                  height={0.8}
+                  r={0.4}
+                  color="#F1C27D" // Amber gold
+                  opacity={0.6}
+                />
+
+                {/* Side decorative flourishes */}
+                <Circle cx={cardWidth / 2 - 22} cy={variant === "hand" ? 26 : 18} r={0.6} color="#C7C6E6" />
+                <Circle cx={cardWidth / 2 + 16} cy={variant === "hand" ? 26 : 18} r={0.6} color="#C7C6E6" />
+              </Canvas>
+
+              <View style={styles.cardFlavorContent}>
+                <Text
+                  style={[styles.cardFlavorNew, {
+                    color: "#1a1a1a", // Very dark for maximum readability
+                    fontSize: flavorFont,
+                    lineHeight: flavorFont + 3
+                  }]}
+                  numberOfLines={3}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                >
+                  {data.flavor}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* Footnote */}
+          {footnote && (
+            <View style={styles.cardFootnoteSection}>
+              <Text style={[styles.cardFootnoteNew, { color: colors.text?.tertiary || "#94a3b8" }]} numberOfLines={1}>
+                {footnote}
+              </Text>
+            </View>
           )}
         </View>
-        {footnote && (
-          <Text style={[styles.cardFootnote, { color: colors.text?.tertiary || "#78716c" }]} numberOfLines={1}>
-            {footnote}
-          </Text>
-        )}
       </View>
     );
   };
@@ -336,20 +656,71 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
   const renderBoard = () => {
     const accent = selectedType ? typeAccent(selectedType, colors.primary?.[400] || "#38bdf8") : colors.primary?.[400] || "#38bdf8";
     const slotWidth = Math.min(108, boardWidth * 0.20);
-    const slotHeight = slotWidth * 1.42;
+    const slotHeight = 90; // Fixed height that works well for horizontal board cards
 
     return (
-      <View style={{ width: boardWidth, height: boardHeight, alignSelf: "center" }}>
+      <View
+        style={{ width: boardWidth, height: boardHeight, alignSelf: "center" }}
+      >
         <Canvas style={StyleSheet.absoluteFillObject}>
+          {/* Main board background - parchment texture */}
           <RoundedRect x={0} y={0} width={boardWidth} height={boardHeight} r={boardHeight * 0.18}>
-            <LinearGradient start={vec(0, 0)} end={vec(boardWidth, boardHeight)} colors={["#fbf4e6", "#f2e4d3"]} />
+            <LinearGradient
+              start={vec(0, 0)}
+              end={vec(boardWidth, boardHeight)}
+              colors={["#F5F1E9", "#F1C27D15"]} // Parchment to soft amber
+            />
           </RoundedRect>
-          <RoundedRect x={10} y={10} width={boardWidth - 20} height={boardHeight - 20} r={boardHeight * 0.15}>
-            <RadialGradient c={vec(boardWidth * 0.48, boardHeight * 0.40)} r={boardWidth * 0.62} colors={["rgba(186,154,255,0.28)", "rgba(255,255,255,0)"]} />
+
+          {/* Lavender vignette overlay */}
+          <RoundedRect x={8} y={8} width={boardWidth - 16} height={boardHeight - 16} r={boardHeight * 0.15}>
+            <RadialGradient
+              c={vec(boardWidth * 0.5, boardHeight * 0.45)}
+              r={boardWidth * 0.65}
+              colors={["rgba(199,198,230,0.15)", "rgba(199,198,230,0.05)", "rgba(255,255,255,0)"]} // Lavender mist vignette
+            />
           </RoundedRect>
-          <Path path={boardCurves.top} color="rgba(148, 163, 218, 0.35)" style="stroke" strokeWidth={7} strokeCap="round" />
-          <Path path={boardCurves.mid} color="rgba(148, 163, 218, 0.22)" style="stroke" strokeWidth={5} strokeCap="round" />
-          <Path path={boardCurves.low} color="rgba(148, 163, 218, 0.35)" style="stroke" strokeWidth={7} strokeCap="round" />
+
+          {/* Paper texture dots - subtle */}
+          {Array.from({ length: 12 }).map((_, i) => (
+            <Circle
+              key={i}
+              cx={(i * 47 + 25) % (boardWidth - 20) + 15}
+              cy={20 + (Math.floor(i / 6) * 35)}
+              r={0.6}
+              color="rgba(155,190,156,0.08)" // Sage green, very subtle
+            />
+          ))}
+          {Array.from({ length: 8 }).map((_, i) => (
+            <Circle
+              key={`tex-${i}`}
+              cx={(i * 53 + 40) % (boardWidth - 20) + 15}
+              cy={boardHeight - 45 + (Math.floor(i / 4) * 20)}
+              r={0.4}
+              color="rgba(52,75,64,0.06)" // Deep moss, very subtle
+            />
+          ))}
+
+          {/* Flowing energy paths - more organic curves */}
+          <Path path={boardCurves.top} color="#9BBE9C" opacity={0.4} style="stroke" strokeWidth={6} strokeCap="round" />
+          <Path path={boardCurves.mid} color="#C7C6E6" opacity={0.3} style="stroke" strokeWidth={4} strokeCap="round" />
+          <Path path={boardCurves.low} color="#F1C27D" opacity={0.35} style="stroke" strokeWidth={5} strokeCap="round" />
+
+          {/* Subtle border highlight */}
+          <RoundedRect
+            x={2} y={2}
+            width={boardWidth - 4} height={boardHeight - 4}
+            r={boardHeight * 0.16}
+            style="stroke"
+            strokeWidth={1}
+            color="rgba(241,194,125,0.3)" // Amber gold highlight
+          />
+
+          {/* Corner ornaments */}
+          <Circle cx={boardHeight * 0.12} cy={boardHeight * 0.12} r={3} color="#9BBE9C" opacity={0.6} />
+          <Circle cx={boardWidth - boardHeight * 0.12} cy={boardHeight * 0.12} r={3} color="#9BBE9C" opacity={0.6} />
+          <Circle cx={boardHeight * 0.12} cy={boardHeight - boardHeight * 0.12} r={3} color="#9BBE9C" opacity={0.6} />
+          <Circle cx={boardWidth - boardHeight * 0.12} cy={boardHeight - boardHeight * 0.12} r={3} color="#9BBE9C" opacity={0.6} />
         </Canvas>
         {SLOT_IDS.map((slotId) => {
           const position = SLOT_POSITIONS[slotId];
@@ -395,17 +766,71 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
                     {
                       width: slotWidth,
                       height: slotHeight,
-                      borderColor: isPlayable ? accent : colors.gray?.[300] || "#d6d3d1",
-                      backgroundColor: colors.background?.secondary || "#fbf6ec",
                     },
                   ]}
                 >
-                  <Text style={{ color: colors.text?.secondary || "#57534e", fontWeight: FONT_WEIGHT.semibold, marginBottom: 6 }}>
-                    Slot {slotId}
-                  </Text>
-                  <Text style={{ color: isPlayable ? accent : colors.text?.tertiary || "#78716c", fontSize: 12, textAlign: "center" }} numberOfLines={2}>
-                    {isPlayable ? "Tap to steady" : "Awaiting play"}
-                  </Text>
+                  <Canvas style={StyleSheet.absoluteFill}>
+                    {/* Organic empty slot design */}
+                    <RoundedRect x={0} y={0} width={slotWidth} height={slotHeight} r={16}>
+                      <LinearGradient
+                        start={vec(0, 0)}
+                        end={vec(slotWidth, slotHeight)}
+                        colors={
+                          isPlayable
+                            ? ["rgba(155,190,156,0.12)", "rgba(241,194,125,0.08)"]
+                            : ["rgba(245,241,233,0.8)", "rgba(199,198,230,0.05)"]
+                        }
+                      />
+                    </RoundedRect>
+
+                    {/* Flowing border */}
+                    <RoundedRect
+                      x={2} y={2}
+                      width={slotWidth - 4} height={slotHeight - 4}
+                      r={14}
+                      style="stroke"
+                      strokeWidth={isPlayable ? 2 : 1}
+                      color={isPlayable ? accent : "#C7C6E6"}
+                      opacity={isPlayable ? 0.8 : 0.6}
+                    />
+
+                    {/* Inner gentle glow */}
+                    <RoundedRect x={6} y={6} width={slotWidth - 12} height={slotHeight - 12} r={10}>
+                      <RadialGradient
+                        c={vec(slotWidth / 2 - 6, slotHeight / 2 - 6)}
+                        r={slotWidth * 0.4}
+                        colors={
+                          isPlayable
+                            ? [`${accent}15`, `${accent}05`]
+                            : ["rgba(199,198,230,0.08)", "rgba(255,255,255,0)"]
+                        }
+                      />
+                    </RoundedRect>
+
+
+                    {/* Decorative elements */}
+                    {isPlayable && (
+                      <>
+                        <Circle cx={slotWidth / 2} cy={slotHeight * 0.3} r={1.5} color={accent} opacity={0.4} />
+                        <Circle cx={slotWidth / 2} cy={slotHeight * 0.7} r={1.5} color={accent} opacity={0.4} />
+                      </>
+                    )}
+
+                    {/* Subtle corner ornaments */}
+                    <Circle cx={12} cy={12} r={1} color="#9BBE9C" opacity={0.3} />
+                    <Circle cx={slotWidth - 12} cy={12} r={1} color="#9BBE9C" opacity={0.3} />
+                    <Circle cx={12} cy={slotHeight - 12} r={1} color="#9BBE9C" opacity={0.3} />
+                    <Circle cx={slotWidth - 12} cy={slotHeight - 12} r={1} color="#9BBE9C" opacity={0.3} />
+                  </Canvas>
+
+                  <View style={styles.emptySlotContent}>
+                    <Text style={[styles.emptySlotLabel, { color: isPlayable ? accent : "#9BBE9C" }]}>
+                      Slot {slotId}
+                    </Text>
+                    <Text style={[styles.emptySlotHint, { color: isPlayable ? accent : "#C7C6E6" }]} numberOfLines={2}>
+                      {isPlayable ? "Tap to steady" : "Awaiting play"}
+                    </Text>
+                  </View>
                 </View>
               )}
             </TouchableOpacity>
@@ -414,25 +839,73 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
       </View>
     );
   };
-  const renderHand = () => (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingVertical: padSm }}>
-      {state.playerHand.map((cardId, idx) => {
-        const card = cards[cardId];
-        if (!card) return null;
-        const isSelected = selectedCard === cardId;
-        return (
-          <TouchableOpacity
-            key={`${cardId}-${idx}`}
-            onPress={() => setSelectedCard(isSelected ? null : cardId)}
-            activeOpacity={0.85}
-            style={{ marginRight: padSm }}
-          >
-            <HarmonyCard data={card} variant="hand" isSelected={isSelected} />
-          </TouchableOpacity>
-        );
-      })}
-    </ScrollView>
-  );
+  const renderHand = () => {
+    const handCount = state.playerHand.length;
+    if (handCount === 0) return null;
+
+    // Calculate hand arc positioning
+    const handWidth = Math.min(screenWidth - padLg * 2, 400);
+    const cardSpacing = Math.min(handCardWidth * 0.6, (handWidth - handCardWidth) / Math.max(handCount - 1, 1));
+    const maxArcAngle = Math.min(30, handCount * 4); // Max 30 degrees arc
+    const arcRadius = handWidth * 1.2; // Larger radius for gentler arc
+
+    return (
+      <View style={[styles.handContainer, { width: handWidth, alignSelf: 'center' }]}>
+        {state.playerHand.map((cardId, idx) => {
+          const card = cards[cardId];
+          if (!card) return null;
+
+          const uniqueKey = `${cardId}-${idx}`;
+          const isSelected = selectedCard === uniqueKey;
+          const centerIndex = (handCount - 1) / 2;
+          const offsetFromCenter = idx - centerIndex;
+
+          // Calculate arc positioning
+          const angleStep = maxArcAngle / Math.max(handCount - 1, 1);
+          const rotation = offsetFromCenter * angleStep;
+          const radians = (rotation * Math.PI) / 180;
+
+          // Arc positioning - cards follow a gentle curve from bottom to top
+          const baseX = idx * cardSpacing + (handWidth - (handCount - 1) * cardSpacing) / 2; // Center the hand
+          const x = baseX;
+          const y = -Math.abs(offsetFromCenter) * 8 + (isSelected ? -20 : 0); // Negative Y for upward arc, selected pops up more
+
+          // Card scaling
+          const scale = isSelected ? 1.0 : 0.85; // Smaller until selected
+          const zIndex = isSelected ? 10 : handCount - Math.abs(offsetFromCenter);
+
+          return (
+            <TouchableOpacity
+              key={uniqueKey}
+              onPress={() => setSelectedCard(isSelected ? null : uniqueKey)}
+              activeOpacity={0.9}
+              disabled={state.phase !== "playerTurn"}
+              style={[
+                styles.handCardContainer,
+                {
+                  left: x,
+                  bottom: y,
+                  zIndex: zIndex,
+                  transform: [
+                    { translateX: -handCardWidth / 2 },
+                    { rotate: `${rotation}deg` },
+                    { scale: scale }
+                  ],
+                }
+              ]}
+            >
+                <HarmonyCard
+                  data={card}
+                  variant="hand"
+                  isSelected={isSelected}
+                  widthOverride={handCardWidth}
+                />
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    );
+  };
 
   const range = HARMONY_MAX - HARMONY_MIN;
   const zeroBandY = pointerPadding + (1 - (0 - HARMONY_MIN) / range) * (meterHeight - pointerPadding * 2);
@@ -518,7 +991,14 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
         <Circle cx={screenWidth * 0.78} cy={screenHeight * 0.78} r={screenWidth * 0.65} color="rgba(167,196,255,0.14)" />
       </Canvas>
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingHorizontal: padLg, paddingVertical: padLg }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingHorizontal: padLg,
+            paddingTop: Math.max(padLg, insets.top),
+            paddingBottom: Math.max(padLg, insets.bottom)
+          }
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.headerRow}>
@@ -542,42 +1022,46 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
           renderSelection()
         ) : (
           <View style={{ gap: padLg }}>
-            <View style={styles.topRow}>
-              <View style={styles.portraitFrame}>
-                <SpineCharacterPortrait
-                  character={opponentId === "luma" ? "Luma" : "Sable"}
-                  emotion={npcEmotion}
-                  isActive={!playerLeading}
-                  size={140}
-                  hideLabels
-                />
-              </View>
-              <View style={styles.scorePanel}>
-                <Text style={{ fontSize: typography.size?.["2xl"] || 24, fontWeight: FONT_WEIGHT.bold, color: colors.text?.primary || "#1c1917" }}>
-                  Harmony {state.harmony.toFixed(1)}
-                </Text>
-                <Text style={{ color: colors.text?.secondary || "#44403c", marginTop: padSm }}>
-                  Starting drift {state.baselineHarmony.toFixed(1)}
-                </Text>
-                <View style={styles.contributionRow}>
-                  <View style={[styles.contributionPill, { borderColor: "#10b981", backgroundColor: "rgba(16,185,129,0.12)" }]}
-                  >
-                    <Text style={[styles.contributionLabel, { color: "#0f766e" }]}>You</Text>
-                    <Text style={[styles.contributionValue, { color: colors.text?.primary || "#1c1917" }]}>
-                      {state.playerContribution.toFixed(1)}
-                    </Text>
+            {isNarrowScreen ? (
+              // Vertical layout for narrow screens
+              <View style={styles.topRowVertical}>
+                <View style={styles.topRowHorizontal}>
+                  <View style={[styles.portraitFrame, { width: portraitSize, height: portraitHeight }]}>
+                    <SpineCharacterPortrait
+                      character={opponentId === "luma" ? "Luma" : "Sable"}
+                      emotion={npcEmotion}
+                      isActive={!playerLeading}
+                      size={portraitSize}
+                      hideLabels
+                    />
                   </View>
-                  <View style={[styles.contributionPill, { borderColor: "#a855f7", backgroundColor: "rgba(168,85,247,0.12)" }]}
-                  >
-                    <Text style={[styles.contributionLabel, { color: "#6b21a8" }]}>{opponentName}</Text>
-                    <Text style={[styles.contributionValue, { color: colors.text?.primary || "#1c1917" }]}>
-                      {state.npcContribution.toFixed(1)}
+                  <View style={styles.scorePanelCompact}>
+                    <Text style={{ fontSize: typography.size?.xl || 20, fontWeight: FONT_WEIGHT.bold, color: colors.text?.primary || "#1c1917" }}>
+                      Harmony {state.harmony.toFixed(1)}
                     </Text>
+                    <Text style={{ color: colors.text?.secondary || "#44403c", fontSize: 14 }}>
+                      Start: {state.baselineHarmony.toFixed(1)}
+                    </Text>
+                    <View style={[styles.contributionRow, { flexWrap: 'wrap', gap: 6 }]}>
+                      <View style={[styles.contributionPill, { borderColor: "#10b981", backgroundColor: "rgba(16,185,129,0.12)", minWidth: 80 }]}>
+                        <Text style={[styles.contributionLabel, { color: "#0f766e" }]}>You</Text>
+                        <Text style={[styles.contributionValue, { color: colors.text?.primary || "#1c1917" }]}>
+                          {state.playerContribution.toFixed(1)}
+                        </Text>
+                      </View>
+                      <View style={[styles.contributionPill, { borderColor: "#a855f7", backgroundColor: "rgba(168,85,247,0.12)", minWidth: 80 }]}>
+                        <Text style={[styles.contributionLabel, { color: "#6b21a8" }]}>{opponentName}</Text>
+                        <Text style={[styles.contributionValue, { color: colors.text?.primary || "#1c1917" }]}>
+                          {state.npcContribution.toFixed(1)}
+                        </Text>
+                      </View>
+                    </View>
                   </View>
+                  <HarmonyMeter />
                 </View>
                 {state.lastMove && (
-                  <View style={styles.lastMoveBadge}>
-                    <Text style={{ color: colors.text?.secondary || "#44403c", fontSize: 12 }}>
+                  <View style={[styles.lastMoveBadge, { alignSelf: 'stretch', marginTop: padSm }]}>
+                    <Text style={{ color: colors.text?.secondary || "#44403c", fontSize: 12, textAlign: 'center' }}>
                       Last ripple {TYPE_EMOJI[state.lastMove.card.type]} {state.lastMove.card.name} ({
                         state.lastMove.contributionDelta >= 0 ? "+" : ""
                       }
@@ -586,8 +1070,53 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
                   </View>
                 )}
               </View>
-              <HarmonyMeter />
-            </View>
+            ) : (
+              // Original horizontal layout for wider screens
+              <View style={styles.topRow}>
+                <View style={[styles.portraitFrame, { width: portraitSize, height: portraitHeight }]}>
+                  <SpineCharacterPortrait
+                    character={opponentId === "luma" ? "Luma" : "Sable"}
+                    emotion={npcEmotion}
+                    isActive={!playerLeading}
+                    size={portraitSize}
+                    hideLabels
+                  />
+                </View>
+                <View style={styles.scorePanel}>
+                  <Text style={{ fontSize: typography.size?.["2xl"] || 24, fontWeight: FONT_WEIGHT.bold, color: colors.text?.primary || "#1c1917" }}>
+                    Harmony {state.harmony.toFixed(1)}
+                  </Text>
+                  <Text style={{ color: colors.text?.secondary || "#44403c", marginTop: padSm }}>
+                    Starting drift {state.baselineHarmony.toFixed(1)}
+                  </Text>
+                  <View style={styles.contributionRow}>
+                    <View style={[styles.contributionPill, { borderColor: "#10b981", backgroundColor: "rgba(16,185,129,0.12)" }]}>
+                      <Text style={[styles.contributionLabel, { color: "#0f766e" }]}>You</Text>
+                      <Text style={[styles.contributionValue, { color: colors.text?.primary || "#1c1917" }]}>
+                        {state.playerContribution.toFixed(1)}
+                      </Text>
+                    </View>
+                    <View style={[styles.contributionPill, { borderColor: "#a855f7", backgroundColor: "rgba(168,85,247,0.12)" }]}>
+                      <Text style={[styles.contributionLabel, { color: "#6b21a8" }]}>{opponentName}</Text>
+                      <Text style={[styles.contributionValue, { color: colors.text?.primary || "#1c1917" }]}>
+                        {state.npcContribution.toFixed(1)}
+                      </Text>
+                    </View>
+                  </View>
+                  {state.lastMove && (
+                    <View style={styles.lastMoveBadge}>
+                      <Text style={{ color: colors.text?.secondary || "#44403c", fontSize: 12 }}>
+                        Last ripple {TYPE_EMOJI[state.lastMove.card.type]} {state.lastMove.card.name} ({
+                          state.lastMove.contributionDelta >= 0 ? "+" : ""
+                        }
+                        {state.lastMove.contributionDelta.toFixed(1)})
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <HarmonyMeter />
+              </View>
+            )}
 
             <View style={styles.boardContainer}>{renderBoard()}</View>
 
@@ -598,14 +1127,17 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
                   fontWeight: FONT_WEIGHT.semibold,
                   color: colors.text?.primary || "#1c1917",
                   marginBottom: padSm,
+                  textAlign: 'center',
                 }}
               >
                 Your Hand
               </Text>
               {state.playerHand.length === 0 ? (
-                <Text style={{ color: colors.text?.secondary || "#57534e" }}>No cards left</Text>
+                <Text style={{ color: colors.text?.secondary || "#57534e", textAlign: 'center' }}>No cards left</Text>
               ) : (
-                renderHand()
+                <View style={styles.handWrapper}>
+                  {renderHand()}
+                </View>
               )}
             </View>
           </View>
@@ -688,9 +1220,20 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 12,
   },
+  topRowVertical: {
+    gap: 8,
+  },
+  topRowHorizontal: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+  },
+  scorePanelCompact: {
+    flex: 1,
+    gap: 4,
+    minWidth: 0, // Allows text to wrap
+  },
   portraitFrame: {
-    width: 150,
-    height: 200,
     borderRadius: 26,
     backgroundColor: "rgba(255,255,255,0.55)",
     alignItems: "center",
@@ -735,7 +1278,26 @@ const styles = StyleSheet.create({
   boardContainer: {
     alignItems: "center",
   },
-  handSection: {},
+  handSection: {
+    marginTop: 8,
+  },
+  handWrapper: {
+    height: 240, // Fixed height to accommodate arced cards and selected card pop-up
+    justifyContent: 'flex-end',
+    paddingBottom: 20,
+  },
+  handContainer: {
+    height: 220,
+    position: 'relative',
+  },
+  handCardContainer: {
+    position: 'absolute',
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
+    shadowColor: "#000",
+    shadowOpacity: 0.15,
+    elevation: 5,
+  },
   meterColumn: {
     width: 68,
     alignItems: "center",
@@ -801,69 +1363,226 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   cardShell: {
-    borderRadius: 18,
-    borderWidth: 2,
-    alignItems: "center",
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 8,
+    borderRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 12,
+    shadowColor: "#000",
+    shadowOpacity: 0.15,
+    elevation: 6,
   },
-  cardHeader: {
-    width: "100%",
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+  cardContent: {
+    flex: 1,
+    padding: 6,
+    paddingTop: 8,
+  },
+  cardHeaderNew: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 10,
+    alignItems: "center",
+    marginBottom: 4,
+    paddingHorizontal: 2,
   },
-  cardTypeText: {
-    fontSize: 18,
-    fontWeight: FONT_WEIGHT.bold,
-  },
-  cardValueBadge: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  cardValueText: {
-    fontSize: 12,
-    fontWeight: FONT_WEIGHT.bold,
-  },
-  cardArt: {
-    width: "100%",
-    borderWidth: 1,
-    borderRadius: 12,
+  cardTypeIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 12,
   },
-  cardName: {
+  cardTypeIconText: {
+    fontSize: 14,
     fontWeight: FONT_WEIGHT.bold,
-    marginBottom: 6,
-    textAlign: "center",
   },
-  cardFlavor: {
+  cardValueGem: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    minWidth: 32,
+    alignItems: "center",
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    shadowColor: "#000",
+    shadowOpacity: 0.25,
+    elevation: 3,
+  },
+  cardValueGemText: {
     fontSize: 12,
-    lineHeight: 16,
-    textAlign: "center",
+    fontWeight: FONT_WEIGHT.bold,
+    color: "#ffffff",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+    textShadowColor: "rgba(0,0,0,0.5)",
   },
-  cardFootnote: {
-    marginTop: 8,
-    fontSize: 11,
+  cardArtNew: {
+    width: "100%",
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 6,
+    overflow: "hidden",
+  },
+  cardArtEmoji: {
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+    textShadowColor: "rgba(0,0,0,0.1)",
+  },
+  cardNameBanner: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 24,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 12,
+  },
+  cardNameBannerText: {
+    fontWeight: FONT_WEIGHT.bold,
+    textAlign: "center",
+    textShadowOffset: { width: 0, height: 0.5 },
+    textShadowRadius: 1,
+    textShadowColor: "rgba(241,194,125,0.3)", // Subtle amber glow
+    letterSpacing: 0.2,
+  },
+  cardFlavorSection: {
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+    minHeight: 50,
+  },
+  cardFlavorContent: {
+    flex: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    justifyContent: "center",
+  },
+  cardFlavorNew: {
+    textAlign: "center",
+    fontStyle: "italic",
+    fontWeight: FONT_WEIGHT.medium,
+  },
+  cardFootnoteSection: {
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(0,0,0,0.08)",
+    marginTop: 2,
+  },
+  cardFootnoteNew: {
+    fontSize: 9,
     textAlign: "center",
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
+    fontWeight: FONT_WEIGHT.semibold,
   },
   emptySlot: {
     borderRadius: 16,
-    borderWidth: 2,
-    borderStyle: "dashed",
     alignItems: "center",
     justifyContent: "center",
-    padding: 12,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    elevation: 2,
+  },
+  emptySlotContent: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 12,
+  },
+  emptySlotLabel: {
+    fontSize: 12,
+    fontWeight: FONT_WEIGHT.semibold,
+    marginBottom: 4,
+    textAlign: "center",
+  },
+  emptySlotHint: {
+    fontSize: 10,
+    textAlign: "center",
+    fontStyle: "italic",
+    opacity: 0.8,
+  },
+  // Board card styles - horizontal layout
+  boardCard: {
+    borderRadius: 12,
+    shadowOffset: { width: 0, height: 3 },
+    shadowRadius: 6,
+    shadowColor: "#000",
+    shadowOpacity: 0.12,
+    elevation: 4,
+  },
+  boardCardContent: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+  },
+  boardCardLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    width: 40,
+  },
+  boardCardTypeIcon: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 4,
+  },
+  boardCardTypeText: {
+    fontSize: 8,
+    fontWeight: FONT_WEIGHT.bold,
+  },
+  boardCardArt: {
+    fontSize: 16,
+  },
+  boardCardCenter: {
+    flex: 1,
+    paddingHorizontal: 4,
+    justifyContent: "center",
+  },
+  boardCardName: {
+    fontSize: 9,
+    fontWeight: FONT_WEIGHT.bold,
+    textAlign: "center",
+    lineHeight: 11,
+  },
+  boardCardValue: {
+    width: 24,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowOffset: { width: 0, height: 1 },
+    shadowRadius: 2,
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    elevation: 2,
+  },
+  boardCardValueText: {
+    fontSize: 9,
+    fontWeight: FONT_WEIGHT.bold,
+    color: "#ffffff",
+    textShadowOffset: { width: 0, height: 0.5 },
+    textShadowRadius: 1,
+    textShadowColor: "rgba(0,0,0,0.5)",
+  },
+  boardCardFootnote: {
+    position: "absolute",
+    bottom: 2,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+  },
+  boardCardFootnoteText: {
+    fontSize: 7,
+    fontWeight: FONT_WEIGHT.semibold,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
