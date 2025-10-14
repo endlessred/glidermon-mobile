@@ -140,6 +140,8 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
   const [selectedOpponent, setSelectedOpponent] = useState<OpponentId | null>(null);
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
   const [rewardClaimed, setRewardClaimed] = useState(false);
+  const [previewSlot, setPreviewSlot] = useState<string | null>(null);
+  const [npcPreview, setNpcPreview] = useState<{ cardId: string; slotId: string } | null>(null);
 
   const state = useHarmonyDriftStore((ctx) => ctx.state);
   const cards = useHarmonyDriftStore((ctx) => ctx.cards);
@@ -147,6 +149,7 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
   const playPlayerCard = useHarmonyDriftStore((ctx) => ctx.playPlayerCard);
   const npcTakeTurn = useHarmonyDriftStore((ctx) => ctx.npcTakeTurn);
   const endMatch = useHarmonyDriftStore((ctx) => ctx.endMatch);
+  const previewPlacement = useHarmonyDriftStore((ctx) => ctx.previewPlacement);
 
   const earnVirtuAcorns = useVirtuAcornStore((s) => s.earn);
 
@@ -199,17 +202,56 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
     setBaselinePointer(baselineResult);
   }, [state.harmony, state.baselineHarmony, meterHeight, pointerPadding]);
 
+  // Helper function to find best NPC move
+  const findBestNpcMove = () => {
+    let best: { cardId: string; slotId: string; score: number; stability: number } | undefined;
+
+    state.npcHand.forEach((cardId) => {
+      SLOT_IDS.forEach((slotId) => {
+        if (state.board[slotId]) return;
+        const preview = previewPlacement(cardId, slotId);
+        if (!preview) return;
+
+        const score = preview.contributionDelta;
+        const stability = Math.abs(preview.harmonyAfter);
+
+        if (!best) {
+          best = { cardId, slotId, score, stability };
+          return;
+        }
+        if (score > best.score || (score === best.score && stability < best.stability)) {
+          best = { cardId, slotId, score, stability };
+        }
+      });
+    });
+
+    return best;
+  };
+
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     if (state.phase === "npcTurn") {
-      timer = setTimeout(() => {
-        npcTakeTurn();
-      }, 650);
+      // First show NPC preview
+      const bestMove = findBestNpcMove();
+      if (bestMove) {
+        setNpcPreview({ cardId: bestMove.cardId, slotId: bestMove.slotId });
+
+        // After 1 second, make the actual move
+        timer = setTimeout(() => {
+          setNpcPreview(null);
+          npcTakeTurn();
+        }, 1000);
+      } else {
+        // No valid move
+        timer = setTimeout(() => {
+          npcTakeTurn();
+        }, 650);
+      }
     }
     return () => {
       if (timer) clearTimeout(timer);
     };
-  }, [state.phase, npcTakeTurn]);
+  }, [state.phase, npcTakeTurn, previewPlacement]);
 
   useEffect(() => {
     if (state.phase === "idle" && selectedOpponent) {
@@ -243,10 +285,19 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
 
   const handleSlotPress = (slotId: string) => {
     if (!selectedCard) return;
-    // Extract the actual card ID from the unique key (format: "cardId-index")
-    const actualCardId = selectedCard.split('-')[0];
-    const resolution = playPlayerCard(actualCardId, slotId);
-    if (resolution) setSelectedCard(null);
+
+    // If this slot is already being previewed, place the card
+    if (previewSlot === slotId) {
+      const actualCardId = selectedCard.split('-')[0];
+      const resolution = playPlayerCard(actualCardId, slotId);
+      if (resolution) {
+        setSelectedCard(null);
+        setPreviewSlot(null);
+      }
+    } else {
+      // First tap - show preview
+      setPreviewSlot(slotId);
+    }
   };
 
   const handleOpponentSelect = (opponent: OpponentId) => {
@@ -263,6 +314,58 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
     endMatch();
   };
 
+  // Calculate preview for current selected card + slot combination
+  const currentPreview = useMemo(() => {
+    if (!selectedCard || !previewSlot || state.phase !== "playerTurn") return null;
+    const actualCardId = selectedCard.split('-')[0];
+    return previewPlacement(actualCardId, previewSlot);
+  }, [selectedCard, previewSlot, state.phase, previewPlacement]);
+
+  // Calculate NPC preview
+  const npcPreviewData = useMemo(() => {
+    if (!npcPreview) return null;
+    return previewPlacement(npcPreview.cardId, npcPreview.slotId);
+  }, [npcPreview, previewPlacement]);
+
+  // Clear preview when no card is selected
+  useEffect(() => {
+    if (!selectedCard) {
+      setPreviewSlot(null);
+    }
+  }, [selectedCard]);
+
+  // Helper function to check if a card has synergy with neighbors
+  const checkCardSynergy = (slotId: string, board: Record<string, any>) => {
+    const card = board[slotId];
+    if (!card) return false;
+
+    const slot = SLOT_IDS.find(id => id === slotId);
+    if (!slot) return false;
+
+    // Import the slot map to get neighbors
+    const slotData = {
+      A1: ["A2", "B1", "B2"],
+      A2: ["A1", "A3", "B2", "B3"],
+      A3: ["A2", "A4", "B3", "B4"],
+      A4: ["A3", "B4", "B5"],
+      B1: ["B2", "A1", "C1", "C2"],
+      B2: ["B1", "B3", "A1", "A2", "C1", "C2"],
+      B3: ["B2", "B4", "A2", "A3", "C2", "C3"],
+      B4: ["B3", "B5", "A3", "A4", "C3", "C4"],
+      B5: ["B4", "A4", "C4"],
+      C1: ["C2", "B1", "B2"],
+      C2: ["C1", "C3", "B1", "B2", "B3"],
+      C3: ["C2", "C4", "B2", "B3", "B4"],
+      C4: ["C3", "B3", "B4", "B5"],
+    };
+
+    const neighbors = slotData[slotId as keyof typeof slotData] || [];
+    return neighbors.some(neighborId => {
+      const neighbor = board[neighborId];
+      return neighbor && neighbor.type === card.type;
+    });
+  };
+
   const HarmonyCard = ({
     data,
     variant,
@@ -270,6 +373,7 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
     footnote,
     valueOverride,
     widthOverride,
+    showSynergy = false,
   }: {
     data: Pick<Card, "name" | "type" | "artAsset" | "rarity" | "flavor" | "value">;
     variant: HarmonyCardVariant;
@@ -277,6 +381,7 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
     footnote?: string;
     valueOverride?: number;
     widthOverride?: number;
+    showSynergy?: boolean;
   }) => {
     const accent = typeAccent(data.type, colors.primary?.[400] || "#38bdf8");
     const cardWidth = widthOverride ?? (variant === "hand" ? handCardWidth : 110);
@@ -287,6 +392,8 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
     const padding = 6;
     const value = valueOverride ?? data.value;
     const prefix = value > 0 ? "+" : "";
+    const baseValue = data.value;
+    const hasSynergy = showSynergy && valueOverride !== undefined && Math.abs(valueOverride) > Math.abs(baseValue);
     const valueText = variant === "hand" ? `${prefix}${Math.round(value)}` : `${prefix}${value.toFixed(1)}`;
     const artGlyph = resolveCardArt(data.artAsset, data.type);
 
@@ -367,8 +474,17 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
             </View>
 
             {/* Right: Value */}
-            <View style={[styles.boardCardValue, { backgroundColor: accent }]}>
-              <Text style={styles.boardCardValueText}>{valueText}</Text>
+            <View style={[styles.boardCardValue, {
+              backgroundColor: hasSynergy ? "#fbbf24" : accent,
+              shadowColor: hasSynergy ? "#f59e0b" : "#000",
+              shadowOpacity: hasSynergy ? 0.4 : 0.2,
+            }]}>
+              <Text style={[styles.boardCardValueText, {
+                textShadowColor: hasSynergy ? "rgba(245,158,11,0.8)" : "rgba(0,0,0,0.5)"
+              }]}>{valueText}</Text>
+              {hasSynergy && (
+                <Text style={styles.synergyIndicator}>⚡</Text>
+              )}
             </View>
           </View>
 
@@ -464,8 +580,17 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
             <View style={[styles.cardTypeIcon, { backgroundColor: `${accent}25` }]}>
               <Text style={[styles.cardTypeIconText, { color: accent }]}>{TYPE_EMOJI[data.type]}</Text>
             </View>
-            <View style={[styles.cardValueGem, { backgroundColor: accent }]}>
-              <Text style={styles.cardValueGemText}>{valueText}</Text>
+            <View style={[styles.cardValueGem, {
+              backgroundColor: hasSynergy ? "#fbbf24" : accent,
+              shadowColor: hasSynergy ? "#f59e0b" : "#000",
+              shadowOpacity: hasSynergy ? 0.4 : 0.25,
+            }]}>
+              <Text style={[styles.cardValueGemText, {
+                textShadowColor: hasSynergy ? "rgba(245,158,11,0.8)" : "rgba(0,0,0,0.5)"
+              }]}>{valueText}</Text>
+              {hasSynergy && (
+                <Text style={styles.synergyIndicatorHand}>⚡</Text>
+              )}
             </View>
           </View>
 
@@ -758,7 +883,48 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
                   valueOverride={occupant.value}
                   footnote={ownerLabel}
                   isSelected={state.lastMove?.slotId === slotId}
+                  showSynergy={checkCardSynergy(slotId, state.board)}
                 />
+              ) : previewSlot === slotId && selectedCard ? (
+                // Show player preview card hovering over slot
+                <View style={{ opacity: 0.8, transform: [{ scale: 1.05 }] }}>
+                  <HarmonyCard
+                    data={{
+                      name: cards[selectedCard.split('-')[0]]?.name || "",
+                      type: cards[selectedCard.split('-')[0]]?.type || "Energy",
+                      artAsset: cards[selectedCard.split('-')[0]]?.artAsset || "",
+                      rarity: cards[selectedCard.split('-')[0]]?.rarity || "common",
+                      flavor: cards[selectedCard.split('-')[0]]?.flavor || "",
+                      value: cards[selectedCard.split('-')[0]]?.value || 0,
+                    }}
+                    variant="board"
+                    widthOverride={slotWidth}
+                    valueOverride={currentPreview?.board[slotId]?.value}
+                    footnote="Preview"
+                    isSelected={true}
+                    showSynergy={currentPreview ? checkCardSynergy(slotId, currentPreview.board) : false}
+                  />
+                </View>
+              ) : npcPreview && npcPreview.slotId === slotId ? (
+                // Show NPC preview card hovering over slot
+                <View style={{ opacity: 0.7, transform: [{ scale: 1.03 }] }}>
+                  <HarmonyCard
+                    data={{
+                      name: cards[npcPreview.cardId]?.name || "",
+                      type: cards[npcPreview.cardId]?.type || "Energy",
+                      artAsset: cards[npcPreview.cardId]?.artAsset || "",
+                      rarity: cards[npcPreview.cardId]?.rarity || "common",
+                      flavor: cards[npcPreview.cardId]?.flavor || "",
+                      value: cards[npcPreview.cardId]?.value || 0,
+                    }}
+                    variant="board"
+                    widthOverride={slotWidth}
+                    valueOverride={npcPreviewData?.board[slotId]?.value}
+                    footnote={`${opponentName} thinking...`}
+                    isSelected={false}
+                    showSynergy={npcPreviewData ? checkCardSynergy(slotId, npcPreviewData.board) : false}
+                  />
+                </View>
               ) : (
                 <View
                   style={[
@@ -1119,6 +1285,93 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
             )}
 
             <View style={styles.boardContainer}>{renderBoard()}</View>
+
+            {/* Preview Banner */}
+            {currentPreview && (
+              <View style={[styles.previewBanner, { backgroundColor: colors.background?.secondary || "#fbf6ec" }]}>
+                <View style={styles.previewContent}>
+                  <Text style={[styles.previewTitle, { color: colors.text?.primary || "#1c1917" }]}>
+                    Preview: {currentPreview.card.name}
+                  </Text>
+                  <View style={styles.previewStats}>
+                    <View style={styles.previewStat}>
+                      <Text style={[styles.previewStatLabel, { color: colors.text?.secondary || "#44403c" }]}>
+                        Harmony Change
+                      </Text>
+                      <Text style={[styles.previewStatValue, {
+                        color: Math.abs(currentPreview.harmonyAfter) < Math.abs(currentPreview.harmonyBefore) ? "#10b981" : "#f59e0b"
+                      }]}>
+                        {currentPreview.harmonyBefore.toFixed(1)} → {currentPreview.harmonyAfter.toFixed(1)}
+                      </Text>
+                    </View>
+                    <View style={styles.previewStat}>
+                      <Text style={[styles.previewStatLabel, { color: colors.text?.secondary || "#44403c" }]}>
+                        Your Score
+                      </Text>
+                      <Text style={[styles.previewStatValue, {
+                        color: currentPreview.contributionDelta > 0 ? "#10b981" : "#ef4444"
+                      }]}>
+                        {currentPreview.contributionDelta >= 0 ? "+" : ""}{currentPreview.contributionDelta.toFixed(1)}
+                      </Text>
+                    </View>
+                  </View>
+                  {currentPreview && checkCardSynergy(previewSlot!, currentPreview.board) && (
+                    <View style={styles.synergyBanner}>
+                      <Text style={[styles.synergyText, { color: "#f59e0b" }]}>
+                        ⚡ Type Synergy! Adjacent cards of the same type double their effects
+                      </Text>
+                    </View>
+                  )}
+                  <Text style={[styles.previewInstruction, { color: colors.text?.tertiary || "#78716c" }]}>
+                    Tap the card again to place it, or select a different card to cancel
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* NPC Preview Banner */}
+            {npcPreviewData && (
+              <View style={[styles.previewBanner, {
+                backgroundColor: colors.background?.secondary || "#fbf6ec",
+                borderLeftColor: "#a855f7",
+                borderLeftWidth: 4
+              }]}>
+                <View style={styles.previewContent}>
+                  <Text style={[styles.previewTitle, { color: colors.text?.primary || "#1c1917" }]}>
+                    {opponentName} considering: {npcPreviewData.card.name}
+                  </Text>
+                  <View style={styles.previewStats}>
+                    <View style={styles.previewStat}>
+                      <Text style={[styles.previewStatLabel, { color: colors.text?.secondary || "#44403c" }]}>
+                        Harmony Change
+                      </Text>
+                      <Text style={[styles.previewStatValue, {
+                        color: Math.abs(npcPreviewData.harmonyAfter) < Math.abs(npcPreviewData.harmonyBefore) ? "#10b981" : "#f59e0b"
+                      }]}>
+                        {npcPreviewData.harmonyBefore.toFixed(1)} → {npcPreviewData.harmonyAfter.toFixed(1)}
+                      </Text>
+                    </View>
+                    <View style={styles.previewStat}>
+                      <Text style={[styles.previewStatLabel, { color: colors.text?.secondary || "#44403c" }]}>
+                        {opponentName}'s Score
+                      </Text>
+                      <Text style={[styles.previewStatValue, {
+                        color: npcPreviewData.contributionDelta > 0 ? "#a855f7" : "#ef4444"
+                      }]}>
+                        {npcPreviewData.contributionDelta >= 0 ? "+" : ""}{npcPreviewData.contributionDelta.toFixed(1)}
+                      </Text>
+                    </View>
+                  </View>
+                  {npcPreviewData && npcPreview && checkCardSynergy(npcPreview.slotId, npcPreviewData.board) && (
+                    <View style={styles.synergyBanner}>
+                      <Text style={[styles.synergyText, { color: "#f59e0b" }]}>
+                        ⚡ {opponentName} found a type synergy!
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            )}
 
             <View style={styles.handSection}>
               <Text
@@ -1595,5 +1848,77 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: "center",
     gap: 8,
+  },
+  previewBanner: {
+    borderRadius: 16,
+    padding: 16,
+    marginHorizontal: 8,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    elevation: 2,
+  },
+  previewContent: {
+    gap: 8,
+  },
+  previewTitle: {
+    fontSize: 16,
+    fontWeight: FONT_WEIGHT.bold,
+    textAlign: "center",
+  },
+  previewStats: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    gap: 16,
+  },
+  previewStat: {
+    flex: 1,
+    alignItems: "center",
+  },
+  previewStatLabel: {
+    fontSize: 12,
+    fontWeight: FONT_WEIGHT.medium,
+    marginBottom: 4,
+  },
+  previewStatValue: {
+    fontSize: 14,
+    fontWeight: FONT_WEIGHT.bold,
+  },
+  previewInstruction: {
+    fontSize: 12,
+    textAlign: "center",
+    fontStyle: "italic",
+    marginTop: 4,
+  },
+  synergyIndicator: {
+    position: "absolute",
+    top: -2,
+    right: -2,
+    fontSize: 8,
+    textShadowOffset: { width: 0, height: 0.5 },
+    textShadowRadius: 1,
+    textShadowColor: "rgba(245,158,11,0.8)",
+  },
+  synergyIndicatorHand: {
+    position: "absolute",
+    top: -3,
+    right: -3,
+    fontSize: 10,
+    textShadowOffset: { width: 0, height: 0.5 },
+    textShadowRadius: 1,
+    textShadowColor: "rgba(245,158,11,0.8)",
+  },
+  synergyBanner: {
+    backgroundColor: "rgba(251,191,36,0.15)",
+    borderRadius: 8,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.3)",
+  },
+  synergyText: {
+    fontSize: 12,
+    fontWeight: FONT_WEIGHT.semibold,
+    textAlign: "center",
   },
 });

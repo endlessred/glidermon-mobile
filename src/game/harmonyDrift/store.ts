@@ -92,6 +92,59 @@ const applyPatternDelta = (
   });
 };
 
+const applyTypeSynergies = (
+  board: Record<string, PlacedCard | undefined>,
+  slotId: string
+) => {
+  const placedCard = board[slotId];
+  if (!placedCard) return;
+
+  const slot = HARMONY_SLOT_MAP[slotId];
+  if (!slot) return;
+
+  // Count adjacent cards of the same type
+  let sameTypeNeighbors = 0;
+  slot.neighbors.forEach((neighborId) => {
+    const neighbor = board[neighborId];
+    if (neighbor && neighbor.type === placedCard.type) {
+      sameTypeNeighbors++;
+    }
+  });
+
+  // If there are any same-type neighbors, double the card's effect
+  if (sameTypeNeighbors > 0) {
+    placedCard.value = placedCard.baseValue * 2;
+
+    // Also apply synergy to all same-type neighbors
+    slot.neighbors.forEach((neighborId) => {
+      const neighbor = board[neighborId];
+      if (neighbor && neighbor.type === placedCard.type) {
+        neighbor.value = neighbor.baseValue * 2;
+      }
+    });
+  }
+};
+
+const applyAllTypeSynergies = (
+  board: Record<string, PlacedCard | undefined>
+) => {
+  // Reset all cards to base values first
+  SLOT_IDS.forEach((slotId) => {
+    const card = board[slotId];
+    if (card) {
+      card.value = card.baseValue;
+    }
+  });
+
+  // Then apply synergies for all placed cards
+  SLOT_IDS.forEach((slotId) => {
+    const card = board[slotId];
+    if (card) {
+      applyTypeSynergies(board, slotId);
+    }
+  });
+};
+
 const simulatePlacement = (
   state: HarmonyMatchState,
   owner: HarmonyPlayer,
@@ -141,6 +194,9 @@ const simulatePlacement = (
         break;
     }
   }
+
+  // Apply type synergies after all card effects
+  applyAllTypeSynergies(boardCopy);
 
   const harmonyBefore = state.harmony;
   const harmonyAfter = calculateHarmony(boardCopy, state.baselineHarmony);
@@ -228,6 +284,8 @@ interface HarmonyDriftActions {
   npcTakeTurn: () => MoveResolution | undefined;
   endMatch: () => void;
   reset: () => void;
+  previewPlacement: (cardId: string, slotId: string) => MoveResolution | undefined;
+  getPlacementPreview: (cardId: string) => Record<string, MoveResolution>;
 }
 
 export const useHarmonyDriftStore = create<HarmonyDriftContext & HarmonyDriftActions>(() => ({
@@ -238,6 +296,8 @@ export const useHarmonyDriftStore = create<HarmonyDriftContext & HarmonyDriftAct
   npcTakeTurn: () => undefined,
   endMatch: () => undefined,
   reset: () => undefined,
+  previewPlacement: () => undefined,
+  getPlacementPreview: () => ({}),
 }));
 
 const evaluateNpcMove = (
@@ -444,6 +504,32 @@ useHarmonyDriftStore.setState((current) => {
     }));
   };
 
+  const previewPlacement: HarmonyDriftActions["previewPlacement"] = (cardId, slotId) => {
+    const currentState = useHarmonyDriftStore.getState().state;
+    if (currentState.phase !== "playerTurn") return undefined;
+    if (!currentState.playerHand.includes(cardId)) return undefined;
+
+    return simulatePlacement(currentState, "player", cardId, slotId);
+  };
+
+  const getPlacementPreview: HarmonyDriftActions["getPlacementPreview"] = (cardId) => {
+    const currentState = useHarmonyDriftStore.getState().state;
+    if (currentState.phase !== "playerTurn") return {};
+    if (!currentState.playerHand.includes(cardId)) return {};
+
+    const previews: Record<string, MoveResolution> = {};
+    SLOT_IDS.forEach((slotId) => {
+      if (!currentState.board[slotId]) {
+        const preview = simulatePlacement(currentState, "player", cardId, slotId);
+        if (preview) {
+          previews[slotId] = preview;
+        }
+      }
+    });
+
+    return previews;
+  };
+
   return {
     ...current,
     startMatch,
@@ -451,5 +537,7 @@ useHarmonyDriftStore.setState((current) => {
     npcTakeTurn,
     endMatch,
     reset,
+    previewPlacement,
+    getPlacementPreview,
   };
 });
