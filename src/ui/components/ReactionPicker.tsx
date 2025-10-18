@@ -168,14 +168,14 @@ export default function ReactionPicker({ onReactionSelect, currentReactions, dis
               textAlign: "center",
               marginBottom: spacing.lg,
             }}>
-              Choose a Reaction
+              React with an emoji!
             </Text>
 
             <View style={{
               flexDirection: "row",
               flexWrap: "wrap",
               justifyContent: "center",
-              gap: spacing.md,
+              gap: spacing.sm,
             }}>
               {Object.values(REACTION_TYPES).map((reaction: ReactionType) => (
                 <Pressable
@@ -183,36 +183,19 @@ export default function ReactionPicker({ onReactionSelect, currentReactions, dis
                   onPress={() => handleReactionSelect(reaction.id)}
                   style={{
                     alignItems: "center",
-                    padding: spacing.md,
-                    borderRadius: borderRadius.lg,
+                    justifyContent: "center",
+                    width: 60,
+                    height: 60,
+                    borderRadius: borderRadius.full,
                     backgroundColor: colors.gray[50],
-                    borderWidth: 1,
+                    borderWidth: 2,
                     borderColor: colors.gray[200],
-                    minWidth: 80,
-                    maxWidth: 100,
                   }}
                 >
                   <Text style={{
-                    fontSize: 32,
-                    marginBottom: spacing.xs,
+                    fontSize: 28,
                   }}>
                     {reaction.emoji}
-                  </Text>
-                  <Text style={{
-                    fontSize: typography.size.sm,
-                    fontWeight: typography.weight.medium as any,
-                    color: reaction.color,
-                    textAlign: "center",
-                    marginBottom: spacing.xs / 2,
-                  }}>
-                    {reaction.label}
-                  </Text>
-                  <Text style={{
-                    fontSize: typography.size.xs,
-                    color: colors.text.secondary,
-                    textAlign: "center",
-                  }}>
-                    {reaction.description}
                   </Text>
                 </Pressable>
               ))}

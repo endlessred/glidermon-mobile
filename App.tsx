@@ -1,7 +1,7 @@
 // App.tsx
 // import './src/spine/spinePhysicsShim'; // Temporarily removed to debug physics issues
 import React, { useState, useEffect } from "react";
-import { Platform, SafeAreaView, View, Text, Pressable, AppState } from "react-native";
+import { Platform, SafeAreaView, View, Text, Pressable, AppState, ScrollView } from "react-native";
 import { useProgressionStore } from "./src/data/stores/progressionStore";
 import { useUserStore } from "./src/data/stores/userStore";
 import HomeScreen from "./src/ui/screens/HudScreen"; // HudScreen serves as HomeScreen
@@ -31,7 +31,7 @@ import { POSE_DEFINITIONS } from "./src/data/poses/poseDefinitions";
 import { useHealthKit } from "./src/data/hooks/useHealthKit";
 // import { migrateEquippedCosmeticsToOutfit, syncOutfitToCosmeticsStore } from "./src/data/utils/outfitMigration.ts";
 
-const TABS = ["HOME", "SHOP", "OUTFIT", "🕹️ ARCADE", "SETTINGS"] as const;
+const TABS = ["HOME", "SHOP", "OUTFIT", "🎨 GALLERY", "🕹️ ARCADE", "SETTINGS"] as const;
 type Tab = typeof TABS[number];
 
 export default function App() {
@@ -198,36 +198,44 @@ export default function App() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background.primary }}>
       {/* top tabs */}
       <View style={{
-        flexDirection: "row",
-        padding: spacing.md,
-        gap: spacing.sm,
         backgroundColor: colors.background.secondary,
         borderBottomWidth: 1,
         borderBottomColor: colors.gray[200],
       }}>
-        {TABS.map((t) => (
-          <Pressable
-            key={t}
-            onPress={() => setTab(t)}
-            style={{
-              paddingVertical: spacing.sm,
-              paddingHorizontal: spacing.md,
-              borderRadius: borderRadius.md,
-              backgroundColor: tab === t ? (colors.primary?.[500] || '#0ea5e9') : (colors.background?.card || '#ffffff'),
-              borderWidth: 1,
-              borderColor: tab === t ? (colors.primary?.[600] || '#0284c7') : (colors.gray?.[300] || '#d6d3d1'),
-              ...getTabShadow(tab === t),
-            }}
-          >
-            <Text style={{
-              color: tab === t ? (colors.text?.inverse || '#ffffff') : (colors.text?.primary || '#1c1917'),
-              fontWeight: (typography.weight?.semibold || '600') as any,
-              fontSize: typography.size?.sm || 14,
-            }}>
-              {t}
-            </Text>
-          </Pressable>
-        ))}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{
+            padding: spacing.md,
+            gap: spacing.sm,
+          }}
+        >
+          {TABS.map((t) => (
+            <Pressable
+              key={t}
+              onPress={() => setTab(t)}
+              style={{
+                paddingVertical: spacing.sm,
+                paddingHorizontal: spacing.md,
+                borderRadius: borderRadius.md,
+                backgroundColor: tab === t ? (colors.primary?.[500] || '#0ea5e9') : (colors.background?.card || '#ffffff'),
+                borderWidth: 1,
+                borderColor: tab === t ? (colors.primary?.[600] || '#0284c7') : (colors.gray?.[300] || '#d6d3d1'),
+                minWidth: 80,
+                ...getTabShadow(tab === t),
+              }}
+            >
+              <Text style={{
+                color: tab === t ? (colors.text?.inverse || '#ffffff') : (colors.text?.primary || '#1c1917'),
+                fontWeight: (typography.weight?.semibold || '600') as any,
+                fontSize: typography.size?.sm || 14,
+                textAlign: 'center',
+              }}>
+                {t}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
       </View>
 
       {/* content */}
@@ -238,6 +246,7 @@ export default function App() {
 
         {tab === "SHOP" && <ShopScreen />}
         {tab === "OUTFIT" && <OutfitScreen />}
+        {tab === "🎨 GALLERY" && <GalleryScreen />}
         {tab === "🕹️ ARCADE" && <ArcadeScreen />}
         {tab === "SETTINGS" && <SettingsScreen />}
       </View>

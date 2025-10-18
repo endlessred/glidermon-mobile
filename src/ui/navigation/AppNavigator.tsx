@@ -41,6 +41,8 @@ export default function AppNavigator() {
           headerShown: true,
           tabBarActiveTintColor: "#10b981",
           tabBarInactiveTintColor: "#9ca3af",
+          tabBarScrollEnabled: true,
+          tabBarItemStyle: { minWidth: 80 },
         }}
       >
         <Tab.Screen
@@ -67,6 +69,15 @@ export default function AppNavigator() {
             tabBarLabel: ({ color }) => <Text style={{ color }}>Outfit</Text>,
             tabBarAccessibilityLabel: "Outfit customization, equip cosmetic items",
             headerTitle: "Outfit"
+          }}
+        />
+        <Tab.Screen
+          name="Gallery"
+          component={GalleryScreen}
+          options={{
+            tabBarLabel: ({ color }) => <Text style={{ color }}>🎨 Gallery</Text>,
+            tabBarAccessibilityLabel: "Gallery, view and showcase character styles",
+            headerTitle: "Gallery"
           }}
         />
         <Tab.Screen

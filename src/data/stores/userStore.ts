@@ -51,12 +51,12 @@ export const useUserStore = create<UserState>()(
   persist(
     (set, get) => ({
       // Initial state
-      glidermonName: "",
-      displayName: "",
+      glidermonName: "TestGlider", // Default name for testing
+      displayName: "TestPlayer", // Default name for testing
       playerAvatar: undefined,
 
-      hasCompletedOnboarding: false,
-      isFirstLaunch: true,
+      hasCompletedOnboarding: true, // Set to true for easier testing
+      isFirstLaunch: false, // Set to false for easier testing
       onboardingStep: 0,
 
       allowLeaderboards: true, // Default to opt-in

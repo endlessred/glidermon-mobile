@@ -1,16 +1,18 @@
 // screens/GalleryScreen.tsx
 import React, { useState, useEffect } from "react";
-import { View, Text, ScrollView, Pressable, TextInput, Alert } from "react-native";
+import { View, Text, ScrollView, Pressable, Alert } from "react-native";
 import { useGalleryStore, GalleryCategory, GalleryEntry } from "../../data/stores/galleryStore";
 import { useUserStore } from "../../data/stores/userStore";
+import { useActivePublicOutfit } from "../../data/stores/outfitStore";
 import { useTheme } from "../../data/hooks/useTheme";
-import HatPreview from "../components/HatPreview";
+import SpineCharacterPreview from "../components/SpineCharacterPreview";
 import ReactionPicker from "../components/ReactionPicker";
+import ComplimentSystem from "../components/ComplimentSystem";
+import SeeReactions from "../components/SeeReactions";
 
 export default function GalleryScreen() {
   const { colors, spacing, borderRadius, typography } = useTheme();
   const [selectedCategory, setSelectedCategory] = useState<GalleryCategory>("style_stars");
-  const [showcaseMessage, setShowcaseMessage] = useState("");
 
   const {
     galleries,
@@ -19,11 +21,17 @@ export default function GalleryScreen() {
     updateMyShowcase,
     submitForCategory,
     addReaction,
+    addCompliment,
     fetchGallery,
-    setParticipation
+    setParticipation,
+    getNewReactions,
+    getNewCompliments,
+    clearNewReactions,
+    clearNewCompliments
   } = useGalleryStore();
 
   const { allowLeaderboards, hasCompletedOnboarding } = useUserStore();
+  const activePublicOutfit = useActivePublicOutfit();
 
   useEffect(() => {
     if (allowLeaderboards && hasCompletedOnboarding) {
@@ -72,7 +80,7 @@ export default function GalleryScreen() {
 
   const handleJoinGallery = () => {
     if (!myEntry) {
-      updateMyShowcase(showcaseMessage);
+      updateMyShowcase();
     }
     submitForCategory(selectedCategory);
     Alert.alert("Success!", `You've been added to ${categories.find(c => c.key === selectedCategory)?.label}!`);
@@ -92,8 +100,9 @@ export default function GalleryScreen() {
     >
       <View style={{
         flexDirection: "row",
-        alignItems: "center",
+        alignItems: "flex-start",
         marginBottom: spacing.md,
+        minHeight: 75, // Ensure minimum height for character preview
       }}>
         {/* Rank */}
         <View style={{
@@ -104,6 +113,7 @@ export default function GalleryScreen() {
           alignItems: "center",
           justifyContent: "center",
           marginRight: spacing.md,
+          marginTop: spacing.sm, // Align with text baseline
         }}>
           <Text style={{
             color: colors.text.inverse,
@@ -114,44 +124,58 @@ export default function GalleryScreen() {
           </Text>
         </View>
 
-        {/* Hat Preview */}
-        <HatPreview hatId={entry.equippedCosmetics.headTop || "leaf_hat"} size={40} />
-
-        {/* Player Info */}
-        <View style={{ flex: 1, marginLeft: spacing.md }}>
-          <Text style={{
-            fontSize: typography.size.md,
-            fontWeight: typography.weight.semibold as any,
-            color: colors.text.primary,
-          }}>
-            {entry.glidermonName}
-          </Text>
-          <Text style={{
-            fontSize: typography.size.sm,
-            color: colors.text.secondary,
-          }}>
-            by {entry.playerDisplayName} • Level {entry.level}
-          </Text>
+        {/* Character Preview - showing entry's outfit */}
+        <View style={{ width: 60, height: 75 }}>
+          <SpineCharacterPreview
+            outfit={entry.outfit}
+            size="small"
+          />
         </View>
 
-        {/* Reaction Picker */}
-        <ReactionPicker
-          onReactionSelect={(reactionType) => addReaction(entry.id, reactionType)}
-          currentReactions={entry.reactions}
-        />
+        {/* Player Info - Full width */}
+        <View style={{
+          flex: 1,
+          marginLeft: spacing.md,
+        }}>
+          <Text
+            numberOfLines={1}
+            style={{
+              fontSize: typography.size.md,
+              fontWeight: typography.weight.semibold as any,
+              color: colors.text.primary,
+            }}
+          >
+            {entry.anonymousGliderName}
+          </Text>
+          <Text
+            numberOfLines={1}
+            style={{
+              fontSize: typography.size.sm,
+              color: colors.text.secondary,
+              marginBottom: spacing.sm,
+            }}
+          >
+            Level {entry.level}
+          </Text>
+
+          {/* Social Interactions - Right aligned below text */}
+          <View style={{
+            alignItems: "flex-end",
+            gap: spacing.sm,
+          }}>
+            <ReactionPicker
+              onReactionSelect={(reactionType) => addReaction(entry.id, reactionType)}
+              currentReactions={entry.reactions}
+            />
+            <ComplimentSystem
+              onComplimentSelect={(categoryId, complimentId, complimentText) =>
+                addCompliment(entry.id, categoryId, complimentId, complimentText)
+              }
+            />
+          </View>
+        </View>
       </View>
 
-      {/* Showcase Message */}
-      {entry.showcaseMessage && (
-        <Text style={{
-          fontSize: typography.size.sm,
-          color: colors.text.secondary,
-          fontStyle: "italic",
-          marginBottom: spacing.sm,
-        }}>
-          "{entry.showcaseMessage}"
-        </Text>
-      )}
 
       {/* Stats */}
       <View style={{
@@ -253,15 +277,35 @@ export default function GalleryScreen() {
       }}
     >
       {/* Header */}
-      <Text style={{
-        fontSize: typography.size.xl,
-        fontWeight: typography.weight.bold as any,
-        color: colors.text.primary,
-        textAlign: "center",
+      <View style={{
+        alignItems: "center",
         marginBottom: spacing.lg,
       }}>
-        🎨 Glidermon Gallery
-      </Text>
+        <Text style={{
+          fontSize: typography.size.xl,
+          fontWeight: typography.weight.bold as any,
+          color: colors.text.primary,
+          textAlign: "center",
+          marginBottom: spacing.md,
+        }}>
+          🎨 Glidermon Gallery
+        </Text>
+
+        {/* See Reactions Button */}
+        {isParticipating && myEntry && activePublicOutfit && (
+          <SeeReactions
+            outfit={activePublicOutfit}
+            newReactions={getNewReactions(myEntry.id)}
+            newCompliments={getNewCompliments(myEntry.id)}
+            onClearReactions={() => {
+              if (myEntry) {
+                clearNewReactions(myEntry.id);
+                clearNewCompliments(myEntry.id);
+              }
+            }}
+          />
+        )}
+      </View>
 
       {/* Category Selector */}
       <ScrollView
@@ -323,42 +367,32 @@ export default function GalleryScreen() {
             fontSize: typography.size.md,
             fontWeight: typography.weight.semibold as any,
             color: colors.primary[700],
-            marginBottom: spacing.sm,
+            marginBottom: spacing.md,
           }}>
             Join this Gallery
           </Text>
 
-          <TextInput
-            style={{
-              borderWidth: 1,
-              borderColor: colors.gray[300],
-              borderRadius: borderRadius.md,
-              padding: spacing.md,
-              fontSize: typography.size.md,
-              color: colors.text.primary,
-              backgroundColor: colors.background.primary,
-              marginBottom: spacing.md,
-            }}
-            placeholder="Add a message about your glidermon... (optional)"
-            placeholderTextColor={colors.text.placeholder}
-            value={showcaseMessage}
-            onChangeText={setShowcaseMessage}
-            maxLength={100}
-            multiline
-          />
+          <Text style={{
+            fontSize: typography.size.sm,
+            color: colors.text.secondary,
+            marginBottom: spacing.md,
+            textAlign: "center",
+          }}>
+            Showcase your glider's style! Your outfit will be displayed anonymously.
+          </Text>
 
           <Pressable
             onPress={handleJoinGallery}
             style={{
               backgroundColor: colors.primary[500],
               borderRadius: borderRadius.md,
-              padding: spacing.sm,
+              padding: spacing.md,
               alignItems: "center",
             }}
           >
             <Text style={{
               color: colors.text.inverse,
-              fontSize: typography.size.sm,
+              fontSize: typography.size.md,
               fontWeight: typography.weight.semibold as any,
             }}>
               Submit to {categories.find(c => c.key === selectedCategory)?.label}
