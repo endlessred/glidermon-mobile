@@ -133,8 +133,8 @@ export default function HudScreen() {
             width={300}
             height={250}
             gridColumn={1}
-            gridRow={1}
-            characterScale={0.5}
+            gridRow={0}
+            characterScale={0.3}
             outfit={localOutfit ?? undefined}
           />
         </View>

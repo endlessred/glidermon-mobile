@@ -249,6 +249,9 @@ async function buildApartmentScene(
       if (material.opacity !== undefined) material.opacity = 1.0;
       if (material.depthTest !== undefined) material.depthTest = false;
       if (material.depthWrite !== undefined) material.depthWrite = false;
+      // Force consistent blending to eliminate gaps between meshes
+      if (material.blending !== undefined) material.blending = THREE.NormalBlending;
+      if (material.side !== undefined) material.side = THREE.DoubleSide;
       material.needsUpdate = true;
     }
   });
@@ -647,6 +650,9 @@ controller.mesh.refreshMeshes();
             if (typeof m.depthTest === 'boolean') m.depthTest = false;
             if (typeof m.depthWrite === 'boolean') m.depthWrite = false;
             if (typeof m.transparent === 'boolean') m.transparent = true;
+            // Force consistent blending to eliminate gaps between character meshes
+            if (typeof m.blending !== 'undefined') m.blending = THREE.NormalBlending;
+            if (typeof m.side !== 'undefined') m.side = THREE.DoubleSide;
             if (typeof m.needsUpdate === 'boolean') m.needsUpdate = true;
           });
         }

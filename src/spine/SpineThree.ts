@@ -26,7 +26,7 @@ const SHADER_SLOT_REGEX = /Shader$/i;
 const SOFT_SLOT_REGEX = /^$/; // No slots need transparent pass - all can be hard cutouts
 
 /** Default anti-halo threshold; trims fringes on most parts */
-const DEFAULT_ALPHA_TEST = 0.0015;
+const DEFAULT_ALPHA_TEST = 0.9015;
 
 /** Minimal cache with “material variants” keyed by (texture, alphaTest, pma) */
 class MaterialCache {
@@ -72,7 +72,6 @@ export function normalizeMaterialForSlot(slot: Slot, mat: THREE.Material) {
   if (PUPIL_SLOT_REGEX.test(name)) return; // 🚫 do NOT touch pupils
 
   const m: any = mat;
-  const isSoft = SOFT_SLOT_REGEX.test(name);
 
   // Check attachment name, not slot name for shader detection
   const attachment = slot.getAttachment?.();
@@ -89,32 +88,19 @@ export function normalizeMaterialForSlot(slot: Slot, mat: THREE.Material) {
       return;
     }
 
-    // Legacy mask recolor shaders: hard parts should be opaque cutouts; soft parts stay transparent
-    if (isSoft) {
-      m.transparent = true;
-      m.depthTest = false;
-      m.depthWrite = false;
-      setMaskRecolorOpaque(m, false); // Stay in transparent pass
-    } else {
-      m.transparent = false;  // ⬅️ render in opaque pass
-      m.depthTest = true;
-      m.depthWrite = false;
-      setMaskRecolorOpaque(m, true); // Force alpha=1.0 for opaque cutout
-    }
+    // Legacy mask recolor shaders: use transparent pass for consistent rendering
+    m.transparent = true;
+    m.depthTest = false;
+    m.depthWrite = false;
+    setMaskRecolorOpaque(m, false); // Stay in transparent pass
     return;
   }
 
   if (m.isMeshBasicMaterial) {
-    // Basic textures: hard parts opaque, soft parts transparent painter's sort
-    if (isSoft) {
-      m.transparent = true;
-      m.depthTest = false;
-      m.depthWrite = false;
-    } else {
-      m.transparent = false;
-      m.depthTest = true;
-      m.depthWrite = false;
-    }
+    // Basic textures: use transparent pass for consistent rendering and eliminate black lines
+    m.transparent = true;
+    m.depthTest = false;
+    m.depthWrite = false;
   }
 }
 
