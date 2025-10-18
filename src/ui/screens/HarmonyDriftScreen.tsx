@@ -8,15 +8,33 @@ import {
   StyleSheet,
   TextStyle,
   useWindowDimensions,
+  TextInput,
+  Alert,
+  Animated as RNAnimated,
 } from "react-native";
+import Animated, {
+  useSharedValue,
+  withRepeat,
+  withTiming,
+  useAnimatedStyle,
+  Easing,
+  cancelAnimation,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../data/hooks/useTheme";
 import SpineCharacterPortrait from "../components/SpineCharacterPortrait";
 import { EmotionType } from "../../data/types/conversation";
 import { useHarmonyDriftStore } from "../../game/harmonyDrift/store";
-import { Card, CardRarity, CardType } from "../../game/harmonyDrift/types";
+import { Card, CardRarity, CardType, CustomDeck } from "../../game/harmonyDrift/types";
+import { DECK_SIZE } from "../../game/harmonyDrift/cards";
 import { useVirtuAcornStore } from "../../data/stores/vaStore";
 import { SLOT_IDS } from "../../game/harmonyDrift/layout";
+import { HarmonyCard } from "../components/HarmonyCard";
+import { HarmonyMeter } from "../components/HarmonyMeter";
+import { BoardSlot } from "../components/BoardSlot";
+import { DeckSelectorModal } from "../components/DeckSelectorModal";
+import { DeckBuilderModal } from "../components/DeckBuilderModal";
+import { getTypeAccent, getRarityGradient, HarmonyColors, OpacityLevels } from "../../theme/harmonyPalette";
 import {
   Canvas,
   RoundedRect,
@@ -26,6 +44,8 @@ import {
   Circle,
   Skia,
   vec,
+  Image,
+  useImage,
 } from "@shopify/react-native-skia";
 
 type HarmonyDriftScreenProps = {
@@ -37,7 +57,6 @@ type HarmonyDriftScreenProps = {
 
 type OpponentId = "luma" | "sable";
 
-type HarmonyCardVariant = "hand" | "board";
 
 const TYPE_EMOJI: Record<CardType, string> = {
   Energy: "\u2600\uFE0F",
@@ -60,9 +79,165 @@ const CARD_ART_EMOJI: Record<string, string> = {
   "emoji:note": "\uD83D\uDCDD",
   "emoji:salad": "\uD83E\uDD57",
   "emoji:sprint": "\uD83C\uDFC3",
+  "emoji:fire": "\uD83D\uDD25",
+  "emoji:chaos": "\uD83C\uDF00",
+  "emoji:target": "\uD83C\uDFAF",
+  "emoji:lightning": "\u26A1",
+  "emoji:peace": "\u262E\uFE0F",
+  "emoji:domino": "\uD83C\uDFB2",
+  "emoji:storm": "\u26C8\uFE0F",
+  "emoji:spike": "\uD83D\uDCC8",
+  "emoji:spiral": "\uD83C\uDF00",
+  "emoji:breath": "\uD83D\uDCA8",
+  "emoji:empty": "\uD83C\uDF7D\uFE0F",
+  "emoji:muscle": "\uD83D\uDCAA",
+  "emoji:clock": "\u23F0",
+  "emoji:tired": "\uD83D\uDE34",
+  "emoji:nap": "\uD83D\uDE34",
+  "emoji:debt": "\uD83D\uDCC9",
+  "emoji:recovery": "\uD83D\uDD04",
+  "emoji:crash": "\uD83D\uDCA5",
+  "emoji:fuel": "\u26FD",
+  "emoji:wild": "\uD83C\uDCCF",
+  "emoji:reset": "\uD83D\uDD04",
+  "emoji:momentum": "\uD83D\uDE80",
+  "emoji:shield": "\uD83D\uDEE1\uFE0F",
+  "emoji:amp": "\uD83D\uDD0A",
 };
 
-const resolveCardArt = (asset: string, fallback: CardType) => CARD_ART_EMOJI[asset] ?? TYPE_EMOJI[fallback];
+// PNG Asset mapping - bundler needs explicit requires (following paperTexture pattern)
+const CARD_ART_PNG: Record<string, any> = {
+  "MorningWalk.png": require("../../assets/HarmonyDrift/CardArt/MorningWalk.png"),
+  "DeepSleep.png": require("../../assets/HarmonyDrift/CardArt/DeepSleep.png"),
+  "HeatWave.png": require("../../assets/HarmonyDrift/CardArt/HeatWave.png"),
+  "AnxietySpiral.png": require("../../assets/HarmonyDrift/CardArt/AnxietySpiral.png"),
+  "JuiceBox.png": require("../../assets/HarmonyDrift/CardArt/JuiceBox.png"),
+};
+
+const resolveCardArt = (asset: string, fallback: CardType) => {
+  // Handle PNG assets
+  if (asset.endsWith('.png')) {
+    const pngAsset = CARD_ART_PNG[asset];
+    if (pngAsset) {
+      return pngAsset;
+    } else {
+      console.warn(`PNG asset not found: ${asset}`);
+      return TYPE_EMOJI[fallback];
+    }
+  }
+  // Handle emoji assets
+  return CARD_ART_EMOJI[asset] ?? TYPE_EMOJI[fallback];
+};
+
+// Helper functions for consistent key handling - safe from dash conflicts
+// Note: These will be properly initialized inside the component with useRef
+
+// Animated Hand Card Component to handle breathing animation
+const AnimatedHandCard: React.FC<{
+  card: Card;
+  isSelected: boolean;
+  uniqueKey: string;
+  x: number;
+  y: number;
+  rotation: number;
+  scale: number;
+  zIndex: number;
+  handCardWidth: number;
+  onPress: () => void;
+  disabled: boolean;
+  getEffectDescription: (effect: any) => string;
+}> = ({ card, isSelected, uniqueKey, x, y, rotation, scale, zIndex, handCardWidth, onPress, disabled, getEffectDescription }) => {
+  // Breathing animation for selected card
+  const breathingScale = React.useRef(new RNAnimated.Value(1)).current;
+
+  React.useEffect(() => {
+    console.log('Breathing animation effect - isSelected:', isSelected, 'cardId:', card.id);
+    try {
+      if (isSelected) {
+        console.log('Starting breathing animation for:', card.id);
+        const breathingLoop = RNAnimated.loop(
+          RNAnimated.sequence([
+            RNAnimated.timing(breathingScale, {
+              toValue: 1.05,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+            RNAnimated.timing(breathingScale, {
+              toValue: 1.0,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+          ])
+        );
+        breathingLoop.start();
+        console.log('Breathing animation started successfully for:', card.id);
+        return () => {
+          console.log('Cleaning up breathing animation for:', card.id);
+          breathingLoop.stop();
+        };
+      } else {
+        console.log('Stopping breathing animation for:', card.id);
+        breathingScale.setValue(1);
+      }
+    } catch (error) {
+      console.error('Error in breathing animation for card:', card.id, error);
+    }
+  }, [isSelected, card.id, breathingScale]);
+
+  return (
+    <TouchableOpacity
+      key={uniqueKey}
+      onPress={onPress}
+      activeOpacity={0.9}
+      disabled={disabled}
+      style={[
+        styles.handCardContainer,
+        {
+          left: x,
+          bottom: y,
+          zIndex: zIndex,
+          transform: [
+            { translateX: -handCardWidth / 2 },
+            { rotate: `${rotation}deg` },
+            { scale: scale }
+          ],
+        }
+      ]}
+    >
+      <RNAnimated.View
+        style={{
+          transform: [{ scale: breathingScale }]
+        }}
+      >
+        {(() => {
+          console.log('About to render HarmonyCard for:', card.id, 'isSelected:', isSelected);
+          return (
+            <HarmonyCard
+              data={card}
+              variant="hand"
+              isSelected={isSelected}
+              widthOverride={handCardWidth}
+              effect={card.effect}
+              getEffectDescription={getEffectDescription}
+              resolveCardArt={resolveCardArt}
+            />
+          );
+        })()}
+      </RNAnimated.View>
+    </TouchableOpacity>
+  );
+};
+
+// Normalize rarity for gradient lookups
+const normalizeRarity = (r?: string) => {
+  if (!r) return "Common";
+  const v = r.toLowerCase();
+  if (v === "uncommon") return "Uncommon";
+  if (v === "rare") return "Rare";
+  if (v === "epic") return "Epic";
+  if (v === "legendary") return "Legendary";
+  return "Common";
+};
 
 const SLOT_POSITIONS: Record<string, { x: number; y: number }> = {
   A1: { x: 0.16, y: 0.26 },
@@ -85,22 +260,6 @@ const HARMONY_MAX = 20;
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
-const typeAccent = (type: CardType, fallback: string) => {
-  switch (type) {
-    case "Energy":
-      return "#f97316";
-    case "Calm":
-      return "#38bdf8";
-    case "Rest":
-      return "#a855f7";
-    case "Nourish":
-      return "#22c55e";
-    case "Anchor":
-      return "#facc15";
-    default:
-      return fallback;
-  }
-};
 
 const SELECTION_META: Record<OpponentId, { title: string; tone: string; description: string }> = {
   sable: {
@@ -137,11 +296,28 @@ const rewardForResult = (
 export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenProps = {}) {
   const { colors, spacing, typography } = useTheme();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+
+  // Global paper texture for consistent usage across components
+  const paperTexture = useImage(require("../../assets/HarmonyDrift/PaperTex.jpg"));
+
+  // Safe key mapping to avoid ID parsing issues with dashes
+  const handKeyToId = React.useRef<Record<string, string>>({});
+  const makeHandKey = (id: string, index: number) => {
+    const key = `${id}__IDX__${index}`; // safe delimiter
+    handKeyToId.current[key] = id;
+    return key;
+  };
+  const keyToId = (key: string) => handKeyToId.current[key] ?? key; // fallback
   const [selectedOpponent, setSelectedOpponent] = useState<OpponentId | null>(null);
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
   const [rewardClaimed, setRewardClaimed] = useState(false);
   const [previewSlot, setPreviewSlot] = useState<string | null>(null);
   const [npcPreview, setNpcPreview] = useState<{ cardId: string; slotId: string } | null>(null);
+  const [showDeckSelector, setShowDeckSelector] = useState(false);
+  const [showDeckBuilder, setShowDeckBuilder] = useState(false);
+  const [editingDeck, setEditingDeck] = useState<CustomDeck | null>(null);
+  const [builderCards, setBuilderCards] = useState<string[]>([]);
+  const [builderName, setBuilderName] = useState("");
 
   const state = useHarmonyDriftStore((ctx) => ctx.state);
   const cards = useHarmonyDriftStore((ctx) => ctx.cards);
@@ -150,6 +326,11 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
   const npcTakeTurn = useHarmonyDriftStore((ctx) => ctx.npcTakeTurn);
   const endMatch = useHarmonyDriftStore((ctx) => ctx.endMatch);
   const previewPlacement = useHarmonyDriftStore((ctx) => ctx.previewPlacement);
+  const deckCollection = useHarmonyDriftStore((ctx) => ctx.deckCollection);
+  const setActiveDeck = useHarmonyDriftStore((ctx) => ctx.setActiveDeck);
+  const createDeck = useHarmonyDriftStore((ctx) => ctx.createDeck);
+  const updateDeck = useHarmonyDriftStore((ctx) => ctx.updateDeck);
+  const deleteDeck = useHarmonyDriftStore((ctx) => ctx.deleteDeck);
 
   const earnVirtuAcorns = useVirtuAcornStore((s) => s.earn);
 
@@ -186,7 +367,24 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
 
   const opponentId = state.opponent ?? selectedOpponent ?? "sable";
   const opponentName = opponentId === "luma" ? "Luma" : "Sable";
-  const selectedType = selectedCard ? cards[selectedCard]?.type : undefined;
+  // Normalize selectedCard key to actual card ID for lookups
+  const realSelectedCardId = useMemo(() => {
+    console.log('realSelectedCardId useMemo start - selectedCard:', selectedCard);
+    if (!selectedCard) {
+      console.log('realSelectedCardId: selectedCard is null, returning null');
+      return null;
+    }
+    const realId = keyToId(selectedCard);
+    console.log('realSelectedCardId calculation - selectedCard:', selectedCard, 'realId:', realId);
+    return realId;
+  }, [selectedCard]);
+
+  console.log('About to calculate selectedType - realSelectedCardId:', realSelectedCardId);
+  console.log('cards object keys:', Object.keys(cards).slice(0, 5), '...');
+  console.log('cards[realSelectedCardId]:', realSelectedCardId ? cards[realSelectedCardId] : 'N/A');
+
+  const selectedType = realSelectedCardId ? cards[realSelectedCardId]?.type : undefined;
+  console.log('selectedType calculation - realSelectedCardId:', realSelectedCardId, 'selectedType:', selectedType);
 
   const [harmonyPointer, setHarmonyPointer] = useState(pointerPadding);
   const [baselinePointer, setBaselinePointer] = useState(pointerPadding);
@@ -288,7 +486,7 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
 
     // If this slot is already being previewed, place the card
     if (previewSlot === slotId) {
-      const actualCardId = selectedCard.split('-')[0];
+      const actualCardId = keyToId(selectedCard);
       const resolution = playPlayerCard(actualCardId, slotId);
       if (resolution) {
         setSelectedCard(null);
@@ -316,15 +514,32 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
 
   // Calculate preview for current selected card + slot combination
   const currentPreview = useMemo(() => {
-    if (!selectedCard || !previewSlot || state.phase !== "playerTurn") return null;
-    const actualCardId = selectedCard.split('-')[0];
-    return previewPlacement(actualCardId, previewSlot);
+    console.log('currentPreview useMemo - selectedCard:', selectedCard, 'previewSlot:', previewSlot, 'phase:', state.phase);
+    if (!selectedCard || !previewSlot || state.phase !== "playerTurn") {
+      console.log('currentPreview: early return null');
+      return null;
+    }
+    const actualCardId = keyToId(selectedCard);
+    console.log('currentPreview: actualCardId:', actualCardId);
+    try {
+      const result = previewPlacement(actualCardId, previewSlot);
+      console.log('currentPreview: previewPlacement success');
+      return result;
+    } catch (e) {
+      console.warn('Preview placement failed for card:', actualCardId, 'slot:', previewSlot, e);
+      return null;
+    }
   }, [selectedCard, previewSlot, state.phase, previewPlacement]);
 
   // Calculate NPC preview
   const npcPreviewData = useMemo(() => {
     if (!npcPreview) return null;
-    return previewPlacement(npcPreview.cardId, npcPreview.slotId);
+    try {
+      return previewPlacement(npcPreview.cardId, npcPreview.slotId);
+    } catch (e) {
+      console.warn('NPC preview placement failed for card:', npcPreview.cardId, 'slot:', npcPreview.slotId, e);
+      return null;
+    }
   }, [npcPreview, previewPlacement]);
 
   // Clear preview when no card is selected
@@ -333,6 +548,37 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
       setPreviewSlot(null);
     }
   }, [selectedCard]);
+
+  // Helper function to generate readable effect descriptions
+  const getEffectDescription = (effect: any) => {
+    if (!effect || effect.kind === "none") return "No special effect.";
+
+    switch (effect.kind) {
+      case "adjacentModify":
+        return `${effect.delta > 0 ? "Boosts" : "Reduces"} adjacent cards by ${Math.abs(effect.delta)}.`;
+      case "typeModify":
+        return `${effect.delta > 0 ? "Boosts" : "Reduces"} all ${effect.targetType} cards by ${Math.abs(effect.delta)}.`;
+      case "globalScale":
+        const percent = Math.round((1 - effect.factor) * 100);
+        return `${effect.factor < 1 ? "Reduces" : "Amplifies"} all card effects by ${Math.abs(percent)}%.`;
+      case "pattern":
+        return `Affects cards in a specific pattern by ${effect.delta > 0 ? "+" : ""}${effect.delta}.`;
+      case "adjacentScale":
+        const adjPercent = Math.round((effect.factor - 1) * 100);
+        return `${effect.factor > 1 ? "Amplifies" : "Reduces"} adjacent cards by ${Math.abs(adjPercent)}%.`;
+      case "radiusModify":
+        return `Affects all cards within ${effect.radius} spaces by ${effect.delta > 0 ? "+" : ""}${effect.delta}.`;
+      case "conditionalModify":
+        if (effect.condition === "adjacentCount") {
+          return `Gains ${effect.delta > 0 ? "+" : ""}${effect.delta} for each adjacent card.`;
+        }
+        return "Special conditional effect.";
+      case "harmonyShift":
+        return `Shifts harmony by ${effect.harmonyDelta > 0 ? "+" : ""}${effect.harmonyDelta} (doesn't affect your score).`;
+      default:
+        return "Unknown effect.";
+    }
+  };
 
   // Helper function to check if a card has synergy with neighbors
   const checkCardSynergy = (slotId: string, board: Record<string, any>) => {
@@ -366,402 +612,6 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
     });
   };
 
-  const HarmonyCard = ({
-    data,
-    variant,
-    isSelected = false,
-    footnote,
-    valueOverride,
-    widthOverride,
-    showSynergy = false,
-  }: {
-    data: Pick<Card, "name" | "type" | "artAsset" | "rarity" | "flavor" | "value">;
-    variant: HarmonyCardVariant;
-    isSelected?: boolean;
-    footnote?: string;
-    valueOverride?: number;
-    widthOverride?: number;
-    showSynergy?: boolean;
-  }) => {
-    const accent = typeAccent(data.type, colors.primary?.[400] || "#38bdf8");
-    const cardWidth = widthOverride ?? (variant === "hand" ? handCardWidth : 110);
-    const shellHeight = variant === "hand" ? (isNarrowScreen ? 186 : 206) : 80; // Much shorter for board
-    const artHeight = variant === "hand" ? (isNarrowScreen ? 78 : 88) : 68;
-    const nameFont = variant === "hand" ? (isNarrowScreen ? 13 : 14) : 10;
-    const flavorFont = variant === "hand" ? (isNarrowScreen ? 10 : 11) : 10;
-    const padding = 6;
-    const value = valueOverride ?? data.value;
-    const prefix = value > 0 ? "+" : "";
-    const baseValue = data.value;
-    const hasSynergy = showSynergy && valueOverride !== undefined && Math.abs(valueOverride) > Math.abs(baseValue);
-    const valueText = variant === "hand" ? `${prefix}${Math.round(value)}` : `${prefix}${value.toFixed(1)}`;
-    const artGlyph = resolveCardArt(data.artAsset, data.type);
-
-    // Rarity colors for card borders - Harmony Drift palette
-    const rarityColors = {
-      Common: ["#9BBE9C", "#C7C6E6"], // Sage green to lavender mist
-      Uncommon: ["#F1C27D", "#9BBE9C"], // Amber gold to sage green
-      Rare: ["#C7C6E6", "#F1C27D"], // Lavender mist to amber gold
-      Epic: ["#344B40", "#9BBE9C"], // Deep moss to sage green
-      Legendary: ["#F1C27D", "#344B40"], // Amber gold to deep moss
-    };
-    const [rarityDark, rarityLight] = rarityColors[data.rarity] || rarityColors.Common;
-
-    // Board cards use a completely different horizontal layout
-    if (variant === "board") {
-      return (
-        <View
-          style={[
-            styles.boardCard,
-            {
-              width: cardWidth,
-              height: shellHeight,
-              transform: [{ scale: isSelected ? 1.05 : 1 }],
-            },
-          ]}
-        >
-          {/* Board card glow for selected */}
-          {isSelected && (
-            <View style={[
-              StyleSheet.absoluteFill,
-              {
-                borderRadius: 12,
-                backgroundColor: accent,
-                opacity: 0.2,
-                transform: [{ scale: 1.1 }],
-              }
-            ]} />
-          )}
-
-          <Canvas style={StyleSheet.absoluteFill}>
-            {/* Board card background */}
-            <RoundedRect x={0} y={0} width={cardWidth} height={shellHeight} r={12}>
-              <LinearGradient
-                start={vec(0, 0)}
-                end={vec(cardWidth, shellHeight)}
-                colors={[rarityDark, rarityLight]}
-              />
-            </RoundedRect>
-            <RoundedRect x={2} y={2} width={cardWidth - 4} height={shellHeight - 4} r={10}>
-              <LinearGradient
-                start={vec(0, 0)}
-                end={vec(0, shellHeight)}
-                colors={["#F5F1E9", "#ffffff"]}
-              />
-            </RoundedRect>
-          </Canvas>
-
-          {/* Horizontal layout for board cards */}
-          <View style={styles.boardCardContent}>
-            {/* Left: Type icon and art */}
-            <View style={styles.boardCardLeft}>
-              <View style={[styles.boardCardTypeIcon, { backgroundColor: `${accent}25` }]}>
-                <Text style={[styles.boardCardTypeText, { color: accent }]}>{TYPE_EMOJI[data.type]}</Text>
-              </View>
-              <Text style={styles.boardCardArt}>{artGlyph}</Text>
-            </View>
-
-            {/* Center: Name */}
-            <View style={styles.boardCardCenter}>
-              <Text
-                style={[styles.boardCardName, { color: "#344B40" }]}
-                numberOfLines={2}
-                adjustsFontSizeToFit
-                minimumFontScale={0.7}
-              >
-                {data.name}
-              </Text>
-            </View>
-
-            {/* Right: Value */}
-            <View style={[styles.boardCardValue, {
-              backgroundColor: hasSynergy ? "#fbbf24" : accent,
-              shadowColor: hasSynergy ? "#f59e0b" : "#000",
-              shadowOpacity: hasSynergy ? 0.4 : 0.2,
-            }]}>
-              <Text style={[styles.boardCardValueText, {
-                textShadowColor: hasSynergy ? "rgba(245,158,11,0.8)" : "rgba(0,0,0,0.5)"
-              }]}>{valueText}</Text>
-              {hasSynergy && (
-                <Text style={styles.synergyIndicator}>⚡</Text>
-              )}
-            </View>
-          </View>
-
-          {/* Footnote */}
-          {footnote && (
-            <View style={styles.boardCardFootnote}>
-              <Text style={[styles.boardCardFootnoteText, { color: accent }]} numberOfLines={1}>
-                {footnote}
-              </Text>
-            </View>
-          )}
-        </View>
-      );
-    }
-
-    return (
-      <View
-        style={[
-          styles.cardShell,
-          {
-            width: cardWidth,
-            height: shellHeight,
-            transform: [{ scale: isSelected ? 1.05 : 1 }],
-          },
-        ]}
-      >
-        {/* Outer glow for selected cards */}
-        {isSelected && (
-          <View style={[
-            StyleSheet.absoluteFill,
-            {
-              borderRadius: 16,
-              backgroundColor: accent,
-              opacity: 0.2,
-              transform: [{ scale: 1.1 }],
-            }
-          ]} />
-        )}
-
-        {/* Main card background with gradient border */}
-        <Canvas style={StyleSheet.absoluteFill}>
-          <RoundedRect x={0} y={0} width={cardWidth} height={shellHeight} r={16}>
-            <LinearGradient
-              start={vec(0, 0)}
-              end={vec(cardWidth, shellHeight)}
-              colors={[rarityDark, rarityLight]}
-            />
-          </RoundedRect>
-          <RoundedRect x={3} y={3} width={cardWidth - 6} height={shellHeight - 6} r={13}>
-            <LinearGradient
-              start={vec(0, 0)}
-              end={vec(0, shellHeight)}
-              colors={["#F5F1E9", "#F1C27D08"]} // Parchment beige with subtle amber tint
-            />
-          </RoundedRect>
-
-          {/* Paper texture overlay - subtle dots pattern */}
-          {Array.from({ length: 8 }).map((_, i) => (
-            <Circle
-              key={i}
-              cx={(i * 23 + 15) % (cardWidth - 10) + 8}
-              cy={15 + (Math.floor(i / 4) * 25)}
-              r={0.5}
-              color="rgba(52,75,64,0.06)" // Deep moss, very subtle
-            />
-          ))}
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Circle
-              key={`row2-${i}`}
-              cx={(i * 27 + 22) % (cardWidth - 10) + 8}
-              cy={shellHeight - 45 + (Math.floor(i / 3) * 15)}
-              r={0.4}
-              color="rgba(155,190,156,0.08)" // Sage green, very subtle
-            />
-          ))}
-
-          {/* Subtle edge highlight for tactile feel */}
-          <RoundedRect
-            x={2} y={2}
-            width={cardWidth - 4}
-            height={shellHeight - 4}
-            r={14}
-            style="stroke"
-            strokeWidth={0.5}
-            color="rgba(241,194,125,0.3)" // Amber gold highlight
-          />
-        </Canvas>
-
-        {/* Card content */}
-        <View style={styles.cardContent}>
-          {/* Header with type and value */}
-          <View style={styles.cardHeaderNew}>
-            <View style={[styles.cardTypeIcon, { backgroundColor: `${accent}25` }]}>
-              <Text style={[styles.cardTypeIconText, { color: accent }]}>{TYPE_EMOJI[data.type]}</Text>
-            </View>
-            <View style={[styles.cardValueGem, {
-              backgroundColor: hasSynergy ? "#fbbf24" : accent,
-              shadowColor: hasSynergy ? "#f59e0b" : "#000",
-              shadowOpacity: hasSynergy ? 0.4 : 0.25,
-            }]}>
-              <Text style={[styles.cardValueGemText, {
-                textShadowColor: hasSynergy ? "rgba(245,158,11,0.8)" : "rgba(0,0,0,0.5)"
-              }]}>{valueText}</Text>
-              {hasSynergy && (
-                <Text style={styles.synergyIndicatorHand}>⚡</Text>
-              )}
-            </View>
-          </View>
-
-          {/* Art section with overlaid name banner */}
-          <View style={[styles.cardArtNew, { height: artHeight }]}>
-            <Canvas style={StyleSheet.absoluteFill}>
-              <RoundedRect x={0} y={0} width={cardWidth - 12} height={artHeight} r={8}>
-                <RadialGradient
-                  c={vec((cardWidth - 12) / 2, artHeight / 2)}
-                  r={artHeight * 0.7}
-                  colors={[`${accent}15`, `${accent}08`]}
-                />
-              </RoundedRect>
-            </Canvas>
-
-            {/* Art emoji */}
-            <Text style={[styles.cardArtEmoji, { fontSize: variant === "hand" ? 36 : 28 }]}>
-              {artGlyph}
-            </Text>
-
-            {/* Ornate name banner */}
-            <View style={styles.cardNameBanner}>
-              <Canvas style={StyleSheet.absoluteFill}>
-                {/* Main banner background */}
-                <RoundedRect
-                  x={6}
-                  y={artHeight - 26}
-                  width={cardWidth - 24}
-                  height={24}
-                  r={12}
-                >
-                  <LinearGradient
-                    start={vec(0, 0)}
-                    end={vec(cardWidth - 24, 24)}
-                    colors={["#F5F1E9", "#ffffff"]} // Parchment to white
-                  />
-                </RoundedRect>
-
-                {/* Ornate border */}
-                <RoundedRect
-                  x={6} y={artHeight - 26}
-                  width={cardWidth - 24} height={24}
-                  r={12}
-                  style="stroke"
-                  strokeWidth={1.5}
-                  color="#344B40" // Deep moss border
-                />
-
-                {/* Inner decorative line */}
-                <RoundedRect
-                  x={8} y={artHeight - 24}
-                  width={cardWidth - 28} height={20}
-                  r={10}
-                  style="stroke"
-                  strokeWidth={0.5}
-                  color="#C7C6E6" // Lavender mist
-                />
-
-                {/* Decorative corner flourishes */}
-                <Circle cx={12} cy={artHeight - 14} r={1.5} color="#F1C27D" />
-                <Circle cx={cardWidth - 24} cy={artHeight - 14} r={1.5} color="#F1C27D" />
-
-                {/* Central ornamental dot */}
-                <Circle cx={cardWidth / 2 - 6} cy={artHeight - 14} r={0.8} color="#9BBE9C" />
-
-                {/* Side decorative lines */}
-                <RoundedRect
-                  x={cardWidth / 2 - 18} y={artHeight - 15}
-                  width={12} height={0.5}
-                  r={0.25}
-                  color="#F1C27D"
-                  opacity={0.7}
-                />
-                <RoundedRect
-                  x={cardWidth / 2 + 0} y={artHeight - 15}
-                  width={12} height={0.5}
-                  r={0.25}
-                  color="#F1C27D"
-                  opacity={0.7}
-                />
-              </Canvas>
-              <Text
-                style={[styles.cardNameBannerText, {
-                  fontSize: nameFont,
-                  lineHeight: nameFont + 2,
-                  color: "#344B40", // Deep moss for high contrast
-                }]}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.7}
-              >
-                {data.name}
-              </Text>
-            </View>
-          </View>
-
-          {/* Ornate flavor text section */}
-          {variant === "hand" && data.flavor && (
-            <View style={styles.cardFlavorSection}>
-              <Canvas style={StyleSheet.absoluteFill}>
-                {/* Ornate text background */}
-                <RoundedRect x={2} y={2} width={cardWidth - 16} height={variant === "hand" ? 48 : 32} r={8}>
-                  <LinearGradient
-                    start={vec(0, 0)}
-                    end={vec(cardWidth - 16, variant === "hand" ? 48 : 32)}
-                    colors={["#ffffff", "#F5F1E9"]} // White to parchment for high contrast
-                  />
-                </RoundedRect>
-
-                {/* Inner ornate frame */}
-                <RoundedRect
-                  x={4} y={4}
-                  width={cardWidth - 20}
-                  height={variant === "hand" ? 44 : 28}
-                  r={6}
-                  style="stroke"
-                  strokeWidth={1}
-                  color="#C7C6E6" // Lavender mist
-                />
-
-                {/* Decorative corner elements */}
-                <Circle cx={8} cy={8} r={1.5} color="#9BBE9C" />
-                <Circle cx={cardWidth - 12} cy={8} r={1.5} color="#9BBE9C" />
-                <Circle cx={8} cy={variant === "hand" ? 46 : 30} r={1.5} color="#9BBE9C" />
-                <Circle cx={cardWidth - 12} cy={variant === "hand" ? 46 : 30} r={1.5} color="#9BBE9C" />
-
-                {/* Central filigree line */}
-                <RoundedRect
-                  x={cardWidth / 2 - 15}
-                  y={variant === "hand" ? 26 : 18}
-                  width={30}
-                  height={0.8}
-                  r={0.4}
-                  color="#F1C27D" // Amber gold
-                  opacity={0.6}
-                />
-
-                {/* Side decorative flourishes */}
-                <Circle cx={cardWidth / 2 - 22} cy={variant === "hand" ? 26 : 18} r={0.6} color="#C7C6E6" />
-                <Circle cx={cardWidth / 2 + 16} cy={variant === "hand" ? 26 : 18} r={0.6} color="#C7C6E6" />
-              </Canvas>
-
-              <View style={styles.cardFlavorContent}>
-                <Text
-                  style={[styles.cardFlavorNew, {
-                    color: "#1a1a1a", // Very dark for maximum readability
-                    fontSize: flavorFont,
-                    lineHeight: flavorFont + 3
-                  }]}
-                  numberOfLines={3}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.8}
-                >
-                  {data.flavor}
-                </Text>
-              </View>
-            </View>
-          )}
-
-          {/* Footnote */}
-          {footnote && (
-            <View style={styles.cardFootnoteSection}>
-              <Text style={[styles.cardFootnoteNew, { color: colors.text?.tertiary || "#94a3b8" }]} numberOfLines={1}>
-                {footnote}
-              </Text>
-            </View>
-          )}
-        </View>
-      </View>
-    );
-  };
   const boardCurves = useMemo(() => {
     const top = Skia.Path.Make();
     top.moveTo(boardWidth * 0.10, boardHeight * 0.30);
@@ -778,8 +628,21 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
     return { top, mid, low };
   }, [boardWidth, boardHeight]);
 
+  // Memoized gradients for board background for performance
+  const boardBackgroundGradient = useMemo(() =>
+    [HarmonyColors.parchment.primary, "#f2e5d7"],
+    []
+  );
+
+  const boardMainGradient = useMemo(() =>
+    ["#faf8f5", "#f7f5f3"],
+    []
+  );
+
   const renderBoard = () => {
-    const accent = selectedType ? typeAccent(selectedType, colors.primary?.[400] || "#38bdf8") : colors.primary?.[400] || "#38bdf8";
+    console.log('renderBoard start - selectedType:', selectedType);
+    const accent = selectedType ? getTypeAccent(selectedType, colors.primary?.[400] || "#38bdf8") : colors.primary?.[400] || "#38bdf8";
+    console.log('renderBoard accent calculated:', accent);
     const slotWidth = Math.min(108, boardWidth * 0.20);
     const slotHeight = 90; // Fixed height that works well for horizontal board cards
 
@@ -788,48 +651,32 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
         style={{ width: boardWidth, height: boardHeight, alignSelf: "center" }}
       >
         <Canvas style={StyleSheet.absoluteFillObject}>
-          {/* Main board background - parchment texture */}
+          {/* Combined board background and vignette */}
           <RoundedRect x={0} y={0} width={boardWidth} height={boardHeight} r={boardHeight * 0.18}>
             <LinearGradient
               start={vec(0, 0)}
               end={vec(boardWidth, boardHeight)}
-              colors={["#F5F1E9", "#F1C27D15"]} // Parchment to soft amber
+              colors={boardBackgroundGradient}
             />
           </RoundedRect>
 
-          {/* Lavender vignette overlay */}
-          <RoundedRect x={8} y={8} width={boardWidth - 16} height={boardHeight - 16} r={boardHeight * 0.15}>
-            <RadialGradient
-              c={vec(boardWidth * 0.5, boardHeight * 0.45)}
-              r={boardWidth * 0.65}
-              colors={["rgba(199,198,230,0.15)", "rgba(199,198,230,0.05)", "rgba(255,255,255,0)"]} // Lavender mist vignette
+          {/* Paper texture overlay from global texture */}
+          {paperTexture && (
+            <Image
+              image={paperTexture}
+              x={8}
+              y={8}
+              width={boardWidth - 16}
+              height={boardHeight - 16}
+              fit="cover"
+              opacity={OpacityLevels.inactive}
             />
-          </RoundedRect>
+          )}
 
-          {/* Paper texture dots - subtle */}
-          {Array.from({ length: 12 }).map((_, i) => (
-            <Circle
-              key={i}
-              cx={(i * 47 + 25) % (boardWidth - 20) + 15}
-              cy={20 + (Math.floor(i / 6) * 35)}
-              r={0.6}
-              color="rgba(155,190,156,0.08)" // Sage green, very subtle
-            />
-          ))}
-          {Array.from({ length: 8 }).map((_, i) => (
-            <Circle
-              key={`tex-${i}`}
-              cx={(i * 53 + 40) % (boardWidth - 20) + 15}
-              cy={boardHeight - 45 + (Math.floor(i / 4) * 20)}
-              r={0.4}
-              color="rgba(52,75,64,0.06)" // Deep moss, very subtle
-            />
-          ))}
-
-          {/* Flowing energy paths - more organic curves */}
-          <Path path={boardCurves.top} color="#9BBE9C" opacity={0.4} style="stroke" strokeWidth={6} strokeCap="round" />
-          <Path path={boardCurves.mid} color="#C7C6E6" opacity={0.3} style="stroke" strokeWidth={4} strokeCap="round" />
-          <Path path={boardCurves.low} color="#F1C27D" opacity={0.35} style="stroke" strokeWidth={5} strokeCap="round" />
+          {/* Flowing energy paths - memoized curves */}
+          <Path path={boardCurves.top} color={HarmonyColors.nature.sage} opacity={OpacityLevels.subtle} style="stroke" strokeWidth={6} strokeCap="round" />
+          <Path path={boardCurves.mid} color={HarmonyColors.nature.lavender} opacity={OpacityLevels.subtle} style="stroke" strokeWidth={4} strokeCap="round" />
+          <Path path={boardCurves.low} color={HarmonyColors.nature.amber} opacity={OpacityLevels.subtle} style="stroke" strokeWidth={5} strokeCap="round" />
 
           {/* Subtle border highlight */}
           <RoundedRect
@@ -838,24 +685,30 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
             r={boardHeight * 0.16}
             style="stroke"
             strokeWidth={1}
-            color="rgba(241,194,125,0.3)" // Amber gold highlight
+            color={HarmonyColors.nature.amber}
+            opacity={OpacityLevels.subtle}
           />
 
           {/* Corner ornaments */}
-          <Circle cx={boardHeight * 0.12} cy={boardHeight * 0.12} r={3} color="#9BBE9C" opacity={0.6} />
-          <Circle cx={boardWidth - boardHeight * 0.12} cy={boardHeight * 0.12} r={3} color="#9BBE9C" opacity={0.6} />
-          <Circle cx={boardHeight * 0.12} cy={boardHeight - boardHeight * 0.12} r={3} color="#9BBE9C" opacity={0.6} />
-          <Circle cx={boardWidth - boardHeight * 0.12} cy={boardHeight - boardHeight * 0.12} r={3} color="#9BBE9C" opacity={0.6} />
+          <Circle cx={boardHeight * 0.12} cy={boardHeight * 0.12} r={3} color={HarmonyColors.nature.sage} opacity={OpacityLevels.moderate} />
+          <Circle cx={boardWidth - boardHeight * 0.12} cy={boardHeight * 0.12} r={3} color={HarmonyColors.nature.sage} opacity={OpacityLevels.moderate} />
+          <Circle cx={boardHeight * 0.12} cy={boardHeight - boardHeight * 0.12} r={3} color={HarmonyColors.nature.sage} opacity={OpacityLevels.moderate} />
+          <Circle cx={boardWidth - boardHeight * 0.12} cy={boardHeight - boardHeight * 0.12} r={3} color={HarmonyColors.nature.sage} opacity={OpacityLevels.moderate} />
         </Canvas>
         {SLOT_IDS.map((slotId) => {
+          console.log('Rendering board slot:', slotId);
           const position = SLOT_POSITIONS[slotId];
-          if (!position) return null;
+          if (!position) {
+            console.log('No position for slot:', slotId);
+            return null;
+          }
           const centerX = position.x * boardWidth;
           const centerY = position.y * boardHeight;
           const left = centerX - slotWidth / 2;
           const top = centerY - slotHeight / 2;
           const occupant = state.board[slotId];
           const isPlayable = Boolean(selectedCard && !occupant && state.phase === "playerTurn");
+          console.log('Slot', slotId, '- occupant:', !!occupant, 'isPlayable:', isPlayable);
           const ownerLabel = occupant ? (occupant.owner === "player" ? "You" : opponentName) : undefined;
 
           return (
@@ -884,58 +737,107 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
                   footnote={ownerLabel}
                   isSelected={state.lastMove?.slotId === slotId}
                   showSynergy={checkCardSynergy(slotId, state.board)}
+                  resolveCardArt={resolveCardArt}
                 />
               ) : previewSlot === slotId && selectedCard ? (
-                // Show player preview card hovering over slot
-                <View style={{ opacity: 0.8, transform: [{ scale: 1.05 }] }}>
-                  <HarmonyCard
-                    data={{
-                      name: cards[selectedCard.split('-')[0]]?.name || "",
-                      type: cards[selectedCard.split('-')[0]]?.type || "Energy",
-                      artAsset: cards[selectedCard.split('-')[0]]?.artAsset || "",
-                      rarity: cards[selectedCard.split('-')[0]]?.rarity || "common",
-                      flavor: cards[selectedCard.split('-')[0]]?.flavor || "",
-                      value: cards[selectedCard.split('-')[0]]?.value || 0,
-                    }}
-                    variant="board"
-                    widthOverride={slotWidth}
-                    valueOverride={currentPreview?.board[slotId]?.value}
-                    footnote="Preview"
-                    isSelected={true}
-                    showSynergy={currentPreview ? checkCardSynergy(slotId, currentPreview.board) : false}
-                  />
-                </View>
+                (() => {
+                  console.log('About to render preview slot for:', slotId);
+                  console.log('realSelectedCardId:', realSelectedCardId);
+                  console.log('cards[realSelectedCardId]:', cards[realSelectedCardId]);
+                  console.log('currentPreview:', currentPreview);
+
+                  const cardData = cards[realSelectedCardId];
+                  if (!cardData) {
+                    console.log('No card data found for:', realSelectedCardId);
+                    return null;
+                  }
+
+                  console.log('Card data found, about to create preview');
+                  try {
+                    const previewData = {
+                      name: cardData.name || "",
+                      type: cardData.type || "Energy",
+                      artAsset: cardData.artAsset || "",
+                      rarity: normalizeRarity(cardData.rarity),
+                      flavor: cardData.flavor || "",
+                      value: cardData.value || 0,
+                    };
+                    console.log('Preview data created:', previewData);
+
+                    return (
+                      <View style={{ opacity: 0.8, transform: [{ scale: 1.05 }] }}>
+                        <HarmonyCard
+                          data={previewData}
+                          variant="board"
+                          widthOverride={slotWidth}
+                          valueOverride={currentPreview?.board[slotId]?.value}
+                          footnote="Preview"
+                          isSelected={true}
+                          showSynergy={currentPreview ? checkCardSynergy(slotId, currentPreview.board) : false}
+                          resolveCardArt={resolveCardArt}
+                        />
+                      </View>
+                    );
+                  } catch (e) {
+                    console.error('Error creating preview card:', e);
+                    return null;
+                  }
+                })()
               ) : npcPreview && npcPreview.slotId === slotId ? (
-                // Show NPC preview card hovering over slot
-                <View style={{ opacity: 0.7, transform: [{ scale: 1.03 }] }}>
-                  <HarmonyCard
-                    data={{
-                      name: cards[npcPreview.cardId]?.name || "",
-                      type: cards[npcPreview.cardId]?.type || "Energy",
-                      artAsset: cards[npcPreview.cardId]?.artAsset || "",
-                      rarity: cards[npcPreview.cardId]?.rarity || "common",
-                      flavor: cards[npcPreview.cardId]?.flavor || "",
-                      value: cards[npcPreview.cardId]?.value || 0,
-                    }}
-                    variant="board"
-                    widthOverride={slotWidth}
-                    valueOverride={npcPreviewData?.board[slotId]?.value}
-                    footnote={`${opponentName} thinking...`}
-                    isSelected={false}
-                    showSynergy={npcPreviewData ? checkCardSynergy(slotId, npcPreviewData.board) : false}
-                  />
-                </View>
+                (() => {
+                  console.log('About to render NPC preview slot for:', slotId);
+                  console.log('npcPreview.cardId:', npcPreview.cardId);
+                  console.log('cards[npcPreview.cardId]:', cards[npcPreview.cardId]);
+
+                  const npcCardData = cards[npcPreview.cardId];
+                  if (!npcCardData) {
+                    console.log('No NPC card data found for:', npcPreview.cardId);
+                    return null;
+                  }
+
+                  console.log('NPC card data found, about to create NPC preview');
+                  try {
+                    return (
+                      <View style={{ opacity: 0.7, transform: [{ scale: 1.03 }] }}>
+                        <HarmonyCard
+                          data={{
+                            name: npcCardData.name || "",
+                            type: npcCardData.type || "Energy",
+                            artAsset: npcCardData.artAsset || "",
+                            rarity: normalizeRarity(npcCardData.rarity),
+                            flavor: npcCardData.flavor || "",
+                            value: npcCardData.value || 0,
+                          }}
+                          variant="board"
+                          widthOverride={slotWidth}
+                          valueOverride={npcPreviewData?.board[slotId]?.value}
+                          footnote={`${opponentName} thinking...`}
+                          isSelected={false}
+                          showSynergy={npcPreviewData ? checkCardSynergy(slotId, npcPreviewData.board) : false}
+                          resolveCardArt={resolveCardArt}
+                        />
+                      </View>
+                    );
+                  } catch (e) {
+                    console.error('Error creating NPC preview card:', e);
+                    return null;
+                  }
+                })()
               ) : (
-                <View
-                  style={[
-                    styles.emptySlot,
-                    {
-                      width: slotWidth,
-                      height: slotHeight,
-                    },
-                  ]}
-                >
-                  <Canvas style={StyleSheet.absoluteFill}>
+                (() => {
+                  console.log('About to render empty slot for:', slotId);
+                  try {
+                    return (
+                      <View
+                        style={[
+                          styles.emptySlot,
+                          {
+                            width: slotWidth,
+                            height: slotHeight,
+                          },
+                        ]}
+                      >
+                        <Canvas style={StyleSheet.absoluteFill}>
                     {/* Organic empty slot design */}
                     <RoundedRect x={0} y={0} width={slotWidth} height={slotHeight} r={16}>
                       <LinearGradient
@@ -977,16 +879,16 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
                     {/* Decorative elements */}
                     {isPlayable && (
                       <>
-                        <Circle cx={slotWidth / 2} cy={slotHeight * 0.3} r={1.5} color={accent} opacity={0.4} />
-                        <Circle cx={slotWidth / 2} cy={slotHeight * 0.7} r={1.5} color={accent} opacity={0.4} />
+                        <Circle cx={slotWidth / 2} cy={slotHeight * 0.3} r={1.5} color={accent} opacity={OpacityLevels.subtle} />
+                        <Circle cx={slotWidth / 2} cy={slotHeight * 0.7} r={1.5} color={accent} opacity={OpacityLevels.subtle} />
                       </>
                     )}
 
                     {/* Subtle corner ornaments */}
-                    <Circle cx={12} cy={12} r={1} color="#9BBE9C" opacity={0.3} />
-                    <Circle cx={slotWidth - 12} cy={12} r={1} color="#9BBE9C" opacity={0.3} />
-                    <Circle cx={12} cy={slotHeight - 12} r={1} color="#9BBE9C" opacity={0.3} />
-                    <Circle cx={slotWidth - 12} cy={slotHeight - 12} r={1} color="#9BBE9C" opacity={0.3} />
+                    <Circle cx={12} cy={12} r={1} color={HarmonyColors.nature.sage} opacity={OpacityLevels.minimal} />
+                    <Circle cx={slotWidth - 12} cy={12} r={1} color={HarmonyColors.nature.sage} opacity={OpacityLevels.minimal} />
+                    <Circle cx={12} cy={slotHeight - 12} r={1} color={HarmonyColors.nature.sage} opacity={OpacityLevels.minimal} />
+                    <Circle cx={slotWidth - 12} cy={slotHeight - 12} r={1} color={HarmonyColors.nature.sage} opacity={OpacityLevels.minimal} />
                   </Canvas>
 
                   <View style={styles.emptySlotContent}>
@@ -998,16 +900,52 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
                     </Text>
                   </View>
                 </View>
+                    );
+                  } catch (e) {
+                    console.error('Error creating empty slot:', e);
+                    return <View style={{ width: slotWidth, height: slotHeight, backgroundColor: 'red' }} />;
+                  }
+                })()
               )}
             </TouchableOpacity>
           );
+        }).map((slot, index) => {
+          console.log('Slot render completed for index:', index);
+          return slot;
         })}
       </View>
     );
   };
+
+  // Animation removed to isolate crash issue
+
+  // Harmony meter pulse animation - this was working fine
+  const harmonyPulse = useSharedValue(1);
+  const prevHarmony = useSharedValue(state.harmony);
+
+  useEffect(() => {
+    if (Math.abs(state.harmony - prevHarmony.value) > 0.1) {
+      harmonyPulse.value = withTiming(1.1, { duration: 200 }, () => {
+        harmonyPulse.value = withTiming(1, { duration: 300 });
+      });
+      prevHarmony.value = state.harmony;
+    }
+  }, [state.harmony]);
+
+  const harmonyPulseStyle = useAnimatedStyle(() => {
+    'worklet';
+    return {
+      transform: [{ scale: harmonyPulse.value }],
+    };
+  }, []);
+
   const renderHand = () => {
+    console.log('renderHand start - selectedCard:', selectedCard);
     const handCount = state.playerHand.length;
-    if (handCount === 0) return null;
+    if (handCount === 0) {
+      console.log('renderHand: no cards, returning null');
+      return null;
+    }
 
     // Calculate hand arc positioning
     const handWidth = Math.min(screenWidth - padLg * 2, 400);
@@ -1018,11 +956,16 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
     return (
       <View style={[styles.handContainer, { width: handWidth, alignSelf: 'center' }]}>
         {state.playerHand.map((cardId, idx) => {
+          console.log('Rendering hand card:', cardId, 'idx:', idx);
           const card = cards[cardId];
-          if (!card) return null;
+          if (!card) {
+            console.log('Card not found for id:', cardId);
+            return null;
+          }
 
-          const uniqueKey = `${cardId}-${idx}`;
+          const uniqueKey = makeHandKey(cardId, idx);
           const isSelected = selectedCard === uniqueKey;
+          console.log('Hand card - uniqueKey:', uniqueKey, 'isSelected:', isSelected);
           const centerIndex = (handCount - 1) / 2;
           const offsetFromCenter = idx - centerIndex;
 
@@ -1038,35 +981,27 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
 
           // Card scaling
           const scale = isSelected ? 1.0 : 0.85; // Smaller until selected
-          const zIndex = isSelected ? 10 : handCount - Math.abs(offsetFromCenter);
+          const zIndex = isSelected ? 100 : handCount - idx; // Left cards on top, selected always highest
 
           return (
-            <TouchableOpacity
+            <AnimatedHandCard
               key={uniqueKey}
-              onPress={() => setSelectedCard(isSelected ? null : uniqueKey)}
-              activeOpacity={0.9}
+              card={card}
+              isSelected={isSelected}
+              uniqueKey={uniqueKey}
+              x={x}
+              y={y}
+              rotation={rotation}
+              scale={scale}
+              zIndex={zIndex}
+              handCardWidth={handCardWidth}
+              onPress={() => {
+                console.log('Card tap - uniqueKey:', uniqueKey, 'isSelected:', isSelected, 'realId:', keyToId(uniqueKey));
+                setSelectedCard(isSelected ? null : uniqueKey);
+              }}
               disabled={state.phase !== "playerTurn"}
-              style={[
-                styles.handCardContainer,
-                {
-                  left: x,
-                  bottom: y,
-                  zIndex: zIndex,
-                  transform: [
-                    { translateX: -handCardWidth / 2 },
-                    { rotate: `${rotation}deg` },
-                    { scale: scale }
-                  ],
-                }
-              ]}
-            >
-                <HarmonyCard
-                  data={card}
-                  variant="hand"
-                  isSelected={isSelected}
-                  widthOverride={handCardWidth}
-                />
-            </TouchableOpacity>
+              getEffectDescription={getEffectDescription}
+            />
           );
         })}
       </View>
@@ -1076,22 +1011,6 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
   const range = HARMONY_MAX - HARMONY_MIN;
   const zeroBandY = pointerPadding + (1 - (0 - HARMONY_MIN) / range) * (meterHeight - pointerPadding * 2);
 
-  const HarmonyMeter = () => (
-    <View style={styles.meterColumn}>
-      <Canvas style={{ width: meterWidth, height: meterHeight }}>
-        <RoundedRect x={0} y={0} width={meterWidth} height={meterHeight} r={24}>
-          <LinearGradient start={vec(meterWidth / 2, 0)} end={vec(meterWidth / 2, meterHeight)} colors={["#2563eb", "#34d399", "#f59e0b"]} positions={[0, 0.52, 1]} />
-        </RoundedRect>
-        <RoundedRect x={5} y={5} width={meterWidth - 10} height={meterHeight - 10} r={20} style="stroke" strokeWidth={1.2} color="rgba(255,255,255,0.35)" />
-        <RoundedRect x={9} y={zeroBandY - 11} width={meterWidth - 18} height={22} r={11} color="rgba(255,255,255,0.15)" />
-        <Circle cx={meterWidth / 2} cy={baselinePointer} r={6} color="rgba(34,197,94,0.85)" />
-        <Circle cx={meterWidth / 2} cy={harmonyPointer} r={13} color="#f8fafc" />
-        <Circle cx={meterWidth / 2} cy={harmonyPointer} r={8} color="#0f172a" />
-      </Canvas>
-      <Text style={[styles.meterValue, { color: colors.text?.primary || "#1c1917" }]}>{state.harmony.toFixed(1)}</Text>
-      <Text style={[styles.meterLabel, { color: colors.text?.tertiary || "#78716c" }]}>Drift</Text>
-    </View>
-  );
 
   const renderSelection = () => (
     <View style={[styles.selectionContainer, { paddingHorizontal: padLg, paddingVertical: padLg }]}>
@@ -1106,6 +1025,27 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
       >
         Choose Your Drift Partner
       </Text>
+
+      {/* Deck Builder Button */}
+      <TouchableOpacity
+        onPress={() => setShowDeckSelector(true)}
+        activeOpacity={0.8}
+        style={[
+          styles.deckBuilderButton,
+          {
+            backgroundColor: colors.background?.secondary || "#fbf6ec",
+            borderColor: colors.primary?.[300] || "#7dd3fc",
+          }
+        ]}
+      >
+        <Text style={[styles.deckBuilderButtonText, { color: colors.primary?.[600] || "#0284c7" }]}>
+          🃏 Build & Manage Decks
+        </Text>
+        <Text style={[styles.deckBuilderSubtext, { color: colors.text?.secondary || "#44403c" }]}>
+          Create custom decks with your favorite cards
+        </Text>
+      </TouchableOpacity>
+
       <View style={[styles.selectionRow, { gap: padLg }]}> 
         {(["sable", "luma"] as OpponentId[]).map((opponent) => {
           const meta = SELECTION_META[opponent];
@@ -1147,14 +1087,33 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
       </View>
     </View>
   );
+  console.log('Main render starting - selectedCard:', selectedCard, 'selectedType:', selectedType);
+
   return (
     <SafeAreaView style={styles.container}>
+      {/* Global unified background with paper texture */}
       <Canvas style={[StyleSheet.absoluteFillObject, { pointerEvents: "none" }]}>
+        {/* Base parchment gradient */}
         <RoundedRect x={0} y={0} width={screenWidth} height={screenHeight} r={0}>
-          <LinearGradient start={vec(0, 0)} end={vec(screenWidth, screenHeight)} colors={["#f9f1e4", "#f2e5d7"]} />
+          <LinearGradient start={vec(0, 0)} end={vec(screenWidth, screenHeight)} colors={boardBackgroundGradient} />
         </RoundedRect>
-        <Circle cx={screenWidth * 0.3} cy={screenHeight * 0.25} r={screenWidth * 0.55} color="rgba(200,176,255,0.18)" />
-        <Circle cx={screenWidth * 0.78} cy={screenHeight * 0.78} r={screenWidth * 0.65} color="rgba(167,196,255,0.14)" />
+
+        {/* Global paper texture overlay */}
+        {paperTexture && (
+          <Image
+            image={paperTexture}
+            x={0}
+            y={0}
+            width={screenWidth}
+            height={screenHeight}
+            fit="cover"
+            opacity={OpacityLevels.inactive}
+          />
+        )}
+
+        {/* Subtle ambient circles - using theme colors and reduced opacity */}
+        <Circle cx={screenWidth * 0.3} cy={screenHeight * 0.25} r={screenWidth * 0.55} color={HarmonyColors.nature.lavender} opacity={0.02} />
+        <Circle cx={screenWidth * 0.78} cy={screenHeight * 0.78} r={screenWidth * 0.65} color={HarmonyColors.nature.sage} opacity={0.015} />
       </Canvas>
       <ScrollView
         contentContainerStyle={[
@@ -1182,6 +1141,15 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
           <Text style={{ fontSize: typography.size?.xl || 20, fontWeight: FONT_WEIGHT.bold, color: colors.text?.primary || "#1c1917" }}>
             Harmony Drift
           </Text>
+          <TouchableOpacity
+            onPress={() => setShowDeckSelector(true)}
+            activeOpacity={0.8}
+            style={styles.deckButton}
+          >
+            <Text style={{ color: colors.text?.secondary || "#57534e", fontSize: 12 }}>
+              {deckCollection.decks.find(d => d.id === deckCollection.activeDeckId)?.name || "Deck"}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {state.phase === "idle" && !selectedOpponent ? (
@@ -1223,7 +1191,17 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
                       </View>
                     </View>
                   </View>
-                  <HarmonyMeter />
+                  <Animated.View style={harmonyPulseStyle}>
+                    <HarmonyMeter
+                      harmony={state.harmony}
+                      baselineHarmony={0}
+                      harmonyPointer={harmonyPointer}
+                      baselinePointer={zeroBandY}
+                      meterWidth={meterWidth}
+                      meterHeight={meterHeight}
+                      zeroBandY={zeroBandY}
+                    />
+                  </Animated.View>
                 </View>
                 {state.lastMove && (
                   <View style={[styles.lastMoveBadge, { alignSelf: 'stretch', marginTop: padSm }]}>
@@ -1280,7 +1258,17 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
                     </View>
                   )}
                 </View>
-                <HarmonyMeter />
+                <Animated.View style={harmonyPulseStyle}>
+                  <HarmonyMeter
+                    harmony={state.harmony}
+                    baselineHarmony={0}
+                    harmonyPointer={harmonyPointer}
+                    baselinePointer={zeroBandY}
+                    meterWidth={meterWidth}
+                    meterHeight={meterHeight}
+                    zeroBandY={zeroBandY}
+                  />
+                </Animated.View>
               </View>
             )}
 
@@ -1443,6 +1431,337 @@ export default function HarmonyDriftScreen({ navigation }: HarmonyDriftScreenPro
           </View>
         </View>
       )}
+
+      {/* Deck Selector Modal */}
+      {showDeckSelector && (
+        <View style={[styles.overlay, { backgroundColor: colors.background?.overlay || "rgba(0,0,0,0.6)" }]}>
+          <View style={[styles.deckSelectorCard, { backgroundColor: colors.background?.secondary || "#fefaf5" }]}>
+            <Text style={[styles.deckSelectorTitle, { color: colors.text?.primary || "#1c1917" }]}>
+              Choose Your Deck
+            </Text>
+
+            <ScrollView style={styles.deckList} showsVerticalScrollIndicator={false}>
+              {deckCollection.decks.map((deck) => {
+                const isActive = deck.id === deckCollection.activeDeckId;
+                return (
+                  <TouchableOpacity
+                    key={deck.id}
+                    onPress={() => {
+                      setActiveDeck(deck.id);
+                      setShowDeckSelector(false);
+                    }}
+                    activeOpacity={0.8}
+                    style={[
+                      styles.deckItem,
+                      {
+                        backgroundColor: isActive ? colors.primary?.[100] || "#dbeafe" : "transparent",
+                        borderColor: isActive ? colors.primary?.[400] || "#38bdf8" : colors.gray?.[200] || "#e5e7eb",
+                      }
+                    ]}
+                  >
+                    <View style={styles.deckItemHeader}>
+                      <Text style={[styles.deckItemName, {
+                        color: isActive ? colors.primary?.[700] || "#0369a1" : colors.text?.primary || "#1c1917",
+                        fontWeight: isActive ? FONT_WEIGHT.bold : FONT_WEIGHT.semibold,
+                      }]}>
+                        {deck.name}
+                      </Text>
+                      {isActive && (
+                        <View style={[styles.activeBadge, { backgroundColor: colors.primary?.[500] || "#0ea5e9" }]}>
+                          <Text style={styles.activeBadgeText}>Active</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={[styles.deckItemInfo, { color: colors.text?.secondary || "#44403c" }]}>
+                      {deck.cards.length} cards • Created {new Date(deck.created).toLocaleDateString()}
+                    </Text>
+
+                    {/* Show card preview for custom decks */}
+                    {!deck.id.startsWith("starter") && (
+                      <View style={styles.deckPreview}>
+                        <Text style={[styles.deckPreviewLabel, { color: colors.text?.tertiary || "#78716c" }]}>
+                          Cards:
+                        </Text>
+                        <View style={styles.deckPreviewCards}>
+                          {deck.cards.slice(0, 6).map((cardId, idx) => {
+                            const card = cards[cardId];
+                            return card ? (
+                              <Text key={idx} style={[styles.deckPreviewCard, { color: colors.text?.secondary || "#44403c" }]}>
+                                {TYPE_EMOJI[card.type]} {card.name}
+                              </Text>
+                            ) : null;
+                          })}
+                          {deck.cards.length > 6 && (
+                            <Text style={[styles.deckPreviewMore, { color: colors.text?.tertiary || "#78716c" }]}>
+                              +{deck.cards.length - 6} more...
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Edit button for custom decks */}
+                    {!deck.id.startsWith("starter") && (
+                      <TouchableOpacity
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          setEditingDeck(deck);
+                          setBuilderCards([...deck.cards]);
+                          setBuilderName(deck.name);
+                          setShowDeckSelector(false);
+                          setShowDeckBuilder(true);
+                        }}
+                        style={styles.editDeckButton}
+                      >
+                        <Text style={[styles.editDeckButtonText, { color: colors.primary?.[600] || "#0284c7" }]}>
+                          ✏️ Edit
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <View style={styles.deckSelectorActions}>
+              <TouchableOpacity
+                onPress={() => setShowDeckSelector(false)}
+                activeOpacity={0.8}
+                style={[styles.deckActionButton, {
+                  backgroundColor: colors.background?.tertiary || "#e7e5e4",
+                  borderColor: colors.gray?.[300] || "#d6d3d1",
+                }]}
+              >
+                <Text style={[styles.deckActionButtonText, { color: colors.text?.primary || "#1c1917" }]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+
+              {deckCollection.decks.filter(d => !d.id.startsWith("starter")).length < 2 && (
+                <TouchableOpacity
+                  onPress={() => {
+                    // Start building a new deck
+                    setEditingDeck(null);
+                    setBuilderCards(deckCollection.decks.find(d => d.id === "starter-balanced")?.cards || []);
+                    setBuilderName(`Custom Deck ${deckCollection.decks.filter(d => !d.id.startsWith("starter")).length + 1}`);
+                    setShowDeckSelector(false);
+                    setShowDeckBuilder(true);
+                  }}
+                  activeOpacity={0.8}
+                  style={[styles.deckActionButton, {
+                    backgroundColor: colors.primary?.[500] || "#0ea5e9",
+                  }]}
+                >
+                  <Text style={[styles.deckActionButtonText, { color: "#ffffff" }]}>
+                    Create New Deck
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* Deck Builder Modal */}
+      {showDeckBuilder && (
+        <View style={[styles.overlay, { backgroundColor: colors.background?.overlay || "rgba(0,0,0,0.6)" }]}>
+          <View style={[styles.deckBuilderCard, { backgroundColor: colors.background?.secondary || "#fefaf5" }]}>
+            <Text style={[styles.deckBuilderTitle, { color: colors.text?.primary || "#1c1917" }]}>
+              {editingDeck ? "Edit Deck" : "Create New Deck"}
+            </Text>
+
+            {/* Deck Name Input */}
+            <View style={styles.deckNameSection}>
+              <Text style={[styles.deckNameLabel, { color: colors.text?.secondary || "#44403c" }]}>
+                Deck Name:
+              </Text>
+              <TextInput
+                style={[styles.deckNameInput, {
+                  borderColor: colors.gray?.[300] || "#d6d3d1",
+                  color: colors.text?.primary || "#1c1917",
+                  backgroundColor: colors.background?.primary || "#ffffff",
+                }]}
+                value={builderName}
+                onChangeText={setBuilderName}
+                placeholder="Enter deck name..."
+                placeholderTextColor={colors.text?.tertiary || "#78716c"}
+                maxLength={20}
+              />
+            </View>
+
+            {/* Current Deck Status */}
+            <View style={styles.deckStatusSection}>
+              <Text style={[styles.deckStatusText, {
+                color: builderCards.length === DECK_SIZE ? colors.primary?.[600] || "#0284c7" : colors.orange?.[600] || "#ea580c"
+              }]}>
+                {builderCards.length}/{DECK_SIZE} cards {builderCards.length === DECK_SIZE ? "✓" : "⚠️"}
+              </Text>
+              <Text style={[styles.deckStatusHint, { color: colors.text?.tertiary || "#78716c" }]}>
+                {builderCards.length === DECK_SIZE ? "Deck ready to save!" : `Need ${DECK_SIZE - builderCards.length} more cards`}
+              </Text>
+            </View>
+
+            {/* Card Selection */}
+            <ScrollView style={styles.cardSelectionArea} showsVerticalScrollIndicator={false}>
+              <Text style={[styles.sectionTitle, { color: colors.text?.primary || "#1c1917" }]}>
+                Available Cards
+              </Text>
+              <Text style={[styles.sectionSubtitle, { color: colors.text?.secondary || "#44403c" }]}>
+                Tap cards to add/remove (max 3 copies each)
+              </Text>
+
+              <View style={styles.cardGrid}>
+                {Object.values(cards).map((card) => {
+                  const cardCount = builderCards.filter(id => id === card.id).length;
+                  const canAdd = cardCount < 3 && builderCards.length < DECK_SIZE;
+                  const canRemove = cardCount > 0;
+
+                  return (
+                    <TouchableOpacity
+                      key={card.id}
+                      onPress={() => {
+                        if (canAdd && cardCount === 0) {
+                          // Add first copy
+                          setBuilderCards([...builderCards, card.id]);
+                        } else if (canRemove) {
+                          // Remove one copy
+                          const index = builderCards.findIndex(id => id === card.id);
+                          if (index !== -1) {
+                            const newCards = [...builderCards];
+                            newCards.splice(index, 1);
+                            setBuilderCards(newCards);
+                          }
+                        }
+                      }}
+                      activeOpacity={0.8}
+                      style={[
+                        styles.builderCard,
+                        {
+                          opacity: cardCount > 0 ? 1 : 0.7,
+                          borderColor: cardCount > 0 ? colors.primary?.[400] || "#38bdf8" : colors.gray?.[200] || "#e5e7eb",
+                        }
+                      ]}
+                    >
+                      <HarmonyCard
+                        data={card}
+                        variant="hand"
+                        widthOverride={90}
+                      />
+
+                      {/* Card Count Badge */}
+                      {cardCount > 0 && (
+                        <View style={[styles.cardCountBadge, { backgroundColor: colors.primary?.[500] || "#0ea5e9" }]}>
+                          <Text style={styles.cardCountText}>{cardCount}</Text>
+                        </View>
+                      )}
+
+                      {/* Add/Remove buttons */}
+                      <View style={styles.cardActions}>
+                        {canRemove && (
+                          <TouchableOpacity
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              const index = builderCards.findIndex(id => id === card.id);
+                              if (index !== -1) {
+                                const newCards = [...builderCards];
+                                newCards.splice(index, 1);
+                                setBuilderCards(newCards);
+                              }
+                            }}
+                            style={[styles.cardActionButton, { backgroundColor: colors.red?.[500] || "#ef4444" }]}
+                          >
+                            <Text style={styles.cardActionButtonText}>-</Text>
+                          </TouchableOpacity>
+                        )}
+                        {canAdd && (
+                          <TouchableOpacity
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              setBuilderCards([...builderCards, card.id]);
+                            }}
+                            style={[styles.cardActionButton, { backgroundColor: colors.green?.[500] || "#22c55e" }]}
+                          >
+                            <Text style={styles.cardActionButtonText}>+</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
+
+            {/* Builder Actions */}
+            <View style={styles.builderActions}>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowDeckBuilder(false);
+                  setEditingDeck(null);
+                  setBuilderCards([]);
+                  setBuilderName("");
+                }}
+                activeOpacity={0.8}
+                style={[styles.builderActionButton, {
+                  backgroundColor: colors.background?.tertiary || "#e7e5e4",
+                  borderColor: colors.gray?.[300] || "#d6d3d1",
+                }]}
+              >
+                <Text style={[styles.builderActionButtonText, { color: colors.text?.primary || "#1c1917" }]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => {
+                  if (builderCards.length !== DECK_SIZE) {
+                    Alert.alert("Invalid Deck", `Deck must have exactly ${DECK_SIZE} cards.`);
+                    return;
+                  }
+                  if (!builderName.trim()) {
+                    Alert.alert("Invalid Name", "Deck name cannot be empty.");
+                    return;
+                  }
+
+                  if (editingDeck) {
+                    // Update existing deck
+                    const success = updateDeck(editingDeck.id, builderName.trim(), builderCards);
+                    if (success) {
+                      setShowDeckBuilder(false);
+                      setEditingDeck(null);
+                      setBuilderCards([]);
+                      setBuilderName("");
+                    } else {
+                      Alert.alert("Error", "Failed to update deck.");
+                    }
+                  } else {
+                    // Create new deck
+                    const deckId = createDeck(builderName.trim(), builderCards);
+                    if (deckId) {
+                      setShowDeckBuilder(false);
+                      setEditingDeck(null);
+                      setBuilderCards([]);
+                      setBuilderName("");
+                    } else {
+                      Alert.alert("Error", "Failed to create deck. Make sure you have less than 2 custom decks.");
+                    }
+                  }
+                }}
+                disabled={builderCards.length !== DECK_SIZE || !builderName.trim()}
+                activeOpacity={0.8}
+                style={[styles.builderActionButton, {
+                  backgroundColor: (builderCards.length === DECK_SIZE && builderName.trim())
+                    ? colors.primary?.[500] || "#0ea5e9"
+                    : colors.gray?.[400] || "#9ca3af",
+                }]}
+              >
+                <Text style={[styles.builderActionButtonText, { color: "#ffffff" }]}>
+                  {editingDeck ? "Update Deck" : "Create Deck"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -1462,6 +1781,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   backButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "rgba(15,23,42,0.08)",
+  },
+  deckButton: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 999,
@@ -1535,7 +1860,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   handWrapper: {
-    height: 240, // Fixed height to accommodate arced cards and selected card pop-up
+    height: 280, // Increased height to accommodate expanded selected cards
     justifyContent: 'flex-end',
     paddingBottom: 20,
   },
@@ -1697,6 +2022,68 @@ const styles = StyleSheet.create({
     textShadowColor: "rgba(241,194,125,0.3)", // Subtle amber glow
     letterSpacing: 0.2,
   },
+  nameBanner: {
+    height: 24,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    marginTop: 6,
+  },
+  typeChip: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  typeEmoji: {
+    fontSize: 14,
+    fontWeight: FONT_WEIGHT.bold,
+  },
+  valuePill: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  valueText: {
+    fontSize: 12,
+    fontWeight: FONT_WEIGHT.bold,
+  },
+  valueBolt: {
+    fontSize: 12,
+    fontWeight: FONT_WEIGHT.bold,
+  },
+  cardBottomSection: {
+    width: "100%",
+    height: 50,
+    marginTop: 4,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  cardBottomContent: {
+    flex: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  cardBottomTitle: {
+    fontWeight: FONT_WEIGHT.bold,
+    textAlign: "center",
+    marginBottom: 2,
+  },
+  cardBottomText: {
+    textAlign: "center",
+    fontWeight: FONT_WEIGHT.medium,
+  },
+  cardBottomFootnote: {
+    textAlign: "center",
+    fontWeight: FONT_WEIGHT.medium,
+    opacity: 0.8,
+  },
   cardFlavorSection: {
     flex: 1,
     justifyContent: "center",
@@ -1727,6 +2114,30 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.8,
     fontWeight: FONT_WEIGHT.semibold,
+  },
+  cardEffectSection: {
+    height: 60,
+    justifyContent: "center",
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+    marginTop: 4,
+  },
+  cardEffectContent: {
+    flex: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    justifyContent: "center",
+  },
+  cardEffectTitle: {
+    fontSize: 11,
+    fontWeight: FONT_WEIGHT.bold,
+    marginBottom: 2,
+    textAlign: "center",
+  },
+  cardEffectDescription: {
+    fontSize: 10,
+    textAlign: "center",
+    lineHeight: 12,
   },
   emptySlot: {
     borderRadius: 16,
@@ -1920,5 +2331,268 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: FONT_WEIGHT.semibold,
     textAlign: "center",
+  },
+  effectIndicator: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#3b82f6",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    shadowColor: "#000",
+    shadowOpacity: 0.3,
+    elevation: 3,
+  },
+  effectIndicatorText: {
+    fontSize: 12,
+    fontWeight: FONT_WEIGHT.bold,
+    color: "#ffffff",
+  },
+  // Deck Selector Modal Styles
+  deckSelectorCard: {
+    width: "85%",
+    maxHeight: "70%",
+    borderRadius: 24,
+    padding: 24,
+    alignItems: "stretch",
+    gap: 16,
+  },
+  deckSelectorTitle: {
+    fontSize: 22,
+    fontWeight: FONT_WEIGHT.bold,
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  deckList: {
+    maxHeight: 300,
+  },
+  deckItem: {
+    borderWidth: 1.5,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    gap: 8,
+  },
+  deckItemHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  deckItemName: {
+    fontSize: 16,
+    fontWeight: FONT_WEIGHT.semibold,
+  },
+  activeBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  activeBadgeText: {
+    fontSize: 10,
+    fontWeight: FONT_WEIGHT.bold,
+    color: "#ffffff",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  deckItemInfo: {
+    fontSize: 12,
+    opacity: 0.8,
+  },
+  deckPreview: {
+    marginTop: 8,
+    gap: 4,
+  },
+  deckPreviewLabel: {
+    fontSize: 11,
+    fontWeight: FONT_WEIGHT.semibold,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  deckPreviewCards: {
+    gap: 2,
+  },
+  deckPreviewCard: {
+    fontSize: 11,
+    paddingLeft: 8,
+  },
+  deckPreviewMore: {
+    fontSize: 11,
+    fontStyle: "italic",
+    paddingLeft: 8,
+  },
+  deckSelectorActions: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 8,
+  },
+  deckActionButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: "center",
+  },
+  deckActionButtonText: {
+    fontSize: 14,
+    fontWeight: FONT_WEIGHT.semibold,
+  },
+  // Deck Builder Button in opponent selection
+  deckBuilderButton: {
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 16,
+    borderWidth: 2,
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  deckBuilderButtonText: {
+    fontSize: 16,
+    fontWeight: FONT_WEIGHT.bold,
+    marginBottom: 4,
+  },
+  deckBuilderSubtext: {
+    fontSize: 12,
+    fontStyle: "italic",
+  },
+  // Edit deck button
+  editDeckButton: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.9)",
+  },
+  editDeckButtonText: {
+    fontSize: 10,
+    fontWeight: FONT_WEIGHT.semibold,
+  },
+  // Deck Builder Modal Styles
+  deckBuilderCard: {
+    width: "95%",
+    maxHeight: "85%",
+    borderRadius: 24,
+    padding: 20,
+    alignItems: "stretch",
+    gap: 16,
+  },
+  deckBuilderTitle: {
+    fontSize: 24,
+    fontWeight: FONT_WEIGHT.bold,
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  deckNameSection: {
+    gap: 8,
+  },
+  deckNameLabel: {
+    fontSize: 14,
+    fontWeight: FONT_WEIGHT.semibold,
+  },
+  deckNameInput: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+  },
+  deckStatusSection: {
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 8,
+  },
+  deckStatusText: {
+    fontSize: 16,
+    fontWeight: FONT_WEIGHT.bold,
+  },
+  deckStatusHint: {
+    fontSize: 12,
+    fontStyle: "italic",
+  },
+  cardSelectionArea: {
+    maxHeight: 400,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: FONT_WEIGHT.bold,
+    marginBottom: 4,
+  },
+  sectionSubtitle: {
+    fontSize: 12,
+    marginBottom: 12,
+  },
+  cardGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    justifyContent: "space-around",
+  },
+  builderCard: {
+    position: "relative",
+    borderWidth: 2,
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 8,
+  },
+  cardCountBadge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
+  },
+  cardCountText: {
+    fontSize: 12,
+    fontWeight: FONT_WEIGHT.bold,
+    color: "#ffffff",
+  },
+  cardActions: {
+    position: "absolute",
+    bottom: -8,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 4,
+  },
+  cardActionButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  cardActionButtonText: {
+    fontSize: 14,
+    fontWeight: FONT_WEIGHT.bold,
+    color: "#ffffff",
+  },
+  builderActions: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 8,
+  },
+  builderActionButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: "center",
+  },
+  builderActionButtonText: {
+    fontSize: 14,
+    fontWeight: FONT_WEIGHT.semibold,
   },
 });

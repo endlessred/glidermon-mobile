@@ -1,7 +1,9 @@
 // src/game/harmonyDrift/store.ts
 import { create } from "zustand";
-import { HarmonyDriftContext, HarmonyMatchState, HarmonyPlayer, HarmonyPhase, HarmonyMatchResult } from "./types";
-import { HARMONY_CARD_INDEX, buildStarterDeck } from "./cards";
+import { persist, createJSONStorage } from "zustand/middleware";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { HarmonyDriftContext, HarmonyMatchState, HarmonyPlayer, HarmonyPhase, HarmonyMatchResult, CustomDeck, DeckCollection } from "./types";
+import { HARMONY_CARD_INDEX, buildStarterDeck, buildBalancedDeck, isValidDeck, DECK_SIZE } from "./cards";
 import { HARMONY_SLOT_MAP, SLOT_IDS, findSlotByOffset } from "./layout";
 import { Card, MoveResolution, PlacedCard } from "./types";
 
@@ -90,6 +92,80 @@ const applyPatternDelta = (
       occupant.value += delta;
     }
   });
+};
+
+const applyAdjacentScale = (
+  board: Record<string, PlacedCard | undefined>,
+  sourceSlot: string,
+  factor: number
+) => {
+  const slot = HARMONY_SLOT_MAP[sourceSlot];
+  if (!slot) return;
+  slot.neighbors.forEach((neighborId) => {
+    const occupant = board[neighborId];
+    if (occupant) {
+      occupant.value *= factor;
+    }
+  });
+};
+
+const applyRadiusModify = (
+  board: Record<string, PlacedCard | undefined>,
+  sourceSlot: string,
+  radius: number,
+  delta: number
+) => {
+  const sourceSlotData = HARMONY_SLOT_MAP[sourceSlot];
+  if (!sourceSlotData) return;
+
+  SLOT_IDS.forEach((targetSlotId) => {
+    if (targetSlotId === sourceSlot) return; // Don't affect self
+
+    const targetSlotData = HARMONY_SLOT_MAP[targetSlotId];
+    if (!targetSlotData) return;
+
+    // Calculate distance (simplified grid distance)
+    const sourceRow = sourceSlotData.row;
+    const sourceCol = sourceSlotData.col;
+    const targetRow = targetSlotData.row;
+    const targetCol = targetSlotData.col;
+
+    const rowDistance = Math.abs(
+      (sourceRow === "A" ? 0 : sourceRow === "B" ? 1 : 2) -
+      (targetRow === "A" ? 0 : targetRow === "B" ? 1 : 2)
+    );
+    const colDistance = Math.abs(sourceCol - targetCol);
+    const distance = Math.max(rowDistance, colDistance);
+
+    if (distance <= radius) {
+      const occupant = board[targetSlotId];
+      if (occupant) {
+        occupant.value += delta;
+      }
+    }
+  });
+};
+
+const applyConditionalModify = (
+  board: Record<string, PlacedCard | undefined>,
+  sourceSlot: string,
+  condition: string,
+  delta: number
+) => {
+  const slot = HARMONY_SLOT_MAP[sourceSlot];
+  const placedCard = board[sourceSlot];
+  if (!slot || !placedCard) return;
+
+  if (condition === "adjacentCount") {
+    // Add delta for each adjacent card
+    let adjacentCount = 0;
+    slot.neighbors.forEach((neighborId) => {
+      if (board[neighborId]) {
+        adjacentCount++;
+      }
+    });
+    placedCard.value += delta * adjacentCount;
+  }
 };
 
 const applyTypeSynergies = (
@@ -189,6 +265,21 @@ const simulatePlacement = (
           applyPatternDelta(boardCopy, slotId, card.effect.pattern, card.effect.delta);
         }
         break;
+      case "adjacentScale":
+        if (typeof card.effect.factor === "number") {
+          applyAdjacentScale(boardCopy, slotId, card.effect.factor);
+        }
+        break;
+      case "radiusModify":
+        if (typeof card.effect.radius === "number" && typeof card.effect.delta === "number") {
+          applyRadiusModify(boardCopy, slotId, card.effect.radius, card.effect.delta);
+        }
+        break;
+      case "conditionalModify":
+        if (card.effect.condition && typeof card.effect.delta === "number") {
+          applyConditionalModify(boardCopy, slotId, card.effect.condition, card.effect.delta);
+        }
+        break;
       case "none":
       default:
         break;
@@ -199,8 +290,17 @@ const simulatePlacement = (
   applyAllTypeSynergies(boardCopy);
 
   const harmonyBefore = state.harmony;
-  const harmonyAfter = calculateHarmony(boardCopy, state.baselineHarmony);
-  const contributionDelta = Number((Math.abs(harmonyBefore) - Math.abs(harmonyAfter)).toFixed(4));
+  const harmonyAfterCards = calculateHarmony(boardCopy, state.baselineHarmony);
+
+  // Calculate contribution delta BEFORE applying harmonyShift
+  let contributionDelta = Number((Math.abs(harmonyBefore) - Math.abs(harmonyAfterCards)).toFixed(4));
+
+  // Handle harmonyShift effect - this affects harmony but NOT the player's score
+  let harmonyAfter = harmonyAfterCards;
+  if (card.effect?.kind === "harmonyShift" && typeof card.effect.harmonyDelta === "number") {
+    harmonyAfter += card.effect.harmonyDelta;
+    // Don't recalculate contributionDelta - keep it based only on card values
+  }
 
   return {
     slotId,
@@ -261,6 +361,26 @@ const drawUpTo = (
   return { hand: nextHand, deck: nextDeck, discard: nextDiscard };
 };
 
+const initialDeckCollection: DeckCollection = {
+  decks: [
+    {
+      id: "starter",
+      name: "Starter Deck",
+      cards: buildStarterDeck(),
+      created: Date.now(),
+      lastModified: Date.now(),
+    },
+    {
+      id: "balanced",
+      name: "Synergy Focus",
+      cards: buildBalancedDeck(),
+      created: Date.now(),
+      lastModified: Date.now(),
+    }
+  ],
+  activeDeckId: "starter",
+};
+
 const initialState: HarmonyMatchState = {
   phase: "idle",
   opponent: "sable",
@@ -286,19 +406,44 @@ interface HarmonyDriftActions {
   reset: () => void;
   previewPlacement: (cardId: string, slotId: string) => MoveResolution | undefined;
   getPlacementPreview: (cardId: string) => Record<string, MoveResolution>;
+  // Deck management
+  createDeck: (name: string, cards: string[]) => string | null;
+  updateDeck: (deckId: string, name: string, cards: string[]) => boolean;
+  deleteDeck: (deckId: string) => boolean;
+  setActiveDeck: (deckId: string) => boolean;
+  getActiveDeck: () => CustomDeck | null;
 }
 
-export const useHarmonyDriftStore = create<HarmonyDriftContext & HarmonyDriftActions>(() => ({
-  state: initialState,
-  cards: HARMONY_CARD_INDEX,
-  startMatch: () => undefined,
-  playPlayerCard: () => undefined,
-  npcTakeTurn: () => undefined,
-  endMatch: () => undefined,
-  reset: () => undefined,
-  previewPlacement: () => undefined,
-  getPlacementPreview: () => ({}),
-}));
+export const useHarmonyDriftStore = create<HarmonyDriftContext & HarmonyDriftActions>()(
+  persist(
+    () => ({
+      state: initialState,
+      cards: HARMONY_CARD_INDEX,
+      deckCollection: initialDeckCollection,
+      startMatch: () => undefined,
+      playPlayerCard: () => undefined,
+      npcTakeTurn: () => undefined,
+      endMatch: () => undefined,
+      reset: () => undefined,
+      previewPlacement: () => undefined,
+      getPlacementPreview: () => ({}),
+      // Deck management placeholders
+      createDeck: () => null,
+      updateDeck: () => false,
+      deleteDeck: () => false,
+      setActiveDeck: () => false,
+      getActiveDeck: () => null,
+    }),
+    {
+      name: 'harmony-drift-storage',
+      storage: createJSONStorage(() => AsyncStorage),
+      // Only persist the deck collection, not the active game state
+      partialize: (state) => ({
+        deckCollection: state.deckCollection
+      }),
+    }
+  )
+);
 
 const evaluateNpcMove = (
   state: HarmonyMatchState,
@@ -328,10 +473,15 @@ const computeResult = (state: HarmonyMatchState): HarmonyMatchResult => {
 
 useHarmonyDriftStore.setState((current) => {
   const startMatch: HarmonyDriftActions["startMatch"] = (opponent) => {
-    const playerDeck = shuffle(buildStarterDeck());
+    const activeDeck = current.deckCollection.decks.find(d => d.id === current.deckCollection.activeDeckId);
+    const deckCards = activeDeck ? activeDeck.cards : buildStarterDeck();
+
+    const playerDeck = shuffle([...deckCards]);
     const npcDeck = shuffle(buildStarterDeck());
 
-    const { hand: playerHand, deck: playerDrawDeck } = drawUpTo([], playerDeck, [], MAX_HAND);
+    // TEMPORARY: Force PNG art cards into hand for testing
+    const pngArtCards = ["hd_morning_walk", "hd_deep_sleep", "hd_heat_wave", "hd_anxiety_spiral", "hd_low_treat"];
+    const { hand: playerHand, deck: playerDrawDeck } = drawUpTo(pngArtCards, playerDeck, [], MAX_HAND);
     const { hand: npcHand, deck: npcDrawDeck } = drawUpTo([], npcDeck, [], MAX_HAND);
     const baselineHarmony = generateInitialHarmony();
 
@@ -530,6 +680,117 @@ useHarmonyDriftStore.setState((current) => {
     return previews;
   };
 
+  const createDeck: HarmonyDriftActions["createDeck"] = (name, cards) => {
+    const validation = isValidDeck(cards);
+    if (!validation.valid) {
+      console.warn("Invalid deck:", validation.errors);
+      return null;
+    }
+
+    if (current.deckCollection.decks.length >= 2) {
+      console.warn("Maximum deck limit reached");
+      return null;
+    }
+
+    const newDeckId = `deck_${Date.now()}`;
+    const newDeck: CustomDeck = {
+      id: newDeckId,
+      name,
+      cards: [...cards],
+      created: Date.now(),
+      lastModified: Date.now(),
+    };
+
+    useHarmonyDriftStore.setState((prev) => ({
+      ...prev,
+      deckCollection: {
+        ...prev.deckCollection,
+        decks: [...prev.deckCollection.decks, newDeck],
+      },
+    }));
+
+    return newDeckId;
+  };
+
+  const updateDeck: HarmonyDriftActions["updateDeck"] = (deckId, name, cards) => {
+    const validation = isValidDeck(cards);
+    if (!validation.valid) {
+      console.warn("Invalid deck:", validation.errors);
+      return false;
+    }
+
+    const deckIndex = current.deckCollection.decks.findIndex(d => d.id === deckId);
+    if (deckIndex === -1) {
+      return false;
+    }
+
+    // Don't allow updating starter decks
+    if (deckId === "starter" || deckId === "balanced") {
+      return false;
+    }
+
+    useHarmonyDriftStore.setState((prev) => ({
+      ...prev,
+      deckCollection: {
+        ...prev.deckCollection,
+        decks: prev.deckCollection.decks.map(deck =>
+          deck.id === deckId
+            ? { ...deck, name, cards: [...cards], lastModified: Date.now() }
+            : deck
+        ),
+      },
+    }));
+
+    return true;
+  };
+
+  const deleteDeck: HarmonyDriftActions["deleteDeck"] = (deckId) => {
+    // Don't allow deleting starter decks
+    if (deckId === "starter" || deckId === "balanced") {
+      return false;
+    }
+
+    const deckExists = current.deckCollection.decks.some(d => d.id === deckId);
+    if (!deckExists) {
+      return false;
+    }
+
+    const newActiveDeckId = current.deckCollection.activeDeckId === deckId
+      ? "starter"
+      : current.deckCollection.activeDeckId;
+
+    useHarmonyDriftStore.setState((prev) => ({
+      ...prev,
+      deckCollection: {
+        decks: prev.deckCollection.decks.filter(d => d.id !== deckId),
+        activeDeckId: newActiveDeckId,
+      },
+    }));
+
+    return true;
+  };
+
+  const setActiveDeck: HarmonyDriftActions["setActiveDeck"] = (deckId) => {
+    const deckExists = current.deckCollection.decks.some(d => d.id === deckId);
+    if (!deckExists) {
+      return false;
+    }
+
+    useHarmonyDriftStore.setState((prev) => ({
+      ...prev,
+      deckCollection: {
+        ...prev.deckCollection,
+        activeDeckId: deckId,
+      },
+    }));
+
+    return true;
+  };
+
+  const getActiveDeck: HarmonyDriftActions["getActiveDeck"] = () => {
+    return current.deckCollection.decks.find(d => d.id === current.deckCollection.activeDeckId) || null;
+  };
+
   return {
     ...current,
     startMatch,
@@ -539,5 +800,10 @@ useHarmonyDriftStore.setState((current) => {
     reset,
     previewPlacement,
     getPlacementPreview,
+    createDeck,
+    updateDeck,
+    deleteDeck,
+    setActiveDeck,
+    getActiveDeck,
   };
 });

@@ -10,6 +10,10 @@ export type CardEffectKind =
   | "typeModify"
   | "globalScale"
   | "pattern"
+  | "adjacentScale"
+  | "harmonyShift"
+  | "conditionalModify"
+  | "radiusModify"
   | "none";
 
 export interface CardEffect {
@@ -19,6 +23,8 @@ export interface CardEffect {
   targetType?: CardType;
   pattern?: [number, number][];
   factor?: number;
+  harmonyDelta?: number;
+  condition?: string;
 }
 
 export interface Card {
@@ -96,7 +102,21 @@ export interface HarmonyMatchState {
   result?: HarmonyMatchResult;
 }
 
+export interface CustomDeck {
+  id: string;
+  name: string;
+  cards: string[]; // Array of card IDs
+  created: number;
+  lastModified: number;
+}
+
+export interface DeckCollection {
+  decks: CustomDeck[];
+  activeDeckId: string | null;
+}
+
 export interface HarmonyDriftContext {
   state: HarmonyMatchState;
   cards: Record<string, Card>;
+  deckCollection: DeckCollection;
 }
