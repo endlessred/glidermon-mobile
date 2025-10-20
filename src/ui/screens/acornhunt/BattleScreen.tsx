@@ -13,6 +13,7 @@ import { BattleEngine, BattleResult, createCombatant } from '../../../game/acorn
 import { CHARACTERS } from '../../../game/acornhunt/characters';
 import { generateEncounter } from '../../../game/acornhunt/enemies';
 import { SeededRNG } from '../../../game/acornhunt/rng';
+import { SpineBattleScene } from './SpineBattleScene';
 
 interface BattleScreenProps {
   run: RunState;
@@ -198,42 +199,38 @@ export function BattleScreen({
 
       {/* Battle Arena */}
       <View style={styles.arena}>
-        {/* Allies Side */}
-        <View style={styles.alliesSide}>
-          <Text style={[styles.sideTitle, { color: colors.text.primary }]}>Your Party</Text>
-          <View style={styles.combatantGrid}>
-            {allies.map((ally: Combatant) => (
-              <CombatantCard
-                key={ally.id}
-                combatant={ally}
-                colors={colors}
-                isAlly={true}
-                isAnimating={animatingCombatants.has(ally.id)}
-              />
-            ))}
-          </View>
-        </View>
+        <SpineBattleScene
+          allies={allies}
+          enemies={enemies}
+          animatingCombatants={animatingCombatants}
+        />
+      </View>
 
-        {/* VS Divider */}
-        <View style={styles.vsDivider}>
-          <Text style={[styles.vsText, { color: colors.text.secondary }]}>⚔️</Text>
-        </View>
-
-        {/* Enemies Side */}
-        <View style={styles.enemiesSide}>
-          <Text style={[styles.sideTitle, { color: colors.text.primary }]}>Enemies</Text>
-          <View style={styles.combatantGrid}>
-            {enemies.map((enemy: Combatant) => (
-              <CombatantCard
-                key={enemy.id}
-                combatant={enemy}
-                colors={colors}
-                isAlly={false}
-                isAnimating={animatingCombatants.has(enemy.id)}
-              />
-            ))}
+      {/* Character Status Panel */}
+      <View style={styles.statusPanel}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          {allies.map((ally: Combatant) => (
+            <CombatantStatusCard
+              key={ally.id}
+              combatant={ally}
+              colors={colors}
+              isAlly={true}
+              isAnimating={animatingCombatants.has(ally.id)}
+            />
+          ))}
+          <View style={styles.statusDivider}>
+            <Text style={[styles.vsText, { color: colors.text.secondary }]}>⚔️</Text>
           </View>
-        </View>
+          {enemies.map((enemy: Combatant) => (
+            <CombatantStatusCard
+              key={enemy.id}
+              combatant={enemy}
+              colors={colors}
+              isAlly={false}
+              isAnimating={animatingCombatants.has(enemy.id)}
+            />
+          ))}
+        </ScrollView>
       </View>
 
       {/* Battle Log */}
@@ -289,7 +286,7 @@ export function BattleScreen({
   );
 }
 
-function CombatantCard({
+function CombatantStatusCard({
   combatant,
   colors,
   isAlly,
@@ -398,40 +395,32 @@ const styles = StyleSheet.create({
   },
   arena: {
     flex: 1,
-    flexDirection: 'row',
-    padding: 16,
+    margin: 16,
+    marginBottom: 8,
+    borderRadius: 8,
+    overflow: 'hidden',
   },
-  alliesSide: {
-    flex: 1,
-    marginRight: 8,
+  statusPanel: {
+    height: 120,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
-  enemiesSide: {
-    flex: 1,
-    marginLeft: 8,
-  },
-  sideTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  combatantGrid: {
-    gap: 8,
-  },
-  vsDivider: {
+  statusDivider: {
     width: 40,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 8,
   },
   vsText: {
     fontSize: 24,
     fontWeight: 'bold',
   },
   combatantCard: {
-    padding: 12,
+    width: 120,
+    padding: 8,
     borderRadius: 8,
     borderWidth: 2,
-    marginBottom: 8,
+    marginRight: 8,
   },
   combatantEmoji: {
     fontSize: 32,

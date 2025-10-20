@@ -323,7 +323,7 @@ export default function IsometricHousingThreeJS({
     } else {
       camera.position.set(0, 1200, 10);
       camera.lookAt(0, 1200, 0);
-      const zoomFactor = 12;
+      const zoomFactor = 9;
       const aspect = width / height;
       const w = width;
       const h = height;
@@ -366,63 +366,116 @@ export default function IsometricHousingThreeJS({
     rendererRef.current?.dispose();
   }, []);
 
-  // Helper to ensure wind animations stay active
+  // Optimized wind animation management - only check when needed
+  const windAnimationsInitializedRef = useRef(false);
+  const lastWindCheckRef = useRef(0);
+
   const ensureWindAnimationsActive = (roomSt: any, roomSk: any) => {
     const windAnimations = ['LeafWind', 'TreeTopWind', 'VinesWind'];
+    let anyAnimationRestarted = false;
 
-    // Debug occasionally (animations are working, reduce noise)
-    if (__DEV__ && Math.random() < 0.001) {
-      console.log('ensureWindAnimationsActive check:', {
-        totalTracks: roomSt.tracks.length,
-        trackStates: roomSt.tracks.map((track: any, i: number) => ({
-          index: i,
-          hasTrack: !!track,
-          animation: track?.animation?.name,
-          isComplete: track?.isComplete?.() || false
-        }))
-      });
-    }
-
-    for (let trackIndex = 0; trackIndex < 3; trackIndex++) {
-      const track = roomSt.tracks[trackIndex];
-      const animName = windAnimations[trackIndex];
-
-      // Check if track is empty or animation is complete
-      if (!track || track.isComplete()) {
-        // Debug: check what animations are available
-        const availableAnimations = roomSk.data.animations.map((a: any) => a.name);
+    // If animations haven't been initialized yet, set them all up
+    if (!windAnimationsInitializedRef.current) {
+      for (let trackIndex = 0; trackIndex < 3; trackIndex++) {
+        const animName = windAnimations[trackIndex];
         const animation = roomSk.data.findAnimation(animName);
-
-        // Reduced logging since animations are working
-        if (__DEV__ && Math.random() < 0.001) {
-          // console.log(`Housing: Setting up ${animName} animation`);
-        }
 
         if (animation) {
           try {
             const entry = roomSt.setAnimation(trackIndex, animName, true);
-
-            // Reduced logging - we know animations are setting up correctly
-
             if (entry) {
               entry.trackTime = Math.random() * animation.duration;
             }
+            anyAnimationRestarted = true;
           } catch (error) {
             if (__DEV__) {
               console.error(`Housing: Error setting animation ${animName}:`, error);
             }
           }
-        } else {
-          if (__DEV__) {
-            console.warn(`Housing: Could not find animation ${animName} to restart`);
+        }
+      }
+      windAnimationsInitializedRef.current = true;
+      if (anyAnimationRestarted) {
+        needsRoomRefreshRef.current = true;
+      }
+      return;
+    }
+
+    // Only check for completed animations occasionally (every 3 seconds)
+    const now = performance.now();
+    if (now - lastWindCheckRef.current < 3000) {
+      return;
+    }
+    lastWindCheckRef.current = now;
+
+    // Quick check - only restart if actually needed
+    for (let trackIndex = 0; trackIndex < 3; trackIndex++) {
+      const track = roomSt.tracks[trackIndex];
+      const animName = windAnimations[trackIndex];
+
+      // Only restart if track is missing or truly complete
+      if (!track || track.isComplete()) {
+        const animation = roomSk.data.findAnimation(animName);
+        if (animation) {
+          try {
+            const entry = roomSt.setAnimation(trackIndex, animName, true);
+            if (entry) {
+              entry.trackTime = Math.random() * animation.duration;
+            }
+            anyAnimationRestarted = true;
+          } catch (error) {
+            if (__DEV__) {
+              console.error(`Housing: Error restarting animation ${animName}:`, error);
+            }
           }
         }
       }
     }
+
+    // Only trigger mesh refresh if we actually restarted something
+    if (anyAnimationRestarted) {
+      needsRoomRefreshRef.current = true;
+    }
   };
+
+  // Performance optimization: track what needs refreshing
+  const needsRoomRefreshRef = useRef(false);
+  const needsCharacterRefreshRef = useRef(false);
+  const frameCountRef = useRef(0);
+
+  // Performance monitoring
+  const fpsCounterRef = useRef(0);
+  const lastFpsLogRef = useRef(performance.now());
+  const roomRefreshCountRef = useRef(0);
+  const characterRefreshCountRef = useRef(0);
 
   const updateCharacterForFrame = (deltaSeconds: number) => {
     try {
+      frameCountRef.current++;
+      fpsCounterRef.current++;
+
+      // Log performance stats every 5 seconds
+      const now = performance.now();
+      if (now - lastFpsLogRef.current > 5000) {
+        const fps = fpsCounterRef.current / 5;
+        const roomRefreshRate = roomRefreshCountRef.current / 5;
+        const characterRefreshRate = characterRefreshCountRef.current / 5;
+
+        if (__DEV__) {
+          console.log('Housing Performance:', {
+            fps: fps.toFixed(1),
+            'room refreshes/sec': roomRefreshRate.toFixed(1),
+            'character refreshes/sec': characterRefreshRate.toFixed(1),
+            'total frames': frameCountRef.current
+          });
+        }
+
+        fpsCounterRef.current = 0;
+        roomRefreshCountRef.current = 0;
+        characterRefreshCountRef.current = 0;
+        lastFpsLogRef.current = now;
+      }
+
       // FIRST: advance room animation + physics every frame
       const roomSk = roomSkeletonRef.current;
       const roomSt = roomStateRef.current;
@@ -430,41 +483,50 @@ export default function IsometricHousingThreeJS({
       if (roomSk && roomSt && roomObj) {
         roomSt.update(deltaSeconds);
         roomSt.apply(roomSk);
-        roomSk.update(deltaSeconds);  // Add skeleton update step
+        roomSk.update(deltaSeconds);
         const PHYSICS: any = Physics as any;
         roomSk.updateWorldTransform(PHYSICS.update);
 
-        // Find and refresh the room's SkeletonMesh FIRST
-        let foundMesh = false;
-        if ((roomObj as any).refreshMeshes) {
-          // Room itself is the SkeletonMesh
-          (roomObj as any).refreshMeshes();
-          foundMesh = true;
-          // Mesh refresh working - reduced logging
-        } else if (roomObj.children) {
-          // Look for SkeletonMesh in children
-          for (const child of roomObj.children) {
-            if ((child as any).refreshMeshes) {
-              (child as any).refreshMeshes();
-              foundMesh = true;
-              if (__DEV__) {
-                // console.log('Housing: Refreshing room mesh (child object)');
+        // Only refresh room mesh when animations actually change something significant
+        // Check if any bones have moved meaningfully since last refresh
+        const bonesChanged = roomSk.bones.some((bone: any) => {
+          const threshold = 0.1; // Pixel threshold for meaningful movement
+          return Math.abs(bone.worldX - (bone.userData?.lastWorldX || bone.worldX)) > threshold ||
+                 Math.abs(bone.worldY - (bone.userData?.lastWorldY || bone.worldY)) > threshold;
+        });
+
+        if (bonesChanged || needsRoomRefreshRef.current) {
+          // Find and refresh the room's SkeletonMesh
+          let foundMesh = false;
+          if ((roomObj as any).refreshMeshes) {
+            (roomObj as any).refreshMeshes();
+            foundMesh = true;
+            needsRoomRefreshRef.current = false;
+            roomRefreshCountRef.current++;
+
+            // Store current bone positions for next comparison
+            roomSk.bones.forEach((bone: any) => {
+              bone.userData = bone.userData || {};
+              bone.userData.lastWorldX = bone.worldX;
+              bone.userData.lastWorldY = bone.worldY;
+            });
+          } else if (roomObj.children) {
+            for (const child of roomObj.children) {
+              if ((child as any).refreshMeshes) {
+                (child as any).refreshMeshes();
+                foundMesh = true;
+                needsRoomRefreshRef.current = false;
+                break;
               }
-              break;
             }
+          }
+
+          if (__DEV__ && !foundMesh) {
+            console.warn('Housing: Could not find SkeletonMesh to refresh for room animations');
           }
         }
 
-        if (__DEV__ && !foundMesh) {
-          console.warn('Housing: Could not find SkeletonMesh to refresh for room animations', {
-            roomObjType: roomObj.constructor.name,
-            hasRefreshMeshes: !!(roomObj as any).refreshMeshes,
-            childrenCount: roomObj.children?.length || 0,
-            childrenTypes: roomObj.children?.map((c: any) => c.constructor.name) || []
-          });
-        }
-
-        // Ensure wind animations keep playing AFTER mesh refresh
+        // Check wind animations less frequently - the function itself now handles timing
         ensureWindAnimationsActive(roomSt, roomSk);
 
         // Debug: Find all bone names to see what the wind animations should target
@@ -526,7 +588,6 @@ export default function IsometricHousingThreeJS({
         tileId = `${tileRow}${tileCol}`;
       }
 
-
       const anchor = getAnchor(tileId);
       if (!anchor) {
         if (__DEV__) {
@@ -538,11 +599,9 @@ export default function IsometricHousingThreeJS({
         const sk = controller.skeleton;
         sk.x = 0; sk.y = 0;
         sk.scaleX = 0.5; sk.scaleY = 0.5;
-        const physicsMaybe: any = (spine as any)?.Physics;     // ← object, not .update
-const PHYSICS: any = Physics as any;       // ← object, not .update
-sk.updateWorldTransform(PHYSICS.update);
-controller.mesh.refreshMeshes();
-        
+        const PHYSICS: any = Physics as any;
+        sk.updateWorldTransform(PHYSICS.update);
+        needsCharacterRefreshRef.current = true;
         return;
       }
 
@@ -618,7 +677,10 @@ controller.mesh.refreshMeshes();
       try {
         const PHYSICS = (spine as any)?.Physics;
         sk.updateWorldTransform(PHYSICS?.update);
+
+        // Refresh character mesh every frame for smooth animation
         controller.mesh.refreshMeshes();
+        characterRefreshCountRef.current++;
       } catch (error) {
         if (__DEV__) console.error('Housing: Error updating skeleton transform', error);
         return;
@@ -654,6 +716,9 @@ controller.mesh.refreshMeshes();
             if (typeof m.blending !== 'undefined') m.blending = THREE.NormalBlending;
             if (typeof m.side !== 'undefined') m.side = THREE.DoubleSide;
             if (typeof m.needsUpdate === 'boolean') m.needsUpdate = true;
+
+            // Don't override opacity for shadow attachments - preserve what SpineThree.ts set
+            // The opacity is already set correctly in the SpineThree uploadTriangles method
           });
         }
       });

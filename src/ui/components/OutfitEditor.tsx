@@ -1,10 +1,18 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, ScrollView, Pressable, Modal, SafeAreaView } from "react-native";
 import { useTheme } from "../../data/hooks/useTheme";
 import { useOutfitStore } from "../../data/stores/outfitStore";
 import { useCosmeticsStore } from "../../data/stores/cosmeticsStore";
 import { CosmeticSocket } from "../../data/types/outfitTypes";
 import SpineCharacterPreview from "./SpineCharacterPreview";
+
+// Hair color options for Windswept hair
+const HAIR_COLORS = [
+  { id: "blonde", name: "Blonde", color: "#f5deb3" },
+  { id: "brunette", name: "Brunette", color: "#8b4513" },
+  { id: "redhead", name: "Redhead", color: "#cd853f" },
+  { id: "black", name: "Black", color: "#2f2f2f" },
+];
 
 interface OutfitEditorProps {
   outfitId: string;
@@ -19,6 +27,7 @@ type CosmeticSlot = {
 
 const COSMETIC_SLOTS: CosmeticSlot[] = [
   { id: "headTop", name: "Head Top", icon: "🎩" },
+  { id: "hair", name: "Hair", icon: "💇" },
   { id: "skin", name: "Skin", icon: "🎨" },
   { id: "face", name: "Face", icon: "😊" },
   { id: "shirt", name: "Shirt", icon: "👕" },
@@ -28,15 +37,45 @@ const COSMETIC_SLOTS: CosmeticSlot[] = [
 export default function OutfitEditor({ outfitId, onClose }: OutfitEditorProps) {
   const { colors, spacing, borderRadius, typography } = useTheme();
   const [selectedSlot, setSelectedSlot] = useState<CosmeticSocket | null>(null);
+  const [selectedHairColor, setSelectedHairColor] = useState<string>("blonde");
 
   const outfit = useOutfitStore(state =>
     state.slots.find(slot => slot.id === outfitId)
   );
 
   const equipCosmetic = useOutfitStore(state => state.equipCosmetic);
+  const equipSpineCosmetic = useOutfitStore(state => state.equipSpineCosmetic);
   const unequipCosmetic = useOutfitStore(state => state.unequipCosmetic);
 
   const { catalog: cosmeticItems, owned } = useCosmeticsStore();
+
+  // Initialize hair color based on currently equipped hair
+  useEffect(() => {
+    if (outfit.cosmetics.hair?.spineData?.maskRecolor) {
+      // Try to determine the color from the recolor data
+      const recolor = outfit.cosmetics.hair.spineData.maskRecolor;
+      const detectedColor = detectHairColorFromRecolor(recolor);
+      if (detectedColor) {
+        setSelectedHairColor(detectedColor);
+      }
+    }
+  }, [outfit.cosmetics.hair]);
+
+  // Helper function to detect hair color from recolor data
+  const detectHairColorFromRecolor = (recolor: any): string | null => {
+    const recolorStr = JSON.stringify(recolor);
+
+    // Check against each hair color's recolor pattern
+    for (const hairColor of HAIR_COLORS) {
+      const expectedRecolor = getHairRecolorForColor(hairColor.id);
+      const expectedStr = JSON.stringify(expectedRecolor);
+      if (recolorStr === expectedStr) {
+        return hairColor.id;
+      }
+    }
+
+    return null; // Default if no match
+  };
 
   if (!outfit) {
     return (
@@ -67,6 +106,13 @@ export default function OutfitEditor({ outfitId, onClose }: OutfitEditorProps) {
         console.log("Debug OutfitEditor - Owned items:", Object.keys(owned).filter(k => owned[k]));
         console.log("Debug OutfitEditor - Owned headTop items:", ownedHeadTop.map(i => i.id));
         return ownedHeadTop;
+      case "hair":
+        // Filter for hair cosmetics from the cosmetics store that are owned
+        const allHair = cosmeticItems.filter(item => item.socket === "hair");
+        const ownedHair = allHair.filter(item => owned[item.id]);
+        console.log("Debug OutfitEditor - All hair items:", allHair.map(i => i.id));
+        console.log("Debug OutfitEditor - Owned hair items:", ownedHair.map(i => i.id));
+        return ownedHair;
       case "skin":
         // Filter for skin cosmetics from the cosmetics store that are owned
         const allSkin = cosmeticItems.filter(item => item.socket === "skin");
@@ -85,8 +131,52 @@ export default function OutfitEditor({ outfitId, onClose }: OutfitEditorProps) {
   };
 
   const handleEquipCosmetic = (socket: CosmeticSocket, itemId: string) => {
-    equipCosmetic(outfitId, socket, itemId);
+    if (socket === "hair") {
+      // For hair, we need to apply color-specific recoloring
+      const hairColor = HAIR_COLORS.find(c => c.id === selectedHairColor);
+      if (hairColor) {
+        // Create a temporary cosmetic with the selected color recoloring
+        const spineData = {
+          skinName: "default", // Hair uses default skin with shader recoloring
+          maskRecolor: getHairRecolorForColor(selectedHairColor)
+        };
+        equipSpineCosmetic(outfitId, socket, itemId, spineData);
+      } else {
+        equipCosmetic(outfitId, socket, itemId);
+      }
+    } else {
+      equipCosmetic(outfitId, socket, itemId);
+    }
     setSelectedSlot(null);
+  };
+
+  const handleEquipCosmeticWithColor = (socket: CosmeticSocket, itemId: string, colorId: string) => {
+    if (socket === "hair") {
+      // For hair, apply the specific color recoloring
+      const spineData = {
+        skinName: "default", // Hair uses default skin with shader recoloring
+        maskRecolor: getHairRecolorForColor(colorId)
+      };
+      equipSpineCosmetic(outfitId, socket, itemId, spineData);
+    } else {
+      equipCosmetic(outfitId, socket, itemId);
+    }
+    // Don't close the modal so user can continue selecting colors
+  };
+
+  const getHairRecolorForColor = (colorId: string) => {
+    switch (colorId) {
+      case "blonde":
+        return { r: "#f5deb3", g: "#fff8dc", b: "#daa520", a: "#ffff00" }; // Blonde tones
+      case "brunette":
+        return { r: "#8b4513", g: "#a0522d", b: "#654321", a: "#d2691e" }; // Brown tones
+      case "redhead":
+        return { r: "#cd853f", g: "#ff6347", b: "#b22222", a: "#ff4500" }; // Red tones
+      case "black":
+        return { r: "#2f2f2f", g: "#404040", b: "#1a1a1a", a: "#808080" }; // Black/gray tones
+      default:
+        return { r: "#f5deb3", g: "#fff8dc", b: "#daa520", a: "#ffff00" }; // Default to blonde
+    }
   };
 
   const handleUnequipCosmetic = (socket: CosmeticSocket) => {
@@ -99,6 +189,22 @@ export default function OutfitEditor({ outfitId, onClose }: OutfitEditorProps) {
     if (!cosmetic?.itemId) return "None";
 
     const item = cosmeticItems.find(item => item.id === cosmetic.itemId);
+
+    // For hair, show the style and current color
+    if (socket === "hair" && item) {
+      // Try to detect the current color from the equipped hair
+      let currentColor = selectedHairColor;
+      if (cosmetic.spineData?.maskRecolor) {
+        const detectedColor = detectHairColorFromRecolor(cosmetic.spineData.maskRecolor);
+        if (detectedColor) {
+          currentColor = detectedColor;
+        }
+      }
+
+      const colorName = HAIR_COLORS.find(c => c.id === currentColor)?.name || currentColor;
+      return `${item.name} (${colorName})`;
+    }
+
     return item?.name || cosmetic.itemId;
   };
 
@@ -327,8 +433,134 @@ export default function OutfitEditor({ outfitId, onClose }: OutfitEditorProps) {
               </Text>
             </Pressable>
 
-            {/* Cosmetic Options */}
-            {selectedSlot && getSlotCosmetics(selectedSlot).map((cosmetic) => {
+            {/* Hair Selection - Special two-step process */}
+            {selectedSlot === "hair" && (
+              <>
+                {/* Hair Style Selection */}
+                {getSlotCosmetics("hair").map((cosmetic) => {
+                  const isEquipped = outfit.cosmetics.hair?.itemId === cosmetic.id;
+
+                  return (
+                    <View key={cosmetic.id} style={{ marginBottom: spacing.lg }}>
+                      {/* Hair Style */}
+                      <Pressable
+                        onPress={() => handleEquipCosmetic("hair", cosmetic.id)}
+                        style={{
+                          backgroundColor: colors.background.card,
+                          padding: spacing.lg,
+                          borderRadius: borderRadius.md,
+                          marginBottom: spacing.md,
+                          borderWidth: 2,
+                          borderColor: isEquipped ? colors.primary[500] : "transparent",
+                        }}
+                      >
+                        <View style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                        }}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{
+                              fontSize: typography.size.base,
+                              fontWeight: typography.weight.medium as any,
+                              color: colors.text.primary,
+                              marginBottom: spacing.xs,
+                            }}>
+                              {cosmetic.name}
+                            </Text>
+                            <Text style={{
+                              fontSize: typography.size.sm,
+                              color: colors.text.secondary,
+                            }}>
+                              Cost: {cosmetic.cost} acorns
+                            </Text>
+                          </View>
+
+                          {isEquipped && (
+                            <Text style={{
+                              fontSize: typography.size.sm,
+                              color: colors.primary[500],
+                              fontWeight: typography.weight.medium as any,
+                            }}>
+                              ✓ Equipped
+                            </Text>
+                          )}
+                        </View>
+                      </Pressable>
+
+                      {/* Hair Color Selection */}
+                      {isEquipped && (
+                        <View style={{
+                          backgroundColor: colors.background.secondary,
+                          padding: spacing.md,
+                          borderRadius: borderRadius.md,
+                        }}>
+                          <Text style={{
+                            fontSize: typography.size.base,
+                            fontWeight: typography.weight.medium as any,
+                            color: colors.text.primary,
+                            marginBottom: spacing.md,
+                          }}>
+                            Choose Color
+                          </Text>
+
+                          <View style={{
+                            flexDirection: "row",
+                            flexWrap: "wrap",
+                            gap: spacing.sm,
+                          }}>
+                            {HAIR_COLORS.map((hairColor) => (
+                              <Pressable
+                                key={hairColor.id}
+                                onPress={() => {
+                                  setSelectedHairColor(hairColor.id);
+                                  // Use the selected color directly instead of relying on state
+                                  handleEquipCosmeticWithColor("hair", cosmetic.id, hairColor.id);
+                                }}
+                                style={{
+                                  flexDirection: "row",
+                                  alignItems: "center",
+                                  backgroundColor: selectedHairColor === hairColor.id
+                                    ? colors.primary[100]
+                                    : colors.background.card,
+                                  padding: spacing.md,
+                                  borderRadius: borderRadius.sm,
+                                  borderWidth: 2,
+                                  borderColor: selectedHairColor === hairColor.id
+                                    ? colors.primary[500]
+                                    : "transparent",
+                                  minWidth: 100,
+                                }}
+                              >
+                                <View style={{
+                                  width: 16,
+                                  height: 16,
+                                  borderRadius: 8,
+                                  backgroundColor: hairColor.color,
+                                  borderWidth: 1,
+                                  borderColor: colors.gray[300],
+                                  marginRight: spacing.sm,
+                                }} />
+                                <Text style={{
+                                  fontSize: typography.size.sm,
+                                  fontWeight: typography.weight.medium as any,
+                                  color: colors.text.primary,
+                                }}>
+                                  {hairColor.name}
+                                </Text>
+                              </Pressable>
+                            ))}
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+              </>
+            )}
+
+            {/* Non-Hair Cosmetic Options */}
+            {selectedSlot && selectedSlot !== "hair" && getSlotCosmetics(selectedSlot).map((cosmetic) => {
               const isEquipped = outfit.cosmetics[selectedSlot]?.itemId === cosmetic.id;
 
               // Show color indicator for recolorable items

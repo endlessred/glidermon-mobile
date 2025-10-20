@@ -1,0 +1,41 @@
+{
+"skeleton": {
+	"hash": "XcSCSNFJeN8",
+	"spine": "4.2.43",
+	"x": -1652.75,
+	"y": 7.64,
+	"width": 3300,
+	"height": 2550,
+	"images": "../AcornHunt/",
+	"audio": "./audio"
+},
+"bones": [
+	{ "name": "root" },
+	{ "name": "PlayerFront", "parent": "root", "x": -484.15, "y": 109.79 },
+	{ "name": "PlayerMid", "parent": "root", "x": -388.73, "y": 297.06 },
+	{ "name": "PlayerBack", "parent": "root", "x": -276.73, "y": 468.49 },
+	{ "name": "EnemyBack", "parent": "root", "x": 268.81, "y": 471.9 },
+	{ "name": "EnemyMid", "parent": "root", "x": 350.37, "y": 300.95 },
+	{ "name": "EnemyFront", "parent": "root", "x": 483.01, "y": 117.88 },
+	{ "name": "MidFront", "parent": "root", "x": 1.9, "y": 114.98 },
+	{ "name": "MidMid", "parent": "root", "x": -0.34, "y": 294.85 },
+	{ "name": "MidBack", "parent": "root", "x": -1.52, "y": 466.48 }
+],
+"slots": [
+	{ "name": "LevelBase", "bone": "root" },
+	{ "name": "LevelBaseDownscale", "bone": "root", "attachment": "LevelBaseDownscale" }
+],
+"skins": [
+	{
+		"name": "default",
+		"attachments": {
+			"LevelBaseDownscale": {
+				"LevelBaseDownscale": { "x": 41.82, "y": 641.19, "width": 1650, "height": 1275 }
+			}
+		}
+	}
+],
+"animations": {
+	"animation": {}
+}
+}

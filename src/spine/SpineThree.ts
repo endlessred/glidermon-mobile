@@ -316,7 +316,23 @@ export class SkeletonMesh extends THREE.Object3D {
     }
 
     // ----- Tint / alpha handling (UNCHANGED pupil behavior) -----
-    const a = slot.color.a * this.skeleton.color.a;
+    let a = slot.color.a * this.skeleton.color.a;
+
+    // Check if this is a shadow attachment and set opacity to 25%
+    const attachment = slot.getAttachment();
+    const attName = (attachment && attachment.name) ? String(attachment.name) : "";
+    if (attName.toLowerCase() === 'shadow') {
+      a = a * 0.25; // Set shadow opacity to 25%
+      if (__DEV__) {
+        console.log('SpineThree: Setting shadow opacity', {
+          slotName: slot.data?.name,
+          attachmentName: attName,
+          originalAlpha: slot.color.a * this.skeleton.color.a,
+          newAlpha: a
+        });
+      }
+    }
+
     const material: any = r.mesh.material;
 
     if (material?.isMeshBasicMaterial) {
@@ -368,7 +384,7 @@ export class SkeletonMesh extends THREE.Object3D {
     return undefined;
   }
 
-  /** Choose the right material variant per slot (pupils get alphaTest=0). */
+  /** Choose the right material variant per slot (pupils and shadows get alphaTest=0). */
   private chooseMaterial(tex: THREE.Texture, slot: Slot) {
     // First let the app override (used for recolor)
     if (this.materialOverride) {
@@ -376,7 +392,13 @@ export class SkeletonMesh extends THREE.Object3D {
       if (override) return override;
     }
     const isPupil = PUPIL_SLOT_REGEX.test(slot.data?.name || "");
-    const alphaTest = isPupil ? 0.0 : DEFAULT_ALPHA_TEST;
+
+    // Check if this is a shadow attachment - shadows need alphaTest=0 for transparency
+    const attachment = slot.getAttachment();
+    const attName = (attachment && attachment.name) ? String(attachment.name) : "";
+    const isShadow = attName.toLowerCase() === 'shadow';
+
+    const alphaTest = (isPupil || isShadow) ? 0.0 : DEFAULT_ALPHA_TEST;
     return this.materialCache.get(tex, this.premultipliedAlpha, alphaTest);
   }
 

@@ -255,7 +255,6 @@ export default function App() {
       <ToastHost />
       <LevelUpOverlay />
       <LevelUpTestButton />
-      <DevDebugPanel />
     </SafeAreaView>
   );
 }

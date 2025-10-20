@@ -9,7 +9,7 @@ const leafPng = require("../../assets/GliderMonLeafHat.png");
 const greaterPng = require("../../assets/GliderMonGreaterHat.png");
 const hatPackPng = require("../../assets/hats/hat_pack_1.png");
 
-type Socket = "headTop" | "theme" | "skin";
+type Socket = "headTop" | "theme" | "skin" | "hair";
 
 export type CosmeticItem = {
   id: string;
@@ -34,6 +34,8 @@ type Equipped = {
   hat?: string;
   // Theme selection:
   theme?: string;
+  // Hair selection:
+  hair?: string;
 };
 
 type CosmeticsState = {
@@ -49,7 +51,9 @@ type CosmeticsState = {
   buy: (id: string) => boolean;   // mark as owned (you already deduct acorns in progression store)
   equip: (id: string) => void;
   equipTheme: (id: string) => void;
+  equipHair: (id: string) => void;
   unequipHead: () => void;
+  unequipHair: () => void;
 
   // extras/dev
   grant: (id: string) => void;
@@ -192,6 +196,24 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     tex: hatPackPng
   },
 
+  // Hair cosmetics - Hair styles (color selected separately)
+  {
+    id: "windswept_short",
+    name: "Windswept Short",
+    cost: 400,
+    socket: "hair",
+    spineSkin: "default", // Uses default skin with shader for HairFront only
+    tex: hatPackPng // Placeholder thumbnail
+  },
+  {
+    id: "windswept_long",
+    name: "Windswept Long",
+    cost: 600,
+    socket: "hair",
+    spineSkin: "default", // Uses default skin with shader for both HairFront and HairBack
+    tex: hatPackPng // Placeholder thumbnail
+  },
+
   // Theme cosmetics - unlockable color themes
   { id: "theme_cute", name: themeDisplayNames.cute, cost: 500, socket: "theme", themeId: "cute" },
   { id: "theme_cyberpunk", name: themeDisplayNames.cyberpunk, cost: 750, socket: "theme", themeId: "cyberpunk" },
@@ -214,7 +236,9 @@ export const useCosmeticsStore = create<CosmeticsState>()(
         wizard_hat: true,              // for testing spine cosmetics
         skin_cute: true,               // for testing skin recoloring
         skin_forest: true,             // for testing skin recoloring
-        skin_ocean: true               // for testing skin recoloring
+        skin_ocean: true,              // for testing skin recoloring
+        windswept_short: true,         // starter hair style owned
+        windswept_long: true           // for testing long hair style
       },
       points: 0,                            // display only (Shop UI shows "Acorns: {points}")
 
@@ -254,7 +278,16 @@ export const useCosmeticsStore = create<CosmeticsState>()(
         });
       },
 
+      equipHair: (id) => {
+        // Require ownership
+        if (!get().owned[id]) return;
+        const item = get().catalog.find(c => c.id === id);
+        if (!item || item.socket !== "hair") return;
+        set((s) => ({ equipped: { ...s.equipped, hair: id } }));
+      },
+
       unequipHead: () => set((s) => ({ equipped: { ...s.equipped, headTop: undefined, hat: undefined } })),
+      unequipHair: () => set((s) => ({ equipped: { ...s.equipped, hair: undefined } })),
 
       grant: (id) => set((s) => ({ owned: { ...s.owned, [id]: true } })),
 
@@ -271,7 +304,9 @@ export const useCosmeticsStore = create<CosmeticsState>()(
             wizard_hat: true,
             skin_cute: true,
             skin_forest: true,
-            skin_ocean: true
+            skin_ocean: true,
+            windswept_short: true,
+            windswept_long: true
           },
           points: 0,
           equipped: { headTop: "white_baseball_cap", hat: "white_baseball_cap" },
@@ -280,13 +315,22 @@ export const useCosmeticsStore = create<CosmeticsState>()(
     {
       name: "cosmetics_store_v4",
       storage: createJSONStorage(() => AsyncStorage),
-      version: 7,
+      version: 9,
       migrate: (state: any, from) => {
         const s = state ?? {};
         // Always update catalog to latest version to include new hats
         s.catalog = DEFAULT_CATALOG;
 
-        // Force update owned items to include all current hats and skins (for testing)
+        // Remove old hair items that no longer exist
+        if (s.owned) {
+          delete s.owned.windswept_blonde;
+          delete s.owned.windswept_brunette;
+          delete s.owned.windswept_redhead;
+          delete s.owned.windswept_black;
+          delete s.owned.windswept_hair; // Remove the old single hair item too
+        }
+
+        // Force update owned items to include all current hats, skins, and hair (for testing)
         s.owned = {
           ...s.owned,
           white_baseball_cap: true,
@@ -298,7 +342,9 @@ export const useCosmeticsStore = create<CosmeticsState>()(
           wizard_hat: true,
           skin_cute: true,
           skin_forest: true,
-          skin_ocean: true
+          skin_ocean: true,
+          windswept_short: true,
+          windswept_long: true
         };
 
         s.points = typeof s.points === "number" ? s.points : 0;
@@ -309,6 +355,10 @@ export const useCosmeticsStore = create<CosmeticsState>()(
         if (!s.equipped.headTop && !s.equipped.hat) {
           s.equipped.headTop = "white_baseball_cap";
           s.equipped.hat = "white_baseball_cap";
+        }
+        // Hair is no longer equipped by default - remove any old hair
+        if (s.equipped.hair) {
+          delete s.equipped.hair;
         }
         return s;
       },

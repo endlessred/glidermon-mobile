@@ -37,6 +37,7 @@ export type CosmeticSocket =
   | "headTop" | "headFront" | "headBack" | "earL" | "earR"
   | "bodyFront" | "bodyBack" | "hand" | "waist"
   | "background" | "foreground" | "fullBody"
+  | "hair" // Hair with front and back slots
   | "pose" // Special socket for poses
   | "skin" // 4-channel recoloring for body parts
   | "skinVariation" | "eyeColor" | "shoeVariation"; // Palette-based cosmetics

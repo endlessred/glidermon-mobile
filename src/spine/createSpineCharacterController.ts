@@ -51,6 +51,7 @@ function updateWorldXform(skeleton: Skeleton, dt = 0) {
   skeleton.updateWorldTransform(PHYSICS.update);
 }
 
+
 // Use a simple string[] so .includes(slotName) accepts any string without TS errors
 const SKIN_SLOTS: string[] = [
   "Tail",
@@ -58,14 +59,24 @@ const SKIN_SLOTS: string[] = [
   "L_Wing",
   "L_Leg",
   "L_Arm",
+  "L_Hand",
   "R_Leg",
   "R_Arm",
+  "R_Hand",
   "L_Ear",
   "Head",
   "R_Ear",
   "Cheeks",
   "Nose",
   "Torso",
+  "L_Lid",
+  "R_Lid",
+];
+
+// Hair slots that use shader recoloring
+const HAIR_SLOTS: string[] = [
+  "HairFront",
+  "HairBack",
 ];
 
 const SLOT_TO_SHADER: Record<string, string> = {
@@ -74,14 +85,20 @@ const SLOT_TO_SHADER: Record<string, string> = {
   L_Wing: "L_WingShader",
   L_Leg: "L_LegShader",
   L_Arm: "L_ArmShader",
+  L_Hand: "L_HandShader",
   R_Leg: "R_LegShader",
   R_Arm: "R_ArmShader",
+  R_Hand: "R_HandShader",
   L_Ear: "L_EarShader",
   Head: "HeadShader",
   R_Ear: "R_EarShader",
   Cheeks: "CheeksShader",
   Nose: "NoseShader",
   Torso: "TorsoShader",
+  L_Lid: "L_LidShader",
+  R_Lid: "R_LidShader",
+  HairFront: "WindsweptShader",
+  HairBack: "WindsweptShader",
 };
 
 const DEFAULT_SHADER_SLOT_REGEX = /Shader$/i;
@@ -140,12 +157,13 @@ export async function createSpineCharacterController(
   const atlasModule = require("../assets/GliderMonSpine/skeleton.atlas");
   const jsonModule = require("../assets/GliderMonSpine/skeleton.json");
   const textureModule = require("../assets/GliderMonSpine/skeleton.png");
+  const textureModule2 = require("../assets/GliderMonSpine/skeleton_2.png");
 
   if (__DEV__) console.log("Spine controller: loading assets");
   const { skeleton, resolveTexture } = await loadSpineFromExpoAssets({
     atlasModule,
     jsonModule,
-    textureModules: [textureModule],
+    textureModules: [textureModule, textureModule2],
   });
 
   skeleton.x = 0;
@@ -230,8 +248,41 @@ export async function createSpineCharacterController(
     updateWorldXform(skeleton, 0);
   }
 
-  function configureMaterialOverride(hatRecolor?: RecolorData, skinRecolor?: RecolorData) {
-    if (!hatRecolor && !skinRecolor) {
+  function configureHairSwitches(hairRecolor: RecolorData | undefined, hairStyle?: string) {
+    // First, clear both hair slots to prevent bugs
+    for (const slotName of HAIR_SLOTS) {
+      const slot = skeleton.findSlot(slotName);
+      if (slot) {
+        slot.setAttachment(null);
+      }
+    }
+
+    if (!hairRecolor || !hairStyle) return;
+
+    // Determine which slots to activate based on hair style
+    let slotsToActivate: string[] = [];
+    if (hairStyle === "windswept_short") {
+      slotsToActivate = ["HairFront"]; // Short hair only uses front
+    } else if (hairStyle === "windswept_long") {
+      slotsToActivate = ["HairFront", "HairBack"]; // Long hair uses both
+    }
+
+    for (const slotName of slotsToActivate) {
+      const shaderName = SLOT_TO_SHADER[slotName];
+      if (!shaderName) continue;
+      const slot = skeleton.findSlot(slotName);
+      if (!slot) continue;
+      const shaderAttachment = getAttachmentFromAnySkin(skeletonData, slotName, shaderName);
+      if (shaderAttachment) {
+        slot.setAttachment(shaderAttachment);
+      }
+    }
+
+    updateWorldXform(skeleton, 0);
+  }
+
+  function configureMaterialOverride(hatRecolor?: RecolorData, skinRecolor?: RecolorData, hairRecolor?: RecolorData) {
+    if (!hatRecolor && !skinRecolor && !hairRecolor) {
       mesh.materialOverride = undefined;
       return;
     }
@@ -246,6 +297,8 @@ export async function createSpineCharacterController(
       let recolor: RecolorData | undefined;
       if (slotName === "Hat_Base" && hatRecolor) {
         recolor = hatRecolor;
+      } else if (isShaderAttachment && hairRecolor && HAIR_SLOTS.includes(slotName)) {
+        recolor = hairRecolor;
       } else if (isShaderAttachment && skinRecolor && SKIN_SLOTS.includes(slotName)) {
         recolor = skinRecolor;
       } else if (!isShaderAttachment && skinRecolor && SKIN_SLOTS.includes(slotName)) {
@@ -286,15 +339,22 @@ export async function createSpineCharacterController(
 
   function applyOutfitInternal(outfitToApply?: OutfitSlot) {
     if (!outfitToApply) {
-      configureMaterialOverride(undefined, undefined);
+      configureMaterialOverride(undefined, undefined, undefined);
       return;
     }
 
     const hatCosmetic = findCosmetic(outfitToApply.cosmetics?.headTop?.itemId);
     const skinCosmetic = findCosmetic(outfitToApply.cosmetics?.skin?.itemId);
+    const hairCosmetic = findCosmetic(outfitToApply.cosmetics?.hair?.itemId);
 
     const hatRecolor = hatCosmetic?.maskRecolor;
     const skinRecolor = skinCosmetic?.maskRecolor;
+
+    // For hair, check if the outfit has spine data with custom recoloring
+    let hairRecolor = hairCosmetic?.maskRecolor;
+    if (outfitToApply.cosmetics?.hair?.spineData?.maskRecolor) {
+      hairRecolor = outfitToApply.cosmetics.hair.spineData.maskRecolor;
+    }
 
     if (hatCosmetic?.spineSkin) {
       const skin = skeletonData.findSkin(hatCosmetic.spineSkin);
@@ -315,7 +375,8 @@ export async function createSpineCharacterController(
     }
 
     configureSkinSwitches(skinRecolor);
-    configureMaterialOverride(hatRecolor, skinRecolor);
+    configureHairSwitches(hairRecolor, outfitToApply.cosmetics?.hair?.itemId);
+    configureMaterialOverride(hatRecolor, skinRecolor, hairRecolor);
   }
 
   applyOutfitInternal(outfit);

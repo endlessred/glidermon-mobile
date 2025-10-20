@@ -472,7 +472,23 @@ export const useOutfitStore = create<OutfitStore>()(
     {
       name: "outfit-store",
       storage: createJSONStorage(() => AsyncStorage),
-      version: 1,
+      version: 2,
+      migrate: (persistedState: any, version: number) => {
+        const state = persistedState || {};
+
+        // Remove hair from existing outfits - hair should be a separate unlockable cosmetic
+        if (state.slots) {
+          state.slots = state.slots.map((outfit: OutfitSlot) => {
+            const { hair, ...otherCosmetics } = outfit.cosmetics || {};
+            return {
+              ...outfit,
+              cosmetics: otherCosmetics
+            };
+          });
+        }
+
+        return state;
+      },
       onRehydrateStorage: () => (state) => {
         if (state) {
           state._rehydrated = true;
