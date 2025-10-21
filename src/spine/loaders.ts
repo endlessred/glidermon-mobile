@@ -89,45 +89,34 @@ export async function loadSpineFromExpoAssets(opts: {
   };
 
   const findTextureForName = (raw: string): THREE.Texture | undefined => {
-    if (!raw) return undefined;
-    const trimmed = raw.trim();
-    if (!trimmed) return undefined;
-
+    if (!raw) return;
     const candidates = new Set<string>();
-    candidates.add(trimmed);
-    candidates.add(trimmed.toLowerCase());
+    const push = (s?: string) => s && candidates.add(s);
 
-    const slashIndex = trimmed.lastIndexOf('/');
-    if (slashIndex >= 0 && slashIndex < trimmed.length - 1) {
-      const short = trimmed.slice(slashIndex + 1);
-      if (short) {
-        candidates.add(short);
-        candidates.add(short.toLowerCase());
-      }
-    }
+    const base = raw.trim();
+    push(base);
+    push(base.toLowerCase());
 
-    const variantList = Array.from(candidates);
-    for (const variant of variantList) {
-      const dotIndex = variant.lastIndexOf('.');
-      if (dotIndex > 0 && dotIndex < variant.length - 1) {
-        const withoutExt = variant.slice(0, dotIndex);
-        if (withoutExt) {
-          candidates.add(withoutExt);
-          candidates.add(withoutExt.toLowerCase());
-        }
+    const lastSlash = base.lastIndexOf('/');
+    const leaf = lastSlash >= 0 ? base.slice(lastSlash + 1) : base;
+    push(leaf);
+    push(leaf.toLowerCase());
+
+    // Try with and without common extensions
+    for (const c of Array.from(candidates)) {
+      if (!/\.(png|jpg|jpeg|webp|ktx2)$/i.test(c)) {
+        push(`${c}.png`);
+        push(`${c}.jpg`);
       } else {
-        const withPng = `${variant}.png`;
-        candidates.add(withPng);
-        candidates.add(withPng.toLowerCase());
+        const noExt = c.replace(/\.(png|jpg|jpeg|webp|ktx2)$/i, '');
+        push(noExt);
       }
     }
 
-    for (const candidate of candidates) {
-      const texture = pageTextures[candidate];
-      if (texture) return texture;
-    }
-
-    return undefined;
+    // Brutal final fallback: first registered texture
+    for (const c of Array.from(candidates)) if (pageTextures[c]) return pageTextures[c];
+    const first = pageTextures[Object.keys(pageTextures)[0]];
+    return first;
   };
 
   for (const moduleId of textureModules) {
@@ -152,6 +141,10 @@ export async function loadSpineFromExpoAssets(opts: {
   }
 
   const atlas = new TextureAtlas(atlasText);
+
+  // DEBUG: Log atlas pages vs registered textures
+  console.log('ATLAS pages:', atlas.pages.map(p => p.name));
+  console.log('pageTextures keys:', Object.keys(pageTextures));
 
   atlas.pages.forEach((page) => {
     const matchedTexture =

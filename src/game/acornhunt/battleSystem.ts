@@ -26,6 +26,8 @@ export interface BattleAnimationCallbacks {
   onActionStart?: (action: BattleAction) => void;
   onTurnDelay?: () => Promise<void>;
   onStateUpdate?: () => void;
+  onActionAnimationComplete?: (actionId: string) => void;
+  waitForActionAnimation?: (actionId: string) => Promise<void>;
 }
 
 export class BattleEngine {
@@ -143,7 +145,7 @@ export class BattleEngine {
 
       await this.processAnimatedCombatantTurn(combatant, callbacks);
 
-      // Add delay between turns for visual feedback
+      // Add short delay between turns for visual feedback (reduced since we wait for animations)
       if (callbacks?.onTurnDelay) {
         await callbacks.onTurnDelay();
       }
@@ -251,6 +253,13 @@ export class BattleEngine {
       // Trigger animation before processing action
       if (callbacks?.onActionStart) {
         callbacks.onActionStart(action);
+      }
+
+      // Wait for animation to complete if callback is provided
+      if (callbacks?.waitForActionAnimation) {
+        console.log(`   ⏳ Waiting for animation completion for action ${action.source}`);
+        await callbacks.waitForActionAnimation(action.source);
+        console.log(`   ✅ Animation completed for action ${action.source}`);
       }
 
       this.processAction(action, combatant, move);

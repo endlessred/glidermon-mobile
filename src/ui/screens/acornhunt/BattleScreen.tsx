@@ -36,6 +36,8 @@ export function BattleScreen({
   const [isProcessing, setIsProcessing] = useState(false);
   const [animatingCombatants, setAnimatingCombatants] = useState<Set<string>>(new Set());
   const animationTimeouts = useRef<NodeJS.Timeout[]>([]);
+  const startAttackMovementRef = useRef<((combatantId: string, targetSlot: number) => void) | null>(null);
+  const animationPromises = useRef<Map<string, { resolve: () => void }>>(new Map());
 
   // Initialize battle
   useEffect(() => {
@@ -91,21 +93,30 @@ export function BattleScreen({
       const result = await battleEngine.runBattleWithAnimations({
         onActionStart: (action) => {
           // Animate the source combatant
+          console.log(`🎬 BATTLE: Starting visual animation for ${action.source} (action: ${action.type})`);
           setAnimatingCombatants(prev => new Set([...prev, action.source]));
 
-          const timeout = setTimeout(() => {
-            setAnimatingCombatants(prev => {
-              const newSet = new Set(prev);
-              newSet.delete(action.source);
-              return newSet;
-            });
-          }, 300); // Animation duration
+          // Directly trigger visual attack movement if available
+          if (startAttackMovementRef.current) {
+            const randomTargetSlot = Math.floor(Math.random() * enemies.length);
+            console.log(`🎯 BATTLE: Directly triggering attack movement for ${action.source} to slot ${randomTargetSlot}`);
+            startAttackMovementRef.current(action.source, randomTargetSlot);
+          } else {
+            console.log(`⚠️ BATTLE: Attack movement function not available yet`);
+          }
 
-          animationTimeouts.current.push(timeout);
+          // Note: Character removal from animatingCombatants is now handled by onAttackAnimationComplete callback
+        },
+        waitForActionAnimation: async (actionId: string) => {
+          console.log(`🎬 BATTLE: Setting up wait for animation completion: ${actionId}`);
+          return new Promise<void>((resolve) => {
+            animationPromises.current.set(actionId, { resolve });
+            console.log(`🎬 BATTLE: Promise created for ${actionId}, waiting...`);
+          });
         },
         onTurnDelay: async () => {
-          // Add delay between turns based on speed setting
-          const delay = run.speed === 1 ? 800 : run.speed === 2 ? 400 : 200;
+          // Minimal delay between turns since we now wait for full animations
+          const delay = run.speed === 1 ? 200 : run.speed === 2 ? 100 : 50;
           await new Promise(resolve => {
             const timeout = setTimeout(resolve, delay);
             animationTimeouts.current.push(timeout);
@@ -203,14 +214,38 @@ export function BattleScreen({
           allies={allies}
           enemies={enemies}
           animatingCombatants={animatingCombatants}
+          onAttackMovementReady={(startAttack) => {
+            startAttackMovementRef.current = startAttack;
+            console.log(`🎯 BATTLE: Attack movement function ready`);
+          }}
+          onAttackAnimationComplete={(combatantId) => {
+            console.log(`🎬 BATTLE: Received animation completion for ${combatantId}, removing from animatingCombatants`);
+            setAnimatingCombatants(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(combatantId);
+              return newSet;
+            });
+
+            // Resolve the animation promise if it exists
+            const promise = animationPromises.current.get(combatantId);
+            if (promise) {
+              console.log(`🎬 BATTLE: Resolving animation promise for ${combatantId}`);
+              promise.resolve();
+              animationPromises.current.delete(combatantId);
+            } else {
+              console.log(`⚠️ BATTLE: No animation promise found for ${combatantId}`);
+            }
+          }}
         />
       </View>
 
-      {/* Character Status Panel */}
-      <View style={styles.statusPanel}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      {/* Simplified Character Status Panel */}
+      <View style={[styles.simplifiedStatusPanel, { backgroundColor: colors.background.card }]}>
+        {/* Allies Section (Left) */}
+        <View style={styles.alliesSection}>
+          <Text style={[styles.sectionLabel, { color: colors.text.primary }]}>Allies</Text>
           {allies.map((ally: Combatant) => (
-            <CombatantStatusCard
+            <SimplifiedStatusBar
               key={ally.id}
               combatant={ally}
               colors={colors}
@@ -218,11 +253,13 @@ export function BattleScreen({
               isAnimating={animatingCombatants.has(ally.id)}
             />
           ))}
-          <View style={styles.statusDivider}>
-            <Text style={[styles.vsText, { color: colors.text.secondary }]}>⚔️</Text>
-          </View>
+        </View>
+
+        {/* Enemies Section (Right) */}
+        <View style={styles.enemiesSection}>
+          <Text style={[styles.sectionLabel, { color: colors.text.primary }]}>Enemies</Text>
           {enemies.map((enemy: Combatant) => (
-            <CombatantStatusCard
+            <SimplifiedStatusBar
               key={enemy.id}
               combatant={enemy}
               colors={colors}
@@ -230,7 +267,7 @@ export function BattleScreen({
               isAnimating={animatingCombatants.has(enemy.id)}
             />
           ))}
-        </ScrollView>
+        </View>
       </View>
 
       {/* Battle Log */}
@@ -286,7 +323,7 @@ export function BattleScreen({
   );
 }
 
-function CombatantStatusCard({
+function SimplifiedStatusBar({
   combatant,
   colors,
   isAlly,
@@ -308,27 +345,29 @@ function CombatantStatusCard({
 
   return (
     <View style={[
-      styles.combatantCard,
+      styles.simplifiedStatusBar,
       {
-        backgroundColor: colors.background.card,
         opacity: isAlive ? 1 : 0.5,
-        borderColor: isAlly ? (colors.status?.success || '#4ade80') : (colors.status?.error || '#ef4444')
+        backgroundColor: isAnimating ? (colors.primary[100] || '#f0f9ff') : 'transparent'
       }
     ]}>
-      <Text style={[styles.combatantEmoji, isAnimating && styles.combatantEmojiAnimating]}>
-        {isAnimating ? `    ${combatant.character.emoji}` : combatant.character.emoji}
-        {!isAlive && ' 💀'}
-      </Text>
-      <Text style={[styles.combatantName, { color: colors.text.primary }]}>
-        {combatant.character.name}
+      {/* Character Name */}
+      <Text style={[
+        styles.simplifiedName,
+        {
+          color: isAlive ? colors.text.primary : colors.text.secondary,
+          fontWeight: isAnimating ? 'bold' : 'normal'
+        }
+      ]}>
+        {combatant.character.name}{!isAlive && ' 💀'}
       </Text>
 
       {/* Health Bar */}
-      <View style={styles.healthContainer}>
-        <View style={[styles.healthBar, { backgroundColor: colors.gray[300] }]}>
+      <View style={styles.simplifiedHealthContainer}>
+        <View style={[styles.simplifiedHealthBar, { backgroundColor: colors.gray[200] }]}>
           <View
             style={[
-              styles.healthFill,
+              styles.simplifiedHealthFill,
               {
                 backgroundColor: getHealthColor(hpPercent),
                 width: `${Math.max(0, hpPercent * 100)}%`
@@ -336,30 +375,10 @@ function CombatantStatusCard({
             ]}
           />
         </View>
-        <Text style={[styles.healthText, { color: colors.text.secondary }]}>
+        <Text style={[styles.simplifiedHealthText, { color: colors.text.secondary }]}>
           {combatant.stats.HP}/{combatant.stats.HPMax}
         </Text>
       </View>
-
-      {/* Status Effects */}
-      {combatant.statusEffects.length > 0 && (
-        <View style={styles.statusEffects}>
-          {combatant.statusEffects.map((effect, index) => (
-            <View key={index} style={[styles.statusBadge, { backgroundColor: colors.gray[300] }]}>
-              <Text style={[styles.statusText, { color: colors.text.primary }]}>
-                {effect.name} ({effect.ttl})
-              </Text>
-            </View>
-          ))}
-        </View>
-      )}
-
-      {/* Last Action */}
-      {combatant.lastAction && (
-        <Text style={[styles.lastAction, { color: colors.text.secondary }]}>
-          {combatant.lastAction}
-        </Text>
-      )}
     </View>
   );
 }
@@ -400,76 +419,61 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     overflow: 'hidden',
   },
-  statusPanel: {
-    height: 120,
+  simplifiedStatusPanel: {
+    flexDirection: 'row',
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#e5e7eb',
   },
-  statusDivider: {
-    width: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-  },
-  vsText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  combatantCard: {
-    width: 120,
-    padding: 8,
-    borderRadius: 8,
-    borderWidth: 2,
+  alliesSection: {
+    flex: 1,
     marginRight: 8,
   },
-  combatantEmoji: {
-    fontSize: 32,
-    textAlign: 'center',
-    marginBottom: 4,
+  enemiesSection: {
+    flex: 1,
+    marginLeft: 8,
   },
-  combatantEmojiAnimating: {
-    transform: [{ translateX: 8 }],
-  },
-  combatantName: {
+  sectionLabel: {
     fontSize: 14,
     fontWeight: 'bold',
+    marginBottom: 8,
     textAlign: 'center',
-    marginBottom: 8,
   },
-  healthContainer: {
-    marginBottom: 8,
-  },
-  healthBar: {
-    height: 6,
-    borderRadius: 3,
-    overflow: 'hidden',
+  simplifiedStatusBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
     marginBottom: 4,
-  },
-  healthFill: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  healthText: {
-    fontSize: 10,
-    textAlign: 'center',
-  },
-  statusEffects: {
-    gap: 4,
-    marginBottom: 8,
-  },
-  statusBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
     borderRadius: 4,
   },
-  statusText: {
-    fontSize: 10,
-    textAlign: 'center',
+  simplifiedName: {
+    fontSize: 12,
+    width: 80,
+    marginRight: 8,
   },
-  lastAction: {
+  simplifiedHealthContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  simplifiedHealthBar: {
+    flex: 1,
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginRight: 6,
+  },
+  simplifiedHealthFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  simplifiedHealthText: {
     fontSize: 10,
-    textAlign: 'center',
-    fontStyle: 'italic',
+    minWidth: 35,
+    textAlign: 'right',
   },
   battleLog: {
     height: 120,
