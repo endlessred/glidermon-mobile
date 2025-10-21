@@ -43,5 +43,22 @@
     }
   ],
   "walls": [],
-  "furniture": []
+  "furniture": [
+    {
+      "id": "chair",
+      "variantId": "wood_chair_brown",
+      "tileId": "C2",
+      "rotation": 0,
+      "layer": "mid",
+      "facing": "right"
+    },
+    {
+      "id": "chair",
+      "variantId": "beanbag_brown",
+      "tileId": "B3",
+      "rotation": 0,
+      "layer": "mid",
+      "facing": "left"
+    }
+  ]
 }

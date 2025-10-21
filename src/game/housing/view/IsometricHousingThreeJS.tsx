@@ -19,7 +19,8 @@ import { useCosmeticsStore } from '../../../data/stores/cosmeticsStore';
 import { OutfitSlot } from '../../../data/types/outfitTypes';
 import { RoomBuilder } from '../builders/RoomBuilder';
 import { RoomLayoutConfig } from '../types/RoomConfig';
-import { Physics } from '@esotericsoftware/spine-core'; 
+import { Physics } from '@esotericsoftware/spine-core';
+import { createFurnitureInstance, LoadedFurniture, disposeFurniture } from '../furniture/FurnitureLoader'; 
 
 interface IsometricHousingThreeJSProps {
   width?: number;
@@ -73,6 +74,7 @@ type ApartmentBuild = {
   roomScale: number;
   getAnchor: (id: string) => Anchor | null;
   roomBuilder: RoomBuilder;
+  furniture: LoadedFurniture[];
 };
 
 // Room configuration is now loaded from JSON files
@@ -234,6 +236,49 @@ async function buildApartmentScene(
     return { ...a, sceneX: a.sceneX * roomScale, sceneY: a.sceneY * roomScale };
   };
 
+  // Load furniture instances
+  const furniture: LoadedFurniture[] = [];
+  if (roomConfig.furniture && roomConfig.furniture.length > 0) {
+    if (__DEV__) {
+      console.log(`Building apartment scene: Loading ${roomConfig.furniture.length} furniture items`);
+    }
+
+    for (const furnitureConfig of roomConfig.furniture) {
+      const anchor = getAnchor(furnitureConfig.tileId);
+      if (!anchor) {
+        if (__DEV__) {
+          console.warn(`No anchor found for furniture at tile ${furnitureConfig.tileId}`);
+        }
+        continue;
+      }
+
+      try {
+        const furnitureInstance = await createFurnitureInstance(furnitureConfig, anchor, roomScale);
+        if (furnitureInstance) {
+          // Don't add to room.mesh yet - will be added after character for proper painterly ordering
+          furniture.push(furnitureInstance);
+
+          if (__DEV__) {
+            console.log(`Created furniture ${furnitureConfig.id} at ${furnitureConfig.tileId} (deferred add)`, {
+              meshPosition: furnitureInstance.mesh.position,
+              meshVisible: furnitureInstance.mesh.visible,
+              roomMeshChildren: room.mesh.children.length,
+              furnitureRenderOrder: furnitureInstance.mesh.renderOrder
+            });
+          }
+        } else {
+          if (__DEV__) {
+            console.warn(`Failed to create furniture instance for ${furnitureConfig.id} at ${furnitureConfig.tileId}`);
+          }
+        }
+      } catch (error) {
+        if (__DEV__) {
+          console.error(`Failed to load furniture ${furnitureConfig.id} at ${furnitureConfig.tileId}:`, error);
+        }
+      }
+    }
+  }
+
   if (DEBUG_HIDE_ENVIRONMENT) room.mesh.visible = false;
 
   room.mesh.visible = true;
@@ -256,7 +301,7 @@ async function buildApartmentScene(
     }
   });
 
-  return { room, roomScale, getAnchor, roomBuilder };
+  return { room, roomScale, getAnchor, roomBuilder, furniture };
 }
 
 export default function IsometricHousingThreeJS({
@@ -296,6 +341,7 @@ export default function IsometricHousingThreeJS({
   // NEW: keep room skeleton + state so we can tick physics each frame
   const roomSkeletonRef = useRef<spine.Skeleton | null>(null);
   const roomStateRef = useRef<spine.AnimationState | null>(null);
+  const furnitureRef = useRef<LoadedFurniture[]>([]);
 
   const resolveIsoPosition = useCallback(() => {
     if (gridColumn != null && gridRow != null) {
@@ -528,32 +574,81 @@ export default function IsometricHousingThreeJS({
 
         // Check wind animations less frequently - the function itself now handles timing
         ensureWindAnimationsActive(roomSt, roomSk);
+      }
 
-        // Debug: Find all bone names to see what the wind animations should target
-        if (__DEV__ && Math.random() < 0.002) {
-          const allBoneNames = roomSk.bones.map((bone: any) => bone.data.name);
-          // console.log('Housing: All bone names in skeleton:', allBoneNames);
+      // Update furniture animations
+      const furniture = furnitureRef.current;
+      if (furniture && furniture.length > 0) {
+        furniture.forEach(furnitureInstance => {
+          try {
+            furnitureInstance.state.update(deltaSeconds);
+            furnitureInstance.state.apply(furnitureInstance.skeleton);
+            furnitureInstance.skeleton.update(deltaSeconds);
 
-          // Also check if any bones have moved from their setup pose
-          const movedBones = roomSk.bones.filter((bone: any) =>
-            Math.abs(bone.x - bone.data.x) > 0.01 ||
-            Math.abs(bone.y - bone.data.y) > 0.01 ||
-            Math.abs(bone.rotation - bone.data.rotation) > 0.01
-          );
+            const PHYSICS: any = Physics as any;
+            furnitureInstance.skeleton.updateWorldTransform(PHYSICS.update);
 
-          if (movedBones.length > 0) {
-            // console.log('Housing: Bones that have moved from setup pose:', movedBones.slice(0, 5).map((bone: any) => ({
-            //   name: bone.data.name,
-            //   currentX: bone.x,
-            //   setupX: bone.data.x,
-            //   currentY: bone.y,
-            //   setupY: bone.data.y,
-            //   currentRotation: bone.rotation,
-            //   setupRotation: bone.data.rotation
-            // })));
-          } else {
-            // console.log('Housing: No bones have moved from setup pose - animations may not be targeting existing bones');
+            // Refresh furniture mesh
+            furnitureInstance.mesh.refreshMeshes();
+
+            // Apply renderOrder like character does (from stored basePainterlyOrder)
+            const storedOrder = furnitureInstance.mesh.userData.basePainterlyOrder;
+            if (storedOrder) {
+              const anchor = getAnchorRef.current?.(furnitureInstance.config.tileId);
+              if (anchor) {
+                const finalOrder = renderOrderFromFeetY(storedOrder, anchor.sceneY, 5);
+                furnitureInstance.mesh.renderOrder = finalOrder;
+
+                if (__DEV__ && Math.random() < 0.01) { // Log occasionally
+                  console.log(`Updated furniture renderOrder`, {
+                    id: furnitureInstance.config.id,
+                    tileId: furnitureInstance.config.tileId,
+                    storedOrder: storedOrder,
+                    finalOrder: finalOrder
+                  });
+                }
+
+                // Apply to child meshes too (same as character)
+                furnitureInstance.mesh.traverse((obj: any) => {
+                  if (obj === furnitureInstance.mesh) return;
+                  const baseSlotOrder = obj.userData?.baseRenderOrder ?? obj.renderOrder ?? 0;
+                  obj.userData.baseRenderOrder = baseSlotOrder;
+                  obj.renderOrder = finalOrder + baseSlotOrder * 0.01;
+                });
+              }
+            }
+          } catch (error) {
+            if (__DEV__) {
+              console.warn('Housing: Error updating furniture animation:', error);
+            }
           }
+        });
+      }
+
+      // Continue with room debug info
+      if (roomSk && __DEV__ && Math.random() < 0.002) {
+        const allBoneNames = roomSk.bones.map((bone: any) => bone.data.name);
+        // console.log('Housing: All bone names in skeleton:', allBoneNames);
+
+        // Also check if any bones have moved from their setup pose
+        const movedBones = roomSk.bones.filter((bone: any) =>
+          Math.abs(bone.x - bone.data.x) > 0.01 ||
+          Math.abs(bone.y - bone.data.y) > 0.01 ||
+          Math.abs(bone.rotation - bone.data.rotation) > 0.01
+        );
+
+        if (movedBones.length > 0) {
+          // console.log('Housing: Bones that have moved from setup pose:', movedBones.slice(0, 5).map((bone: any) => ({
+          //   name: bone.data.name,
+          //   currentX: bone.x,
+          //   setupX: bone.data.x,
+          //   currentY: bone.y,
+          //   setupY: bone.data.y,
+          //   currentRotation: bone.rotation,
+          //   setupRotation: bone.data.rotation
+          // })));
+        } else {
+          // console.log('Housing: No bones have moved from setup pose - animations may not be targeting existing bones');
         }
       }
 
@@ -761,13 +856,14 @@ export default function IsometricHousingThreeJS({
       updateCameraForZoom(camera, false, { x: 0, y: 0 });
 
       // console.log('Housing: About to build apartment scene');
-      let room, roomScale, getAnchor;
+      let room, roomScale, getAnchor, furniture;
       try {
         const result = await buildApartmentScene(scene, w, h, roomConfig);
         room = result.room;
         roomScale = result.roomScale;
         getAnchor = result.getAnchor;
-        console.log('Housing room loaded with', room.anchors.size, 'anchors');
+        furniture = result.furniture;
+        console.log('Housing room loaded with', room.anchors.size, 'anchors and', furniture.length, 'furniture items');
       } catch (error) {
         console.error('Housing: Failed to build apartment scene', error);
         throw error;
@@ -776,6 +872,7 @@ export default function IsometricHousingThreeJS({
       roomRef.current = room.mesh;
       roomScaleRef.current = roomScale;
       getAnchorRef.current = getAnchor;
+      furnitureRef.current = furniture;
 
       // NEW: save room skeleton & state for per-frame physics/animation ticking
       roomSkeletonRef.current = room.skeleton;
@@ -790,6 +887,47 @@ export default function IsometricHousingThreeJS({
       controller.mesh.frustumCulled = false;
       nativeCharacterHeightRef.current = computeNativeCharacterHeight(controller.mesh);
       room.mesh.add(controller.mesh);
+
+      if (__DEV__) {
+        console.log(`Character added to room.mesh`, {
+          characterRenderOrder: controller.mesh.renderOrder,
+          characterMeshChildren: controller.mesh.children.length
+        });
+      }
+
+      // Add furniture AFTER character to ensure it renders on top in painterly system
+      if (__DEV__) {
+        console.log(`Adding ${furniture.length} furniture items to room.mesh after character`);
+      }
+      furniture.forEach((furnitureInstance, index) => {
+        if (__DEV__) {
+          console.log(`Adding furniture ${index}:`, {
+            id: furnitureInstance.config.id,
+            variantId: furnitureInstance.config.variantId,
+            tileId: furnitureInstance.config.tileId,
+            meshPosition: furnitureInstance.mesh.position,
+            meshVisible: furnitureInstance.mesh.visible,
+            skeletonPosition: { x: furnitureInstance.skeleton.x, y: furnitureInstance.skeleton.y }
+          });
+        }
+        // Put furniture under room.mesh (NOT scene) - same as character
+        room.mesh.add(furnitureInstance.mesh);
+
+        // Furniture already positioned in FurnitureLoader with skeleton.x/y in room space.
+        // Don't rescale / reposition with world math here.
+        furnitureInstance.mesh.position.set(0, 0, 0);
+        furnitureInstance.mesh.scale.set(1, 1, 1);
+
+        if (__DEV__) {
+          console.log(`Added furniture ${furnitureInstance.config.id} to room.mesh`, {
+            tileId: furnitureInstance.config.tileId,
+            skeletonPos: { x: furnitureInstance.skeleton.x, y: furnitureInstance.skeleton.y },
+            meshPos: { x: furnitureInstance.mesh.position.x, y: furnitureInstance.mesh.position.y },
+            roomMeshChildrenCount: room.mesh.children.length,
+            furnitureChildIndex: room.mesh.children.length - 1
+          });
+        }
+      });
 
       rendererRef.current = renderer;
       spineRef.current = controller;

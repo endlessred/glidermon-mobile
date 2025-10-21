@@ -1,8 +1,10 @@
 import { Skeleton, Slot, Physics } from '@esotericsoftware/spine-core';
-import { RoomLayoutConfig, AVAILABLE_FLOOR_SETS, AVAILABLE_WALL_SETS, FloorSetName, WallSetName, FloorVariant, WallVariant } from '../types/RoomConfig';
+import { RoomLayoutConfig, AVAILABLE_FLOOR_SETS, AVAILABLE_WALL_SETS, FloorSetName, WallSetName, FloorVariant, WallVariant, RoomFurnitureConfig } from '../types/RoomConfig';
+import { FURNITURE_CATALOG, shouldApplyFlipX } from '../types/furnitureCatalog';
 
 export class RoomBuilder {
   private skeleton: Skeleton;
+  private furnitureInstances: Map<string, any> = new Map(); // Track loaded furniture
 
   constructor(skeleton: Skeleton) {
     this.skeleton = skeleton;
@@ -80,12 +82,54 @@ export class RoomBuilder {
   }
 
   private applyFurnitureLayout(config: RoomLayoutConfig): void {
-    // Furniture implementation would go here
-    // For now, just log the furniture items
-    config.furniture?.forEach(furnitureConfig => {
+    if (!config.furniture || config.furniture.length === 0) {
+      return;
+    }
+
+    config.furniture.forEach(furnitureConfig => {
+      this.placeFurniture(furnitureConfig);
+    });
+  }
+
+  private placeFurniture(furnitureConfig: RoomFurnitureConfig): void {
+    const furnitureDef = FURNITURE_CATALOG[furnitureConfig.id];
+    if (!furnitureDef) {
       if (__DEV__) {
-        // console.log(`RoomBuilder: Furniture ${furnitureConfig.furniture.asset} at ${furnitureConfig.tileId}`);
+        console.warn(`RoomBuilder: Furniture definition not found for ${furnitureConfig.id}`);
       }
+      return;
+    }
+
+    // Find the variant
+    const variant = furnitureDef.variants.find(v => v.id === furnitureConfig.variantId);
+    if (!variant) {
+      if (__DEV__) {
+        console.warn(`RoomBuilder: Variant ${furnitureConfig.variantId} not found for furniture ${furnitureConfig.id}`);
+      }
+      return;
+    }
+
+    // For now, we'll place furniture by creating a virtual "furniture slot" at the tile location
+    // In a full implementation, we'd load separate Spine skeletons for furniture
+    // This is a simplified approach that demonstrates the concept
+
+    if (__DEV__) {
+      console.log(`RoomBuilder: Placing ${furnitureConfig.id} variant ${furnitureConfig.variantId} at ${furnitureConfig.tileId}`, {
+        facing: furnitureConfig.facing,
+        rotation: furnitureConfig.rotation,
+        layer: furnitureConfig.layer,
+        useFlipX: shouldApplyFlipX(furnitureConfig.id, furnitureConfig.facing),
+        skeleton: furnitureDef.skeleton,
+        skin: variant.skin
+      });
+    }
+
+    // Store furniture instance for potential future reference
+    const furnitureKey = `${furnitureConfig.tileId}_${furnitureConfig.id}_${furnitureConfig.variantId}`;
+    this.furnitureInstances.set(furnitureKey, {
+      config: furnitureConfig,
+      definition: furnitureDef,
+      variant: variant
     });
   }
 

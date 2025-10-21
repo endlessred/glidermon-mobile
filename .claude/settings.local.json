@@ -34,7 +34,8 @@
       "WebFetch(domain:github.com)",
       "Bash(npx tsc:*)",
       "Bash(pnpm:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Read(//c//**)"
     ],
     "deny": [],
     "ask": []

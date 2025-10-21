@@ -1,0 +1,52 @@
+{
+"skeleton": {
+	"hash": "zx0FGwgHpew",
+	"spine": "4.2.43",
+	"x": -255.73,
+	"y": -317.97,
+	"width": 500,
+	"height": 1000,
+	"images": "C:/Projects/Chairs/Chairs",
+	"audio": ""
+},
+"bones": [
+	{ "name": "root" }
+],
+"slots": [
+	{ "name": "ChairBase", "bone": "root", "attachment": "Beanbag_Brown" },
+	{ "name": "1x1_OfficeChair_Front_Green", "bone": "root" },
+	{ "name": "1x1_OfficeChair_Front_Beige", "bone": "root" },
+	{ "name": "1x1_Beanbag_Front_Beige", "bone": "root" },
+	{ "name": "1x1_Beanbag_Front_Brown", "bone": "root" }
+],
+"skins": [
+	{
+		"name": "default",
+		"attachments": {
+			"ChairBase": {
+				"Beanbag_Beige": { "path": "Beige/1x1_Beanbag_Front_Beige", "x": -5.73, "y": 182.03, "width": 500, "height": 1000 },
+				"Beanbag_Brown": { "path": "Brown/1x1_Beanbag_Front_Brown", "x": -5.73, "y": 182.03, "width": 500, "height": 1000 },
+				"OfficeChair_Beige": { "path": "Beige/1x1_OfficeChair_Front_Beige", "x": 0.89, "y": 178.55, "width": 500, "height": 1000 },
+				"OfficeChair_Green": { "path": "Green/1x1_OfficeChair_Front_Green", "x": 0.31, "y": 178.55, "width": 500, "height": 1000 },
+				"WoodChair_Beige": { "path": "Beige/1x1_WoodChair_Front_Beige", "x": 0.89, "y": 168.13, "width": 500, "height": 1000 },
+				"WoodChair_Black": { "path": "Black/1x1_WoodChair_Front_Black", "x": 0.89, "y": 168.13, "width": 500, "height": 1000 },
+				"WoodChair_Blue": { "path": "Blue/1x1_WoodChair_Front_Blue", "x": 0.89, "y": 168.13, "width": 500, "height": 1000 },
+				"WoodChair_Brown": { "path": "Brown/1x1_WoodChair_Front_Brown", "x": 0.89, "y": 168.13, "width": 500, "height": 1000 },
+				"WoodChair_Green": { "path": "Green/1x1_WoodChair_Front_Green", "x": 0.89, "y": 168.13, "width": 500, "height": 1000 }
+			}
+		}
+	}
+],
+"animations": {
+	"animation": {},
+	"FlipX": {
+		"bones": {
+			"root": {
+				"scale": [
+					{ "x": -1 }
+				]
+			}
+		}
+	}
+}
+}

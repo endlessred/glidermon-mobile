@@ -323,7 +323,7 @@ export class SkeletonMesh extends THREE.Object3D {
     const attName = (attachment && attachment.name) ? String(attachment.name) : "";
     if (attName.toLowerCase() === 'shadow') {
       a = a * 0.25; // Set shadow opacity to 25%
-      if (__DEV__) {
+      if (__DEV__ && false) { // Silenced - too verbose
         console.log('SpineThree: Setting shadow opacity', {
           slotName: slot.data?.name,
           attachmentName: attName,

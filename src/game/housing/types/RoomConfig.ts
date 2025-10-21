@@ -25,17 +25,18 @@ export interface RoomWallConfig {
 }
 
 export interface RoomFurnitureConfig {
+  /** Unique identifier for this furniture instance */
+  id: string;
+  /** Variant ID from the furniture definition */
+  variantId: string;
   /** The tile ID where furniture is placed */
   tileId: string;
-  /** Furniture item reference */
-  furniture: {
-    /** Furniture asset path */
-    asset: string;
-    /** Optional positioning offset */
-    offset?: { x: number; y: number };
-    /** Optional scale adjustment */
-    scale?: number;
-  };
+  /** Rotation in degrees (0, 90, 180, 270) */
+  rotation: number;
+  /** Rendering layer */
+  layer: "under" | "mid" | "over";
+  /** Chair orientation: "left" (default) or "right" (uses FlipX animation) */
+  facing?: "left" | "right";
 }
 
 export interface RoomLayoutConfig {
@@ -105,3 +106,47 @@ export type FloorSetName = typeof AVAILABLE_FLOOR_SETS[number];
 export type WallSetName = typeof AVAILABLE_WALL_SETS[number];
 export type FloorVariant = typeof FLOOR_VARIANTS[number];
 export type WallVariant = typeof WALL_VARIANTS[number];
+
+// Furniture catalog system
+export interface FurnitureFootprint {
+  /** Width in tiles */
+  w: number;
+  /** Height in tiles */
+  h: number;
+  /** Allowed rotation angles in degrees */
+  allowedRot: number[];
+}
+
+export interface FurnitureVariant {
+  /** Variant identifier */
+  id: string;
+  /** Optional skin override for this variant */
+  skin?: string;
+  /** Optional tint color for this variant */
+  tint?: string;
+}
+
+export interface FurnitureDef {
+  /** Furniture type identifier (e.g., "chair_wood") */
+  id: string;
+  /** Spine skeleton key or atlas id */
+  skeleton: string;
+  /** Possible footprints for this furniture */
+  footprints: FurnitureFootprint[];
+  /** Fine positioning adjustment per tile center */
+  anchors?: { dx?: number; dy?: number };
+  /** Supported rendering layers */
+  supportsLayers: Array<"under" | "mid" | "over">;
+  /** Occlusion behavior for z-ordering */
+  occlusion: "none" | "footboard" | "tall";
+  /** Available variants for this furniture */
+  variants: FurnitureVariant[];
+  /** Whether this furniture supports facing direction (uses FlipX animation) */
+  supportsFacing?: boolean;
+  /** Default facing direction */
+  defaultFacing?: "left" | "right";
+}
+
+export interface FurnitureCatalog {
+  [furnitureId: string]: FurnitureDef;
+}
