@@ -46,7 +46,7 @@
   "furniture": [
     {
       "id": "chair",
-      "variantId": "wood_chair_brown",
+      "variantId": "wood_chair_green",
       "tileId": "C2",
       "rotation": 0,
       "layer": "mid",
