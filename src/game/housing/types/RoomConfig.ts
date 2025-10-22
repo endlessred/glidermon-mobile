@@ -39,6 +39,17 @@ export interface RoomFurnitureConfig {
   facing?: "left" | "right";
 }
 
+export interface WallFurnitureConfig {
+  /** Unique identifier for this wall furniture instance */
+  id: string;
+  /** Variant ID from the wall furniture definition */
+  variantId: string;
+  /** The wall ID where furniture is placed (e.g., "LeftBack5", "RightBack2") */
+  wallId: string;
+  /** Rendering layer for wall furniture */
+  layer: "background" | "foreground";
+}
+
 export interface RoomLayoutConfig {
   /** Room metadata */
   name: string;
@@ -60,6 +71,8 @@ export interface RoomLayoutConfig {
   walls: RoomWallConfig[];
   /** Furniture placements */
   furniture?: RoomFurnitureConfig[];
+  /** Wall-mounted furniture and art */
+  wallFurniture?: WallFurnitureConfig[];
 }
 
 // Pre-defined room templates

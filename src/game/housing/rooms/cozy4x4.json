@@ -47,18 +47,30 @@
     {
       "id": "chair",
       "variantId": "wood_chair_green",
-      "tileId": "C2",
+      "tileId": "C3",
       "rotation": 0,
       "layer": "mid",
       "facing": "right"
+    }
+  ],
+  "wallFurniture": [
+    {
+      "id": "bookshelf",
+      "variantId": "bookshelf_oak_shader",
+      "wallId": "LeftBack6",
+      "layer": "background"
     },
     {
-      "id": "chair",
-      "variantId": "beanbag_brown",
-      "tileId": "B3",
-      "rotation": 0,
-      "layer": "mid",
-      "facing": "left"
+      "id": "bookshelf",
+      "variantId": "bookshelf_oak_front",
+      "wallId": "LeftBack6",
+      "layer": "foreground"
+    },
+    {
+      "id": "wallArt",
+      "variantId": "poster_map",
+      "wallId": "RightBack2",
+      "layer": "foreground"
     }
   ]
 }

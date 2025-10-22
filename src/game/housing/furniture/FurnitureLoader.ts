@@ -7,6 +7,7 @@ import { FURNITURE_CATALOG, shouldApplyFlipX } from '../types/furnitureCatalog';
 import { Anchor } from '../anchors';
 import { renderOrderFromFeetY } from '../anchors';
 import { applyPainterlyState } from '../painterly/Painterly';
+import { calculateFurnitureRenderOrderBase } from '../utils/depthSorting';
 
 export type LoadedFurniture = {
   skeleton: import('@esotericsoftware/spine-core').Skeleton;

@@ -13,7 +13,7 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
       }
     ],
     anchors: { dx: 0, dy: 0 },
-    supportsLayers: ["mid"],
+    supportsLayers: ["under", "mid", "over"],
     occlusion: "none",
     supportsFacing: true, // Chairs support FlipX animation
     defaultFacing: "left", // Default orientation faces left

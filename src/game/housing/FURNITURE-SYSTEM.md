@@ -76,11 +76,84 @@ The system uses **render order values** instead of z-depth:
 Layer               Base RenderOrder    Purpose
 ==========================================
 Room tiles          0                   Floor/walls (background)
-Under furniture      1500               Rugs, floor items
+Under layer          1000               Rugs, floor decorations (always behind)
+Behind furniture     1500               Mid-layer furniture in back rows
 Character            2000               Player character
-Mid furniture        6000               Chairs, tables (default)
-Over furniture       7000               Tall items, lamps
+Front furniture      2500               Mid-layer furniture in front rows
+Over layer           3500               Tall items, lamps (always on top)
 ```
+
+### Layer System
+
+Furniture can be assigned to different layers that control their rendering behavior:
+
+#### **"under" Layer (renderOrder: 1000)**
+- **Purpose**: Rugs, floor decorations, carpet
+- **Behavior**: Always renders behind character and all other furniture
+- **Use case**: Items that should appear "on the floor" under everything else
+
+#### **"mid" Layer (renderOrder: 1500-2500)**
+- **Purpose**: Regular furniture like chairs, tables, beds
+- **Behavior**: Uses depth sorting based on grid position relative to character
+- **Back rows** (A, B): Renders behind character (1500)
+- **Front rows** (C, D+): Renders in front of character (2500)
+
+#### **"over" Layer (renderOrder: 3500)**
+- **Purpose**: Tall furniture, lamps, hanging decorations
+- **Behavior**: Always renders in front of character and all other furniture
+- **Use case**: Items that should appear "above" everything else
+
+### Depth Sorting System
+
+For **"mid" layer furniture only**, the system uses grid row positions to determine depth:
+
+#### Grid Layout (4x4 room example)
+```
+    1   2   3   4
+A  [·] [·] [·] [·]  ← Back row (behind character)
+B  [·] [·] [·] [·]  ← Back row (behind character)
+C  [·] [☺] [·] [·]  ← Character position
+D  [·] [·] [·] [·]  ← Front row (in front of character)
+```
+
+### Example Layering Scenario
+
+```json
+{
+  "furniture": [
+    {
+      "id": "rug",
+      "tileId": "C2",
+      "layer": "under"     // Always behind everything (rug on floor)
+    },
+    {
+      "id": "chair",
+      "tileId": "A2",
+      "layer": "mid"       // Behind character (back row)
+    },
+    {
+      "id": "table",
+      "tileId": "D3",
+      "layer": "mid"       // In front of character (front row)
+    },
+    {
+      "id": "lamp",
+      "tileId": "B2",
+      "layer": "over"      // Always on top (tall item)
+    }
+  ]
+}
+```
+
+**Render order result**:
+1. Room tiles (0)
+2. Rug at C2 (1000) - under layer
+3. Chair at A2 (1500) - mid layer, back row
+4. Character (2000)
+5. Table at D3 (2500) - mid layer, front row
+6. Lamp at B2 (3500) - over layer
+
+This creates natural depth layering where rugs appear under everything, furniture depth-sorts relative to the character, and lamps appear over everything.
 
 ### How Characters Render Properly
 

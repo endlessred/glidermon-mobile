@@ -1,0 +1,109 @@
+{
+"skeleton": {
+	"hash": "b4R9bfl2NEw",
+	"spine": "4.2.43",
+	"x": -152.12,
+	"y": -264.77,
+	"width": 500,
+	"height": 1000,
+	"images": "../Wall/",
+	"audio": "./audio"
+},
+"bones": [
+	{ "name": "root" },
+	{ "name": "FurnAndArt", "parent": "root", "x": 13.34, "y": 247.95 }
+],
+"slots": [
+	{ "name": "Wall", "bone": "FurnAndArt" },
+	{ "name": "WallFurn1", "bone": "FurnAndArt" },
+	{ "name": "WallFurnFront", "bone": "FurnAndArt" },
+	{ "name": "Art", "bone": "FurnAndArt", "attachment": "PosterMap" }
+],
+"skins": [
+	{
+		"name": "default",
+		"attachments": {
+			"Art": {
+				"Landscape_Dark": { "path": "Paintings/WallDecor_Painting1Frame1_Dark", "x": 80.05, "y": 2.24, "width": 500, "height": 1000 },
+				"ModernClock_Beige": {
+					"path": "Clocks/WallDecor_ModernClock_Beige",
+					"x": 24.69,
+					"y": 39.65,
+					"scaleX": 0.5,
+					"scaleY": 0.5,
+					"width": 500,
+					"height": 1000
+				},
+				"ModernClock_Blue": {
+					"path": "Clocks/WallDecor_ModernClock_Blue",
+					"x": 25.44,
+					"y": 38.15,
+					"scaleX": 0.5,
+					"scaleY": 0.5,
+					"width": 500,
+					"height": 1000
+				},
+				"PinboardPolaroids_DarkWood": { "path": "Paintings/WallDecor_PinboardPoloroids_DarkWood", "x": 72.57, "y": -65.09, "width": 500, "height": 1000 },
+				"PinboardString_FantasyWood": { "path": "Paintings/WallDecor_PinboardString_FantasyWood", "x": 68.08, "y": -66.58, "width": 500, "height": 1000 },
+				"PosterMap": { "path": "Paintings/WallDecor_PosterMap", "x": 84.54, "y": -12.72, "width": 500, "height": 1000 },
+				"PosterUFO": { "path": "Paintings/WallDecor_PosterUFO", "x": 80.05, "y": -21.69, "width": 500, "height": 1000 },
+				"RoundClock_Beige": {
+					"path": "Clocks/WallDecor_RoundClock_Beige",
+					"x": 21.69,
+					"y": 33.66,
+					"scaleX": 0.5,
+					"scaleY": 0.5,
+					"width": 500,
+					"height": 1000
+				}
+			},
+			"Wall": {
+				"Sides2": { "x": 76.16, "y": -120.45, "width": 500, "height": 1000 }
+			},
+			"WallFurn1": {
+				"Bookshelf_Shader": {
+					"path": "try2/1x1Furn-1",
+					"x": -60.89,
+					"y": 1.57,
+					"scaleX": 0.4059,
+					"scaleY": 0.4059,
+					"width": 3300,
+					"height": 2550
+				},
+				"HexShelf_Shader": {
+					"path": "try2/1x1Furn-3",
+					"x": -201.24,
+					"y": 58.35,
+					"scaleX": 0.8,
+					"scaleY": 0.8,
+					"width": 3300,
+					"height": 2550
+				}
+			},
+			"WallFurnFront": {
+				"Bookshelf": {
+					"path": "try2/1x1Furn-2",
+					"x": -61.46,
+					"y": 3.74,
+					"scaleX": 0.4,
+					"scaleY": 0.4,
+					"width": 3300,
+					"height": 2550
+				}
+			}
+		}
+	}
+],
+"animations": {
+	"animation": {},
+	"FlipX": {
+		"bones": {
+			"FurnAndArt": {
+				"scale": [
+					{ "x": -1 }
+				]
+			}
+		}
+	}
+}
+}

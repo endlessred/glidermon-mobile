@@ -11,6 +11,7 @@ import {
 import { TILE_H, zFromFeetScreenY } from '../coords';
 import { loadRoomSkeleton, LoadedRoom, loadRoomConfig } from '../rooms/RoomLoader';
 import { AnchorMap, Anchor, renderOrderFromFeetY } from '../anchors';
+import { calculateFurnitureRenderOrderBase } from '../utils/depthSorting';
 import {
   createSpineCharacterController,
   SpineCharacterController,
@@ -20,7 +21,9 @@ import { OutfitSlot } from '../../../data/types/outfitTypes';
 import { RoomBuilder } from '../builders/RoomBuilder';
 import { RoomLayoutConfig } from '../types/RoomConfig';
 import { Physics } from '@esotericsoftware/spine-core';
-import { createFurnitureInstance, LoadedFurniture, disposeFurniture } from '../furniture/FurnitureLoader'; 
+import { createFurnitureInstance, LoadedFurniture, disposeFurniture } from '../furniture/FurnitureLoader';
+import { createWallFurnitureInstance, LoadedWallFurniture } from '../furniture/WallFurnitureLoader';
+import { generateWallAnchors } from '../utils/wallAnchors'; 
 
 interface IsometricHousingThreeJSProps {
   width?: number;
@@ -75,6 +78,7 @@ type ApartmentBuild = {
   getAnchor: (id: string) => Anchor | null;
   roomBuilder: RoomBuilder;
   furniture: LoadedFurniture[];
+  wallFurniture: LoadedWallFurniture[];
 };
 
 // Room configuration is now loaded from JSON files
@@ -279,6 +283,38 @@ async function buildApartmentScene(
     }
   }
 
+  // Load wall furniture instances
+  const wallFurniture: LoadedWallFurniture[] = [];
+  if (roomConfig.wallFurniture && roomConfig.wallFurniture.length > 0) {
+
+    // Generate wall anchors for the room
+    const wallAnchors = generateWallAnchors();
+
+    for (const wallFurnitureConfig of roomConfig.wallFurniture) {
+      const wallAnchor = wallAnchors.get(wallFurnitureConfig.wallId);
+      if (!wallAnchor) {
+        continue;
+      }
+
+      try {
+        const wallFurnitureInstance = await createWallFurnitureInstance(wallFurnitureConfig, wallAnchor);
+        if (wallFurnitureInstance) {
+          wallFurniture.push(wallFurnitureInstance);
+
+          // Scale wall furniture mesh position to match room scale
+          wallFurnitureInstance.mesh.position.x *= roomScale;
+          wallFurnitureInstance.mesh.position.y *= roomScale;
+          wallFurnitureInstance.mesh.scale.set(roomScale, roomScale, 1);
+
+          // Add to room mesh for proper positioning
+          room.mesh.add(wallFurnitureInstance.mesh);
+        }
+      } catch (error) {
+        // Silently handle wall furniture loading errors
+      }
+    }
+  }
+
   if (DEBUG_HIDE_ENVIRONMENT) room.mesh.visible = false;
 
   room.mesh.visible = true;
@@ -301,7 +337,7 @@ async function buildApartmentScene(
     }
   });
 
-  return { room, roomScale, getAnchor, roomBuilder, furniture };
+  return { room, roomScale, getAnchor, roomBuilder, furniture, wallFurniture };
 }
 
 export default function IsometricHousingThreeJS({
@@ -342,6 +378,7 @@ export default function IsometricHousingThreeJS({
   const roomSkeletonRef = useRef<spine.Skeleton | null>(null);
   const roomStateRef = useRef<spine.AnimationState | null>(null);
   const furnitureRef = useRef<LoadedFurniture[]>([]);
+  const wallFurnitureRef = useRef<LoadedWallFurniture[]>([]);
 
   const resolveIsoPosition = useCallback(() => {
     if (gridColumn != null && gridRow != null) {
@@ -591,31 +628,52 @@ export default function IsometricHousingThreeJS({
             // Refresh furniture mesh
             furnitureInstance.mesh.refreshMeshes();
 
-            // Apply renderOrder like character does (from stored basePainterlyOrder)
-            const storedOrder = furnitureInstance.mesh.userData.basePainterlyOrder;
-            if (storedOrder) {
-              const anchor = getAnchorRef.current?.(furnitureInstance.config.tileId);
-              if (anchor) {
-                const finalOrder = renderOrderFromFeetY(storedOrder, anchor.sceneY, 5);
-                furnitureInstance.mesh.renderOrder = finalOrder;
+            // Calculate depth-aware render order based on character position
+            const anchor = getAnchorRef.current?.(furnitureInstance.config.tileId);
+            if (anchor) {
+              // Get character grid position
+              const characterGridRow = gridRow ?? Math.floor(characterPosRef.current.y);
+              const characterGridCol = gridColumn ?? Math.floor(characterPosRef.current.x);
 
-                if (__DEV__ && Math.random() < 0.01) { // Log occasionally
-                  console.log(`Updated furniture renderOrder`, {
-                    id: furnitureInstance.config.id,
-                    tileId: furnitureInstance.config.tileId,
-                    storedOrder: storedOrder,
-                    finalOrder: finalOrder
-                  });
-                }
+              // Calculate appropriate render order base relative to character
+              const characterRenderOrderBase = CHARACTER_RENDER_ORDER_BASE;
+              const layerBases = {
+                under: 1500,
+                mid: 2500,
+                over: 3500,
+              };
+              const furnitureLayerBase = layerBases[furnitureInstance.config.layer] || layerBases.mid;
 
-                // Apply to child meshes too (same as character)
-                furnitureInstance.mesh.traverse((obj: any) => {
-                  if (obj === furnitureInstance.mesh) return;
-                  const baseSlotOrder = obj.userData?.baseRenderOrder ?? obj.renderOrder ?? 0;
-                  obj.userData.baseRenderOrder = baseSlotOrder;
-                  obj.renderOrder = finalOrder + baseSlotOrder * 0.01;
+              const depthAwareBase = calculateFurnitureRenderOrderBase(
+                furnitureInstance.config.tileId,
+                characterGridRow,
+                characterGridCol,
+                characterRenderOrderBase,
+                furnitureLayerBase,
+                furnitureInstance.config.layer
+              );
+
+              const finalOrder = renderOrderFromFeetY(depthAwareBase, anchor.sceneY, 5);
+              furnitureInstance.mesh.renderOrder = finalOrder;
+
+              if (__DEV__ && Math.random() < 0.01) { // Log occasionally
+                console.log(`Updated furniture renderOrder (depth-aware)`, {
+                  id: furnitureInstance.config.id,
+                  tileId: furnitureInstance.config.tileId,
+                  characterPos: { row: characterGridRow, col: characterGridCol },
+                  depthAwareBase: depthAwareBase,
+                  finalOrder: finalOrder,
+                  rendersBehindChar: depthAwareBase < characterRenderOrderBase
                 });
               }
+
+              // Apply to child meshes too (same as character)
+              furnitureInstance.mesh.traverse((obj: any) => {
+                if (obj === furnitureInstance.mesh) return;
+                const baseSlotOrder = obj.userData?.baseRenderOrder ?? obj.renderOrder ?? 0;
+                obj.userData.baseRenderOrder = baseSlotOrder;
+                obj.renderOrder = finalOrder + baseSlotOrder * 0.01;
+              });
             }
           } catch (error) {
             if (__DEV__) {
@@ -856,14 +914,15 @@ export default function IsometricHousingThreeJS({
       updateCameraForZoom(camera, false, { x: 0, y: 0 });
 
       // console.log('Housing: About to build apartment scene');
-      let room, roomScale, getAnchor, furniture;
+      let room, roomScale, getAnchor, furniture, wallFurniture;
       try {
         const result = await buildApartmentScene(scene, w, h, roomConfig);
         room = result.room;
         roomScale = result.roomScale;
         getAnchor = result.getAnchor;
         furniture = result.furniture;
-        console.log('Housing room loaded with', room.anchors.size, 'anchors and', furniture.length, 'furniture items');
+        wallFurniture = result.wallFurniture;
+        console.log('Housing room loaded with', room.anchors.size, 'anchors,', furniture.length, 'furniture items, and', wallFurniture.length, 'wall furniture items');
       } catch (error) {
         console.error('Housing: Failed to build apartment scene', error);
         throw error;
@@ -873,6 +932,7 @@ export default function IsometricHousingThreeJS({
       roomScaleRef.current = roomScale;
       getAnchorRef.current = getAnchor;
       furnitureRef.current = furniture;
+      wallFurnitureRef.current = wallFurniture;
 
       // NEW: save room skeleton & state for per-frame physics/animation ticking
       roomSkeletonRef.current = room.skeleton;
