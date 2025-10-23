@@ -132,10 +132,17 @@ export default function SpineCharacterPreview({
     return cosmeticItem?.maskRecolor || null;
   };
 
-  // ---- set/refresh material override: recolor hats, body parts, and hair ----
-  const setupMaterialOverride = (skeletonMesh: SkeletonMesh, hatRecolor: any, skinRecolor: any, hairRecolor: any) => {
+  const getJacketMaskRecolor = () => {
+    const equippedJacket = outfit.cosmetics.jacket;
+    if (!equippedJacket?.itemId) return null;
+    const cosmeticItem = catalog.find((item) => item.id === equippedJacket.itemId);
+    return cosmeticItem?.maskRecolor || null; // 4-channel recoloring for jacket parts
+  };
 
-    if (!hatRecolor && !skinRecolor && !hairRecolor) {
+  // ---- set/refresh material override: recolor hats, body parts, hair, and jackets ----
+  const setupMaterialOverride = (skeletonMesh: SkeletonMesh, hatRecolor: any, skinRecolor: any, hairRecolor: any, jacketRecolor: any) => {
+
+    if (!hatRecolor && !skinRecolor && !hairRecolor && !jacketRecolor) {
       skeletonMesh.materialOverride = undefined;
       return;
     }
@@ -145,6 +152,9 @@ export default function SpineCharacterPreview({
 
     // Hair slots that should be recolored with hair cosmetics
     const hairSlots = ["HairFront", "HairBack"];
+
+    // Jacket slots that should be recolored with jacket cosmetics
+    const jacketSlots = ["JacketTorso", "JacketLArm", "JacketRArm"];
 
     // Switch skin slots to their shader variants when skin recoloring is enabled
     if (skinRecolor) {
@@ -266,6 +276,69 @@ export default function SpineCharacterPreview({
       }
     }
 
+    // Switch jacket slots to their shader variants when jacket recoloring is enabled
+    if (jacketRecolor) {
+      const jacketToShaderMap: Record<string, string> = {
+        "JacketTorso": "Motorcycle_Shader",
+        "JacketLArm": "Motorcycle_Shader",
+        "JacketRArm": "Motorcycle_Shader"
+      };
+
+      const skeleton = skeletonRef.current;
+      if (skeleton) {
+        // First, clear all jacket slots to prevent bugs
+        for (const baseSlotName of jacketSlots) {
+          const slot = skeleton.findSlot(baseSlotName);
+          if (slot) {
+            slot.setAttachment(null);
+          }
+        }
+
+        // Activate all jacket slots when jacket is equipped
+        for (const baseSlotName of jacketSlots) {
+          const shaderAttachmentName = jacketToShaderMap[baseSlotName];
+          if (shaderAttachmentName) {
+            const slot = skeleton.findSlot(baseSlotName);
+            if (slot) {
+              const shaderAttachment = getAttachmentFromAnySkin(skeletonDataRef.current, baseSlotName, shaderAttachmentName);
+              if (shaderAttachment) {
+                slot.setAttachment(shaderAttachment);
+                console.log(`✅ Preview: Switched ${baseSlotName} slot to shader variant: ${shaderAttachmentName}`);
+              } else {
+                console.warn(`⚠️ Preview: Could not find shader attachment: ${shaderAttachmentName} for slot: ${baseSlotName}`);
+              }
+            } else {
+              console.warn(`⚠️ Preview: Could not find slot: ${baseSlotName}`);
+            }
+          }
+        }
+
+        // Keep our attachment switches; just recompute world transforms
+        skeleton.updateWorldTransform(Physics);
+
+        // Verify the jacket switches stuck
+        console.log('🔎 Preview: Verifying jacket attachment switches');
+        for (const baseSlotName of jacketSlots) {
+          const slot = skeleton.findSlot(baseSlotName);
+          if (slot) {
+            console.log(`🔎 Preview: ${baseSlotName} now has attachment:`, slot.getAttachment()?.name || 'none');
+          }
+        }
+      }
+    } else {
+      // Clear jacket slots when no jacket is equipped
+      const skeleton = skeletonRef.current;
+      if (skeleton) {
+        for (const baseSlotName of jacketSlots) {
+          const slot = skeleton.findSlot(baseSlotName);
+          if (slot) {
+            slot.setAttachment(null);
+          }
+        }
+        skeleton.updateWorldTransform(Physics);
+      }
+    }
+
     skeletonMesh.materialOverride = (slot: any, baseTex: THREE.Texture) => {
       const slotName: string = slot?.data?.name ?? "";
       const attachment = slot.getAttachment?.();
@@ -282,6 +355,10 @@ export default function SpineCharacterPreview({
       // Hair via shader variant
       else if (isShaderAttachment && hairRecolor && hairSlots.includes(slotName)) {
         recolorData = hairRecolor;
+      }
+      // Jacket via shader variant
+      else if (isShaderAttachment && jacketRecolor && jacketSlots.includes(slotName)) {
+        recolorData = jacketRecolor;
       }
       // Skin via shader variant
       else if (isShaderAttachment && skinRecolor) {
@@ -348,6 +425,7 @@ export default function SpineCharacterPreview({
     const hatRecolor = getHatMaskRecolor();
     const skinRecolor = getSkinMaskRecolor();
     const hairRecolor = getHairMaskRecolor();
+    const jacketRecolor = getJacketMaskRecolor();
 
     if (skinName && skinName !== "default") {
       const skin = skeletonData.findSkin(skinName);
@@ -363,8 +441,8 @@ export default function SpineCharacterPreview({
       skeleton.updateWorldTransform(Physics.update);
     }
 
-    setupMaterialOverride(skeletonMesh, hatRecolor, skinRecolor, hairRecolor);
-  }, [outfit.cosmetics.headTop, outfit.cosmetics.skin, outfit.cosmetics.hair, catalog]);
+    setupMaterialOverride(skeletonMesh, hatRecolor, skinRecolor, hairRecolor, jacketRecolor);
+  }, [outfit.cosmetics.headTop, outfit.cosmetics.skin, outfit.cosmetics.hair, outfit.cosmetics.jacket, catalog]);
 
   const onContextCreate = async (gl: any) => {
     try {
@@ -498,7 +576,7 @@ export default function SpineCharacterPreview({
       scene.add(mesh);
 
       // Initial recolor override
-      setupMaterialOverride(mesh, getHatMaskRecolor(), getSkinMaskRecolor(), getHairMaskRecolor());
+      setupMaterialOverride(mesh, getHatMaskRecolor(), getSkinMaskRecolor(), getHairMaskRecolor(), getJacketMaskRecolor());
 
       // Render loop
       let lastTime = Date.now() / 1000;

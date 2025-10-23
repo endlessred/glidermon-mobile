@@ -79,6 +79,13 @@ const HAIR_SLOTS: string[] = [
   "HairBack",
 ];
 
+// Jacket slots that use shader recoloring
+const JACKET_SLOTS: string[] = [
+  "JacketTorso",
+  "JacketLArm",
+  "JacketRArm",
+];
+
 const SLOT_TO_SHADER: Record<string, string> = {
   Tail: "NewTailShader",
   R_Wing: "R_WingShader",
@@ -99,6 +106,9 @@ const SLOT_TO_SHADER: Record<string, string> = {
   R_Lid: "R_LidShader",
   HairFront: "WindsweptShader",
   HairBack: "WindsweptShader",
+  JacketTorso: "Motorcycle_Shader",
+  JacketLArm: "Motorcycle_Shader",
+  JacketRArm: "Motorcycle_Shader",
 };
 
 const DEFAULT_SHADER_SLOT_REGEX = /Shader$/i;
@@ -281,8 +291,34 @@ export async function createSpineCharacterController(
     updateWorldXform(skeleton, 0);
   }
 
-  function configureMaterialOverride(hatRecolor?: RecolorData, skinRecolor?: RecolorData, hairRecolor?: RecolorData) {
-    if (!hatRecolor && !skinRecolor && !hairRecolor) {
+  function configureJacketSwitches(jacketRecolor: RecolorData | undefined) {
+    // First, clear all jacket slots to prevent bugs
+    for (const slotName of JACKET_SLOTS) {
+      const slot = skeleton.findSlot(slotName);
+      if (slot) {
+        slot.setAttachment(null);
+      }
+    }
+
+    if (!jacketRecolor) return;
+
+    // Activate all jacket slots when jacket is equipped
+    for (const slotName of JACKET_SLOTS) {
+      const shaderName = SLOT_TO_SHADER[slotName];
+      if (!shaderName) continue;
+      const slot = skeleton.findSlot(slotName);
+      if (!slot) continue;
+      const shaderAttachment = getAttachmentFromAnySkin(skeletonData, slotName, shaderName);
+      if (shaderAttachment) {
+        slot.setAttachment(shaderAttachment);
+      }
+    }
+
+    updateWorldXform(skeleton, 0);
+  }
+
+  function configureMaterialOverride(hatRecolor?: RecolorData, skinRecolor?: RecolorData, hairRecolor?: RecolorData, jacketRecolor?: RecolorData) {
+    if (!hatRecolor && !skinRecolor && !hairRecolor && !jacketRecolor) {
       mesh.materialOverride = undefined;
       return;
     }
@@ -299,6 +335,8 @@ export async function createSpineCharacterController(
         recolor = hatRecolor;
       } else if (isShaderAttachment && hairRecolor && HAIR_SLOTS.includes(slotName)) {
         recolor = hairRecolor;
+      } else if (isShaderAttachment && jacketRecolor && JACKET_SLOTS.includes(slotName)) {
+        recolor = jacketRecolor;
       } else if (isShaderAttachment && skinRecolor && SKIN_SLOTS.includes(slotName)) {
         recolor = skinRecolor;
       } else if (!isShaderAttachment && skinRecolor && SKIN_SLOTS.includes(slotName)) {
@@ -339,16 +377,19 @@ export async function createSpineCharacterController(
 
   function applyOutfitInternal(outfitToApply?: OutfitSlot) {
     if (!outfitToApply) {
-      configureMaterialOverride(undefined, undefined, undefined);
+      configureMaterialOverride(undefined, undefined, undefined, undefined);
+      configureJacketSwitches(undefined);
       return;
     }
 
     const hatCosmetic = findCosmetic(outfitToApply.cosmetics?.headTop?.itemId);
     const skinCosmetic = findCosmetic(outfitToApply.cosmetics?.skin?.itemId);
     const hairCosmetic = findCosmetic(outfitToApply.cosmetics?.hair?.itemId);
+    const jacketCosmetic = findCosmetic(outfitToApply.cosmetics?.jacket?.itemId);
 
     const hatRecolor = hatCosmetic?.maskRecolor;
     const skinRecolor = skinCosmetic?.maskRecolor;
+    const jacketRecolor = jacketCosmetic?.maskRecolor;
 
     // For hair, check if the outfit has spine data with custom recoloring
     let hairRecolor = hairCosmetic?.maskRecolor;
@@ -376,7 +417,8 @@ export async function createSpineCharacterController(
 
     configureSkinSwitches(skinRecolor);
     configureHairSwitches(hairRecolor, outfitToApply.cosmetics?.hair?.itemId);
-    configureMaterialOverride(hatRecolor, skinRecolor, hairRecolor);
+    configureJacketSwitches(jacketRecolor);
+    configureMaterialOverride(hatRecolor, skinRecolor, hairRecolor, jacketRecolor);
   }
 
   applyOutfitInternal(outfit);

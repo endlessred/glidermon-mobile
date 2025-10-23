@@ -120,9 +120,15 @@ export default function OutfitEditor({ outfitId, onClose }: OutfitEditorProps) {
         console.log("Debug OutfitEditor - All skin items:", allSkin.map(i => i.id));
         console.log("Debug OutfitEditor - Owned skin items:", ownedSkin.map(i => i.id));
         return ownedSkin;
+      case "jacket":
+        // Filter for jacket cosmetics from the cosmetics store that are owned
+        const allJacket = cosmeticItems.filter(item => item.socket === "jacket");
+        const ownedJacket = allJacket.filter(item => owned[item.id]);
+        console.log("Debug OutfitEditor - All jacket items:", allJacket.map(i => i.id));
+        console.log("Debug OutfitEditor - Owned jacket items:", ownedJacket.map(i => i.id));
+        return ownedJacket;
       case "face":
       case "shirt":
-      case "jacket":
         // For now, return empty array for unimplemented slots
         return [];
       default:

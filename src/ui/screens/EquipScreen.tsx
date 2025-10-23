@@ -21,6 +21,9 @@ export default function EquipScreen() {
   const equip       = useCosmeticsStore(s => s.equip);
   const equipTheme  = useCosmeticsStore(s => s.equipTheme);
 
+  // Outfit store actions for jackets
+  const equipCosmetic = useOutfitStore(s => s.equipCosmetic);
+
   // Outfit store for palette customization
   const activeOutfit = useActiveLocalOutfit();
   const setSkinVariation = useOutfitStore(s => s.setSkinVariation);
@@ -44,6 +47,11 @@ export default function EquipScreen() {
 
   const themes = useMemo(
     () => catalog.filter(c => c.socket === "theme" && owned[c.id]),
+    [catalog, owned]
+  );
+
+  const jackets = useMemo(
+    () => catalog.filter(c => c.socket === "jacket" && owned[c.id]),
     [catalog, owned]
   );
 
@@ -210,6 +218,19 @@ export default function EquipScreen() {
       }}>
         {item.socket === "headTop" ? (
           <HatPreview hatId={item.id} size={48} />
+        ) : item.socket === "jacket" ? (
+          <View style={{
+            width: 48,
+            height: 48,
+            borderRadius: borderRadius.md,
+            backgroundColor: item.maskRecolor?.r || colors.primary[100],
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 2,
+            borderColor: item.maskRecolor?.g || colors.gray[300],
+          }}>
+            <Text style={{ fontSize: 20 }}>🧥</Text>
+          </View>
         ) : (
           <View style={{
             width: 48,
@@ -313,7 +334,8 @@ export default function EquipScreen() {
           { type: 'section', title: 'Eye Color', items: eyeOptions, isPalette: true },
           { type: 'section', title: 'Shoe Color', items: shoeOptions, isPalette: true },
           { type: 'section', title: 'Color Themes', items: themes },
-          { type: 'section', title: 'Hats', items: hats }
+          { type: 'section', title: 'Hats', items: hats },
+          { type: 'section', title: 'Jackets', items: jackets }
         ]}
         keyExtractor={(item, index) => `${item.type}-${index}`}
         ItemSeparatorComponent={() => <View style={{ height: spacing.lg }} />}
@@ -363,6 +385,8 @@ export default function EquipScreen() {
                     ? "No themes unlocked yet. Visit the Shop to buy some!"
                     : section.title === 'Hats'
                     ? "No hats unlocked yet. Visit the Shop to buy some!"
+                    : section.title === 'Jackets'
+                    ? "No jackets unlocked yet. Visit the Shop to buy some!"
                     : "No options available"
                   }
                 </Text>
@@ -397,10 +421,14 @@ export default function EquipScreen() {
                     // Handle regular cosmetic items
                     const isEquipped = section.title === 'Color Themes'
                       ? equipped.theme === item.id
+                      : section.title === 'Jackets'
+                      ? activeOutfit?.cosmetics?.jacket?.itemId === item.id
                       : equipped.headTop === item.id;
 
                     const onEquip = section.title === 'Color Themes'
                       ? () => { equipTheme(item.id); addToast(`Equipped ${item.name} theme`); }
+                      : section.title === 'Jackets' && activeOutfit
+                      ? () => { equipCosmetic(activeOutfit.id, "jacket", item.id); addToast(`Equipped ${item.name}`); }
                       : () => { equip(item.id); addToast(`Equipped ${item.name}`); };
 
                     return (

@@ -9,7 +9,7 @@ const leafPng = require("../../assets/GliderMonLeafHat.png");
 const greaterPng = require("../../assets/GliderMonGreaterHat.png");
 const hatPackPng = require("../../assets/hats/hat_pack_1.png");
 
-type Socket = "headTop" | "theme" | "skin" | "hair";
+type Socket = "headTop" | "theme" | "skin" | "hair" | "jacket";
 
 export type CosmeticItem = {
   id: string;
@@ -214,6 +214,78 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     tex: hatPackPng // Placeholder thumbnail
   },
 
+  // Jacket cosmetics - Motorcycle jacket with multiple color variants
+  {
+    id: "motorcycle_jacket_red_green",
+    name: "Motorcycle Jacket (Red/Green)",
+    cost: 500,
+    socket: "jacket",
+    spineSkin: "default", // Uses default skin with shader recoloring
+    maskRecolor: {
+      r: "#ff0000", // Red primary color
+      g: "#00ff00", // Green secondary color
+      b: "#333333", // Dark accent
+      a: "#666666"  // Light accent
+    },
+    tex: hatPackPng // Placeholder thumbnail
+  },
+  {
+    id: "motorcycle_jacket_blue_orange",
+    name: "Motorcycle Jacket (Blue/Orange)",
+    cost: 500,
+    socket: "jacket",
+    spineSkin: "default",
+    maskRecolor: {
+      r: "#0066ff", // Blue primary color
+      g: "#ff6600", // Orange secondary color
+      b: "#333333", // Dark accent
+      a: "#666666"  // Light accent
+    },
+    tex: hatPackPng
+  },
+  {
+    id: "motorcycle_jacket_black_gold",
+    name: "Motorcycle Jacket (Black/Gold)",
+    cost: 600,
+    socket: "jacket",
+    spineSkin: "default",
+    maskRecolor: {
+      r: "#1a1a1a", // Black primary color
+      g: "#ffd700", // Gold secondary color
+      b: "#333333", // Dark accent
+      a: "#666666"  // Light accent
+    },
+    tex: hatPackPng
+  },
+  {
+    id: "motorcycle_jacket_white_purple",
+    name: "Motorcycle Jacket (White/Purple)",
+    cost: 550,
+    socket: "jacket",
+    spineSkin: "default",
+    maskRecolor: {
+      r: "#ffffff", // White primary color
+      g: "#9400d3", // Purple secondary color
+      b: "#333333", // Dark accent
+      a: "#666666"  // Light accent
+    },
+    tex: hatPackPng
+  },
+  {
+    id: "motorcycle_jacket_forest_brown",
+    name: "Motorcycle Jacket (Forest/Brown)",
+    cost: 450,
+    socket: "jacket",
+    spineSkin: "default",
+    maskRecolor: {
+      r: "#228b22", // Forest green primary color
+      g: "#8b4513", // Brown secondary color
+      b: "#333333", // Dark accent
+      a: "#666666"  // Light accent
+    },
+    tex: hatPackPng
+  },
+
   // Theme cosmetics - unlockable color themes
   { id: "theme_cute", name: themeDisplayNames.cute, cost: 500, socket: "theme", themeId: "cute" },
   { id: "theme_cyberpunk", name: themeDisplayNames.cyberpunk, cost: 750, socket: "theme", themeId: "cyberpunk" },
@@ -238,7 +310,10 @@ export const useCosmeticsStore = create<CosmeticsState>()(
         skin_forest: true,             // for testing skin recoloring
         skin_ocean: true,              // for testing skin recoloring
         windswept_short: true,         // starter hair style owned
-        windswept_long: true           // for testing long hair style
+        windswept_long: true,          // for testing long hair style
+        motorcycle_jacket_red_green: true,    // for testing jacket cosmetics
+        motorcycle_jacket_blue_orange: true,  // for testing jacket cosmetics
+        motorcycle_jacket_black_gold: true    // for testing jacket cosmetics
       },
       points: 0,                            // display only (Shop UI shows "Acorns: {points}")
 
@@ -306,7 +381,10 @@ export const useCosmeticsStore = create<CosmeticsState>()(
             skin_forest: true,
             skin_ocean: true,
             windswept_short: true,
-            windswept_long: true
+            windswept_long: true,
+            motorcycle_jacket_red_green: true,
+            motorcycle_jacket_blue_orange: true,
+            motorcycle_jacket_black_gold: true
           },
           points: 0,
           equipped: { headTop: "white_baseball_cap", hat: "white_baseball_cap" },
@@ -315,7 +393,7 @@ export const useCosmeticsStore = create<CosmeticsState>()(
     {
       name: "cosmetics_store_v4",
       storage: createJSONStorage(() => AsyncStorage),
-      version: 9,
+      version: 10,
       migrate: (state: any, from) => {
         const s = state ?? {};
         // Always update catalog to latest version to include new hats
@@ -330,7 +408,7 @@ export const useCosmeticsStore = create<CosmeticsState>()(
           delete s.owned.windswept_hair; // Remove the old single hair item too
         }
 
-        // Force update owned items to include all current hats, skins, and hair (for testing)
+        // Force update owned items to include all current hats, skins, hair, and jackets (for testing)
         s.owned = {
           ...s.owned,
           white_baseball_cap: true,
@@ -344,7 +422,10 @@ export const useCosmeticsStore = create<CosmeticsState>()(
           skin_forest: true,
           skin_ocean: true,
           windswept_short: true,
-          windswept_long: true
+          windswept_long: true,
+          motorcycle_jacket_red_green: true,
+          motorcycle_jacket_blue_orange: true,
+          motorcycle_jacket_black_gold: true
         };
 
         s.points = typeof s.points === "number" ? s.points : 0;
