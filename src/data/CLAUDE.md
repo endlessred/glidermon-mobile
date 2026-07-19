@@ -24,10 +24,19 @@ Configuration and integration points for external data sources.
 - **Integration**: Bridge between health data and game engine
 - **Persistence**: Game state persisted for session continuity
 
+#### `checkInStore.ts`
+- **Purpose**: Daily check-in state, goal-setting, and adherence tracking
+- **State**: morning/midday/evening CheckIn objects (null until completed), daily streak, check-in cap multiplier
+- **Actions**: `completeCheckIn(slot, goals)`, `computeGlucoseAdherence(goal, from, to)`, `resetDailyIfNeeded()`
+- **Integration**: Writes `checkInCapMultiplier` to progressionStore after each completed check-in; reads CGM trail from gameStore for glucose adherence scoring
+- **Availability windows**: Morning 6–11 AM, Midday 11 AM–4 PM, Evening 5 PM–midnight (local time)
+- **Persistence**: Resets daily; streak persists across days
+- **Design spec**: `docs/superpowers/specs/2026-07-19-checkin-system-design.md`
+
 #### `progressionStore.ts`
 - **Purpose**: Player progression, levels, achievements
-- **State**: XP, level, acorns (currency), unlocks, streaks
-- **Actions**: Level calculations, reward distribution, milestone tracking
+- **State**: XP, level, acorns (currency), unlocks, streaks, `checkInCapMultiplier` (default 1.0)
+- **Actions**: Level calculations, reward distribution, milestone tracking, `setCheckInCapMultiplier()`, `grantCheckInXp()`
 - **Features**: Automatic level-up detection, achievement triggers
 - **Persistence**: Critical progression data backed up
 

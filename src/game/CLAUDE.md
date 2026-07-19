@@ -13,6 +13,23 @@ AI and interactive behavior system for game entities.
 ### View (`view/`)
 React Native components for game rendering and interaction.
 
+## Spine Animation Inventory
+
+Animations live in `src/assets/GliderMonSpine/skeleton.json`. Key check-in animations:
+
+| Animation tag | Status | Used for |
+|---|---|---|
+| `CheckIn/WakeUp` | ✅ exists | Morning check-in greeting |
+| `CheckIn/Cheer` | ✅ exists | Goal confirmation, success states |
+| `High/HighWorriedFace` | ✅ exists | Midday react — glucose running high |
+| `Low/LowSadFace` | ✅ exists | Midday react — glucose running low |
+| `Idle/IdleWave` | ✅ exists | Midday react — neutral/on-track |
+| `CheckIn/WindDown` | ❌ needs creation | Evening greeting (cozy, winding down) |
+| `CheckIn/GoalMissed` | ❌ post-MVP | Evening react — low adherence, empathetic |
+| `CheckIn/Streak` | ❌ post-MVP | Multi-day streak milestone celebration |
+
+Artist brief for `CheckIn/WindDown`: cozy/content wind-down pose, 2–3 sec looping, gentle stretch or yawn with body settling, warm and tired — plays before evening recap regardless of how the day went.
+
 ## Sprite System
 
 ### `spriteCatalog.ts`

@@ -32,6 +32,24 @@ Navigation structure and routing logic.
 - **Features**: Progress visualization, streak indicators
 - **Mechanics**: Encourages daily engagement
 
+### Check-In Components (planned — see `docs/superpowers/specs/2026-07-19-checkin-system-design.md`)
+
+#### `CheckInCard.tsx`
+- **Purpose**: Glowing card that appears on the HUD home screen when a check-in slot is available
+- **Behavior**: Shows for the active time window (Morning 6–11 AM, Midday 11 AM–4 PM, Evening 5 PM–midnight); dismisses after completion
+- **Props**: `slot: 'morning' | 'midday' | 'evening'`, `onPress: () => void`
+- **Integration**: Reads from checkInStore; drives navigation into CheckInFlowScreen
+
+#### `CheckInFlowScreen.tsx`
+- **Purpose**: Multi-step guided check-in flow driven by GliderMon dialogue and animations
+- **Features**: 4–5 step sequence per slot; Spine animation per step; goal pickers; self-report taps
+- **Props**: `slot`, `style: 'guided' | 'quick'` (quick = Approach 1 single-screen fallback for future setting)
+- **Integration**: Writes to checkInStore on completion; triggers XP burst via progressionStore
+
+#### `GoalPicker.tsx`
+- **Purpose**: Reusable goal selection list for glucose goals, meal goals, and activity goals
+- **Features**: Preset options + optional free-text custom goal; single-select with visual confirmation
+
 ### Feedback Components
 
 #### `ToastHost.tsx`
@@ -88,9 +106,9 @@ Navigation structure and routing logic.
 
 ### `HudScreen.tsx` (Main/Home)
 - **Purpose**: Primary gameplay screen with live glucose monitoring
-- **Components**: Glucose chart, pet display, acorn badge, level bar
+- **Components**: Glucose chart, pet display, acorn badge, level bar, CheckInCard (when slot is available)
 - **Real-time**: Updates with live health data
-- **Layout**: Optimized for frequent viewing
+- **Layout**: CheckInCard appears between the progress section and game canvas when a check-in window is active
 
 ### `ShopScreen.tsx`
 - **Purpose**: In-game store for cosmetic purchases
