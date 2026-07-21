@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, ScrollView, useWindowDimensions, Platform } from "react-native";
 import { useProgressionStore } from "../../data/stores/progressionStore";
 import { useUserStore } from "../../data/stores/userStore";
@@ -14,6 +14,102 @@ import { useGlucoseHistory } from "../../data/hooks/useGlucoseHistory";
 import { useComplimentShower } from "../components/ComplimentShower";
 import { useActiveLocalOutfit } from "../../data/stores/outfitStore";
 import { IsometricHousingThreeJS } from "../../game/housing";
+import { UIThemeProvider, useUITokens } from "../theme/UIThemeProvider";
+import { FramedCard } from "../components/FramedCard";
+import { BadgeChip } from "../components/BadgeChip";
+import { CheckInCard } from "../components/CheckInCard";
+import { CheckInFlowModal } from "../components/CheckInFlowModal";
+import { useCheckInStore } from "../../data/stores/checkInStore";
+
+// Phosphor icons - fallback if not available
+let PhosphorIcons: any = {};
+try {
+  PhosphorIcons = require("phosphor-react-native");
+} catch {
+  // Fallback if phosphor is not installed yet
+}
+
+const { Acorn } = PhosphorIcons;
+
+// Glucose section component that uses UI tokens
+const GlucoseSection = () => {
+  const uiTokens = useUITokens();
+  const { colors, spacing, borderRadius, typography } = useTheme();
+  const { mgdl, trendCode, minutesAgo } = useHudVM();
+  const glucoseHistory = useGlucoseHistory();
+
+  // Cross-platform shadow styles using UI tokens
+  const cardShadow = Platform.select({
+    web: {
+      boxShadow: `0 2px 4px ${uiTokens.shadow}`,
+    },
+    default: {
+      shadowColor: uiTokens.shadow,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.8,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+  });
+
+  return (
+    <View style={{
+      backgroundColor: uiTokens.fill,
+      borderRadius: uiTokens.radius,
+      borderWidth: uiTokens.outline,
+      borderColor: uiTokens.outlineColor,
+      padding: uiTokens.padding * 1.2,
+      gap: spacing.md,
+      ...cardShadow,
+    }}>
+      <Text style={{
+        color: uiTokens.text,
+        fontWeight: typography.weight.bold as any,
+        fontSize: typography.size.lg,
+      }}>
+        🩺 Glucose Monitor
+      </Text>
+
+      <View style={{
+        backgroundColor: uiTokens.fillMuted,
+        borderRadius: uiTokens.radius * 0.75,
+        borderWidth: uiTokens.outline * 0.5,
+        borderColor: uiTokens.outlineColor,
+        padding: uiTokens.padding * 1.2,
+      }}>
+        <View style={{
+          flexDirection: "row",
+          alignItems: "baseline",
+          gap: spacing.sm,
+        }}>
+          <Text style={{
+            color: mgdl != null ? getGlucoseColor(mgdl) : uiTokens.textMuted,
+            fontSize: typography.size['3xl'],
+            fontWeight: typography.weight.extrabold as any,
+            lineHeight: typography.lineHeight.tight,
+          }}>
+            {mgdl != null ? `${mgdl} mg/dL` : "—"}
+          </Text>
+          <Text style={{
+            color: uiTokens.textMuted,
+            fontSize: typography.size.lg,
+          }}>
+            {getTrendIcon(trendCode)}
+          </Text>
+          <Text style={{
+            color: uiTokens.textMuted,
+            fontSize: typography.size.sm,
+          }}>
+            {minutesAgo != null ? `${minutesAgo}m ago` : "no data"}
+          </Text>
+        </View>
+
+        {/* Wind Trail Chart */}
+        <GlucoseWindTrail readings={glucoseHistory} height={100} />
+      </View>
+    </View>
+  );
+};
 
 export default function HudScreen() {
   const { width } = useWindowDimensions();
@@ -38,9 +134,14 @@ export default function HudScreen() {
   const { myEntry, getNewReactions, clearNewReactions } = useGalleryStore();
   const { triggerShower, ComplimentShowerComponent } = useComplimentShower();
 
-  // Glucose VM (null-safe)
-  const { mgdl, trendCode, minutesAgo } = useHudVM();
-  const glucoseHistory = useGlucoseHistory();
+  // Check-in state
+  const [checkInOpen, setCheckInOpen] = useState(false);
+  const availableSlot = useCheckInStore(s => s.availableSlot());
+  const resetDailyIfNeeded = useCheckInStore(s => s.resetDailyIfNeeded);
+
+  useEffect(() => {
+    resetDailyIfNeeded();
+  }, []);
 
   // Optional: slightly smaller canvas on tiny screens
   const canvasScale = width < 380 ? 0.9 : 1;
@@ -61,20 +162,6 @@ export default function HudScreen() {
     }
   }, [myEntry, getNewReactions, clearNewReactions, triggerShower]);
 
-  // Cross-platform shadow styles
-  const cardShadow = Platform.select({
-    web: {
-      boxShadow: `0 2px 4px rgba(0, 0, 0, 0.05)`,
-    },
-    default: {
-      shadowColor: colors.gray[900],
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.05,
-      shadowRadius: 4,
-      elevation: 2,
-    },
-  });
-
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background.primary }}
@@ -84,119 +171,89 @@ export default function HudScreen() {
         paddingBottom: spacing['3xl'],
       }}
     >
-      {/* ===== Progress Section ===== */}
-      <View style={{
-        backgroundColor: colors.background.card,
-        borderRadius: borderRadius.lg,
-        padding: spacing.lg,
-        gap: spacing.md,
-        ...cardShadow,
-      }}>
-        <View style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: spacing.md,
-        }}>
-          <AcornBadge count={acorns} />
-          <View style={{ flex: 1 }}>
-            <LevelBar level={level} current={xpInto} next={nextXp} />
-          </View>
-        </View>
-        <DailyCapBar value={dailyEarn} cap={dailyCap} rested={restedBank} />
-      </View>
-
-      {/* ===== Game Canvas (moved here) ===== */}
-      <View style={{
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: colors.background.card,
-        borderRadius: borderRadius.lg,
-        padding: spacing.lg,
-        transform: [{ scale: canvasScale }],
-        ...cardShadow,
-      }}>
-        {glidermonName && (
-          <Text style={{
-            fontSize: typography.size.lg,
-            fontWeight: typography.weight.semibold as any,
-            color: colors.text.primary,
-            marginBottom: spacing.md,
-            textAlign: "center",
-          }}>
-            {glidermonName}
-          </Text>
-        )}
-        {/* Isometric room with character at B3 */}
-        <View style={{ width: 300, height: 250, overflow: 'hidden', borderRadius: 8 }}>
-          <IsometricHousingThreeJS
-            width={300}
-            height={250}
-            gridColumn={1}
-            gridRow={0}
-            characterScale={0.3}
-            outfit={localOutfit ?? undefined}
-          />
-        </View>
-      </View>
-
-      {/* ===== Glucose Section ===== */}
-      <View style={{
-        backgroundColor: colors.background.card,
-        borderRadius: borderRadius.lg,
-        padding: spacing.lg,
-        gap: spacing.md,
-        ...cardShadow,
-      }}>
-        <Text style={{
-          color: colors.text.primary,
-          fontWeight: typography.weight.bold as any,
-          fontSize: typography.size.lg,
-        }}>
-          🩺 Glucose Monitor
-        </Text>
-
-        <View style={{
-          backgroundColor: colors.background.secondary,
-          borderRadius: borderRadius.md,
-          borderWidth: 1,
-          borderColor: colors.gray[200],
-          padding: spacing.lg,
-        }}>
+      {/* ===== Progress Section (Cozy Theme) ===== */}
+      <UIThemeProvider mode="cozy">
+        <FramedCard width={width - spacing.lg * 2} height={140}>
           <View style={{
             flexDirection: "row",
-            alignItems: "baseline",
-            gap: spacing.sm,
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: spacing.md,
+            marginBottom: spacing.md,
           }}>
-            <Text style={{
-              color: mgdl != null ? getGlucoseColor(mgdl) : colors.text.secondary,
-              fontSize: typography.size['3xl'],
-              fontWeight: typography.weight.extrabold as any,
-              lineHeight: typography.lineHeight.tight,
-            }}>
-              {mgdl != null ? `${mgdl} mg/dL` : "—"}
-            </Text>
-            <Text style={{
-              color: colors.text.secondary,
-              fontSize: typography.size.lg,
-            }}>
-              {getTrendIcon(trendCode)}
-            </Text>
-            <Text style={{
-              color: colors.text.secondary,
-              fontSize: typography.size.sm,
-            }}>
-              {minutesAgo != null ? `${minutesAgo}m ago` : "no data"}
-            </Text>
+            <BadgeChip
+              text={`${acorns}`}
+              tone="accent"
+              width={100}
+              height={36}
+              LeftIcon={Acorn ? <Acorn size={16} weight="fill" /> : <Text style={{ fontSize: 16 }}>🌰</Text>}
+            />
+            <View style={{ flex: 1 }}>
+              <LevelBar level={level} current={xpInto} next={nextXp} />
+            </View>
           </View>
+          <View style={{ paddingBottom: spacing.sm }}>
+            <DailyCapBar value={dailyEarn} cap={dailyCap} rested={restedBank} />
+          </View>
+        </FramedCard>
+      </UIThemeProvider>
 
-          {/* Wind Trail Chart */}
-          <GlucoseWindTrail readings={glucoseHistory} height={100} />
+      {/* ===== Check-In Card (appears when a slot is active) ===== */}
+      {availableSlot && (
+        <UIThemeProvider mode="cozy">
+          <CheckInCard onPress={() => setCheckInOpen(true)} />
+        </UIThemeProvider>
+      )}
+
+      {/* ===== Game Canvas (Cozy Theme) ===== */}
+      <UIThemeProvider mode="cozy">
+        <View style={{ alignItems: "center", transform: [{ scale: canvasScale }] }}>
+          <FramedCard width={300 + spacing.lg * 2} height={250 + spacing.lg * 2 + (glidermonName ? 40 : 0)}>
+            {glidermonName && (
+              <Text style={{
+                fontSize: typography.size.lg,
+                fontWeight: typography.weight.semibold as any,
+                color: colors.text.primary,
+                marginBottom: spacing.md,
+                textAlign: "center",
+              }}>
+                {glidermonName}
+              </Text>
+            )}
+            {/* Isometric room with character at B3 */}
+            <View style={{
+              width: 300,
+              height: 250,
+              overflow: 'hidden',
+              borderRadius: 8,
+              alignSelf: 'center'
+            }}>
+              <IsometricHousingThreeJS
+                width={300}
+                height={250}
+                gridColumn={1}
+                gridRow={0}
+                characterScale={0.3}
+                outfit={localOutfit ?? undefined}
+              />
+            </View>
+          </FramedCard>
         </View>
-      </View>
+      </UIThemeProvider>
+
+      {/* ===== Glucose Section (Clinical Theme) ===== */}
+      <UIThemeProvider mode="clinical">
+        <GlucoseSection />
+      </UIThemeProvider>
 
       {/* Compliment Shower Animation Overlay */}
       {ComplimentShowerComponent}
+
+      <CheckInFlowModal
+        visible={checkInOpen}
+        slot={availableSlot}
+        onClose={() => setCheckInOpen(false)}
+      />
     </ScrollView>
   );
 }
