@@ -23,6 +23,7 @@ type ProgressionState = {
   dailyCap: number;
   restedBank: number;
   lastResetDay: string; // YYYY-MM-DD
+  checkInCapMultiplier: number; // set by checkInStore, default 1.0
 
   // hydration status
   _rehydrated: boolean;
@@ -30,6 +31,8 @@ type ProgressionState = {
   // actions
   spend: (cost: number) => boolean;
   grantAcorns: (n: number) => void; // not capped
+  setCheckInCapMultiplier: (m: number) => void;
+  grantCheckInXp: (xp: number, bonusAcorns?: number) => void;
   resetDailyIfNeeded: () => void;
   resetProgression: () => void;
 
@@ -100,6 +103,7 @@ export const useProgressionStore = create<ProgressionState>()(
       dailyCap: DAILY_CAP_DEFAULT,
       restedBank: 0,
       lastResetDay: ymd(),
+      checkInCapMultiplier: 1.0,
 
       _rehydrated: false,
 
@@ -115,6 +119,32 @@ export const useProgressionStore = create<ProgressionState>()(
       grantAcorns: (n: number) => {
         if (!n) return;
         set((s) => ({ acorns: s.acorns + Math.max(0, n) }));
+      },
+
+      setCheckInCapMultiplier: (m: number) => {
+        set({ checkInCapMultiplier: Math.max(1.0, Math.min(2.0, m)) });
+      },
+
+      grantCheckInXp: (xp: number, bonusAcorns: number = 0) => {
+        const s0 = get();
+        const carry = s0.xpIntoCurrent + xp;
+        const rolled = consumeXpIntoLevels(s0.level, carry);
+        const newTotalXp = s0.xpTotal + xp;
+
+        if (rolled.leveled > 0) {
+          useLevelUpStore.getState().enqueueRange(
+            s0.level, rolled.level, () => ({ acorns: ACORNS_PER_LEVEL })
+          );
+        }
+
+        set({
+          xpIntoCurrent: rolled.xpOverflow,
+          level: rolled.level,
+          nextXp: xpNeededForLevel(rolled.level),
+          xpTotal: newTotalXp,
+          lifetimeXp: newTotalXp,
+          acorns: s0.acorns + rolled.leveled * ACORNS_PER_LEVEL + bonusAcorns,
+        });
       },
 
       resetDailyIfNeeded: () => {
@@ -147,7 +177,8 @@ export const useProgressionStore = create<ProgressionState>()(
         const tickAcorns = calcTickAcorns(mgdl, trend);
 
         // daily cap application for CURRENCY
-        const remainingCap = Math.max(0, s0.dailyCap - s0.dailyEarned);
+        const effectiveCap = s0.dailyCap * s0.checkInCapMultiplier;
+        const remainingCap = Math.max(0, effectiveCap - s0.dailyEarned);
         const earnNow = Math.min(remainingCap, tickAcorns);
         const overflow = Math.max(0, tickAcorns - earnNow);
 
@@ -201,6 +232,7 @@ export const useProgressionStore = create<ProgressionState>()(
         dailyCap: s.dailyCap,
         restedBank: s.restedBank,
         lastResetDay: s.lastResetDay,
+        checkInCapMultiplier: s.checkInCapMultiplier,
       }),
       // Example migration scaffold
       migrate: (persisted: any, fromVersion) => {
