@@ -41,7 +41,7 @@ export function GoalPicker({ title, options, selected, onSelect }: Props) {
               borderColor: isSelected ? accentColor : colors.gray[300],
               backgroundColor: isSelected
                 ? accentColor + "22"
-                : colors.background?.secondary ?? colors.background.secondary,
+                : colors.background.secondary,
             }}
           >
             <Text style={{
