@@ -263,14 +263,13 @@ function MorningFlow({
         )}
         <NextButton
           onPress={() => {
-            const glucoseOption = GLUCOSE_OPTIONS.find(o => o.label === selectedGlucoseLabel)!;
+            const glucoseOption = GLUCOSE_OPTIONS.find(o => o.label === selectedGlucoseLabel);
+            if (!glucoseOption) return;
             const lifestyleGoals: LifestyleGoal[] = [];
-            if (selectedMealGoal) {
-              lifestyleGoals.push(MEAL_GOALS.find(g => g.text === selectedMealGoal)!);
-            }
-            if (selectedActivityGoal) {
-              lifestyleGoals.push(ACTIVITY_GOALS.find(g => g.text === selectedActivityGoal)!);
-            }
+            const mealMatch = selectedMealGoal ? MEAL_GOALS.find(g => g.text === selectedMealGoal) : undefined;
+            const activityMatch = selectedActivityGoal ? ACTIVITY_GOALS.find(g => g.text === selectedActivityGoal) : undefined;
+            if (mealMatch) lifestyleGoals.push(mealMatch);
+            if (activityMatch) lifestyleGoals.push(activityMatch);
             onComplete(glucoseOption.goal, lifestyleGoals);
           }}
           label="Confirm →"
