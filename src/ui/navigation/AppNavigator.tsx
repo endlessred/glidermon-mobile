@@ -15,6 +15,7 @@ import OutfitScreen from "../screens/OutfitScreen";
 import AcornHuntScreen from "../screens/AcornHuntScreen";
 import ArcadeScreen from "../screens/ArcadeScreen";
 import UpsAndDownsScreen from "../screens/UpsAndDownsScreen";
+import { PebbleTabBar } from "./PebbleTabBar";
 
 const Tab = createBottomTabNavigator();
 const ArcadeStack = createStackNavigator();
@@ -37,12 +38,9 @@ export default function AppNavigator() {
   return (
     <NavigationContainer>
       <Tab.Navigator
+        tabBar={(props) => <PebbleTabBar {...props} />}
         screenOptions={{
           headerShown: true,
-          tabBarActiveTintColor: "#10b981",
-          tabBarInactiveTintColor: "#9ca3af",
-          tabBarScrollEnabled: true,
-          tabBarItemStyle: { minWidth: 80 },
         }}
       >
         <Tab.Screen

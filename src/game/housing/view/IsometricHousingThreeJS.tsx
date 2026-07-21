@@ -12,6 +12,7 @@ import { TILE_H, zFromFeetScreenY } from '../coords';
 import { loadRoomSkeleton, LoadedRoom, loadRoomConfig } from '../rooms/RoomLoader';
 import { AnchorMap, Anchor, renderOrderFromFeetY } from '../anchors';
 import { calculateFurnitureRenderOrderBase } from '../utils/depthSorting';
+import { applyPainterlyState } from '../painterly/Painterly';
 import {
   createSpineCharacterController,
   SpineCharacterController,
@@ -841,40 +842,13 @@ export default function IsometricHousingThreeJS({
 
       const mesh = controller.mesh;
       const sortFeetY = anchor.sceneY;
-      const roomChildren = (roomRef.current as any)?.children ?? [];
-      const maxRoomOrder = roomChildren.reduce((max: number, child: any) => {
-        if (child === mesh) return max;
-        const order = child.renderOrder ?? 0;
-        return order > max ? order : max;
-      }, 0);
-      mesh.renderOrder = renderOrderFromFeetY(CHARACTER_RENDER_ORDER_BASE, sortFeetY, 5);
+      const baseRenderOrder = renderOrderFromFeetY(CHARACTER_RENDER_ORDER_BASE, sortFeetY, 5);
 
-      const baseOrder = mesh.renderOrder;
-      mesh.traverse((obj) => {
-        if (obj === mesh) return;
-        const object3D = obj as THREE.Object3D & { isMesh?: boolean; material?: any };
-        const baseSlotOrder = object3D.userData?.baseRenderOrder ?? object3D.renderOrder ?? 0;
-        object3D.userData.baseRenderOrder = baseSlotOrder;
-        object3D.renderOrder = baseOrder + baseSlotOrder * 0.01;
+      // Store base render order for consistent painterly updates
+      mesh.userData.basePainterlyOrder = baseRenderOrder;
 
-        if (object3D.isMesh) {
-          const materials = Array.isArray(object3D.material) ? object3D.material : [object3D.material];
-          materials.forEach((material: THREE.Material | null | undefined) => {
-            if (!material) return;
-            const m: any = material;
-            if (typeof m.depthTest === 'boolean') m.depthTest = false;
-            if (typeof m.depthWrite === 'boolean') m.depthWrite = false;
-            if (typeof m.transparent === 'boolean') m.transparent = true;
-            // Force consistent blending to eliminate gaps between character meshes
-            if (typeof m.blending !== 'undefined') m.blending = THREE.NormalBlending;
-            if (typeof m.side !== 'undefined') m.side = THREE.DoubleSide;
-            if (typeof m.needsUpdate === 'boolean') m.needsUpdate = true;
-
-            // Don't override opacity for shadow attachments - preserve what SpineThree.ts set
-            // The opacity is already set correctly in the SpineThree uploadTriangles method
-          });
-        }
-      });
+      // Apply painterly state (handles render order assignment and material setup)
+      applyPainterlyState(mesh, baseRenderOrder);
 
       if (invalidTransformLogRef.current) invalidTransformLogRef.current = false;
     } catch (err) {
@@ -948,8 +922,15 @@ export default function IsometricHousingThreeJS({
       nativeCharacterHeightRef.current = computeNativeCharacterHeight(controller.mesh);
       room.mesh.add(controller.mesh);
 
+      // Set up persistent painterly updates for character (like furniture)
+      controller.mesh.onBeforeRender = () => {
+        if (controller.mesh.userData.basePainterlyOrder !== undefined) {
+          applyPainterlyState(controller.mesh, controller.mesh.userData.basePainterlyOrder);
+        }
+      };
+
       if (__DEV__) {
-        console.log(`Character added to room.mesh`, {
+        console.log(`Character added to room.mesh with painterly updates`, {
           characterRenderOrder: controller.mesh.renderOrder,
           characterMeshChildren: controller.mesh.children.length
         });

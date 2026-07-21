@@ -68,7 +68,7 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     cost: 200,
     socket: "headTop",
     spineSkin: "Hats/Baseball Caps/White Baseball Cap", // Use white cap as base
-    maskRecolor: { r: "#2563eb" }, // Blue color for R channel
+    maskRecolor: { r: "#5f80a6" }, // Blue color for R channel
     tex: hatPackPng // Keep thumbnail for shop display
   },
   {
@@ -77,7 +77,7 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     cost: 200,
     socket: "headTop",
     spineSkin: "Hats/Baseball Caps/White Baseball Cap", // Use white cap as base
-    maskRecolor: { r: "#16a34a" }, // Green color for R channel
+    maskRecolor: { r: "#6f975e" }, // Green color for R channel
     tex: hatPackPng
   },
   {
@@ -86,7 +86,7 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     cost: 200,
     socket: "headTop",
     spineSkin: "Hats/Baseball Caps/White Baseball Cap", // Use white cap as base
-    maskRecolor: { r: "#ff0000" }, // Bright red color for maximum visibility
+    maskRecolor: { r: "#a83f48" }, // Red color from palette
     tex: hatPackPng
   },
   {
@@ -132,10 +132,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "skin",
     spineSkin: "default", // Uses default skin with recoloring
     maskRecolor: {
-      r: "#f37ab7", // Cute pink main
-      g: "#ff40a0", // Cute light pink bright
-      b: "#e49abb", // Cute dark pink
-      a: "#9364f1"  // Cute purple accent
+      r: "#b6607c", // Cute pink base from palette
+      g: "#823e69", // Shadow version of pink
+      b: "#d3a092", // Lightened version of pink
+      a: "#613661"  // Purple accent from palette
     },
     tex: hatPackPng
   },
@@ -146,10 +146,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "skin",
     spineSkin: "default",
     maskRecolor: {
-      r: "#00ffff", // Cyberpunk cyan main
-      g: "#66ffff", // Cyberpunk bright cyan
-      b: "#0099cc", // Cyberpunk dark cyan
-      a: "#ff0080"  // Cyberpunk magenta accent
+      r: "#6c9ba7", // Cyberpunk blue base from palette
+      g: "#466f77", // Shadow version of blue
+      b: "#9db8c5", // Lightened version of blue
+      a: "#524f73"  // Purple accent from palette
     },
     tex: hatPackPng
   },
@@ -160,10 +160,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "skin",
     spineSkin: "default",
     maskRecolor: {
-      r: "#36c436", // Forest green main
-      g: "#1d5a1d", // Forest light green bright
-      b: "#79ee79", // Forest dark green
-      a: "#8b4513"  // Forest brown accent
+      r: "#6f975e", // Forest green base from palette
+      g: "#3b6b58", // Shadow version of green
+      b: "#a8b164", // Lightened version of green
+      a: "#865d56"  // Brown accent from palette
     },
     tex: hatPackPng
   },
@@ -174,10 +174,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "skin",
     spineSkin: "default",
     maskRecolor: {
-      r: "#1e90ff", // Ocean blue main
-      g: "#87ceeb", // Ocean light blue bright
-      b: "#000080", // Ocean dark blue
-      a: "#20b2aa"  // Ocean teal accent
+      r: "#5f80a6", // Ocean blue base from palette
+      g: "#2d494b", // Shadow version of blue
+      b: "#9db8c5", // Lightened version of blue
+      a: "#466f77"  // Teal accent from palette
     },
     tex: hatPackPng
   },
@@ -188,10 +188,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "skin",
     spineSkin: "default",
     maskRecolor: {
-      r: "#ff4500", // Sunset orange main
-      g: "#ffa500", // Sunset bright orange
-      b: "#8b0000", // Sunset dark red
-      a: "#ffd700"  // Sunset gold accent
+      r: "#dc995d", // Sunset orange base from palette
+      g: "#c55650", // Shadow version of orange/red
+      b: "#dec575", // Lightened version of orange
+      a: "#d37755"  // Orange accent from palette
     },
     tex: hatPackPng
   },
@@ -222,10 +222,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "jacket",
     spineSkin: "default", // Uses default skin with shader recoloring
     maskRecolor: {
-      r: "#ff0000", // Red primary color
-      g: "#00ff00", // Green secondary color
-      b: "#333333", // Dark accent
-      a: "#666666"  // Light accent
+      r: "#a83f48", // Red primary color from palette
+      g: "#6f975e", // Green secondary color from palette
+      b: "#2a202a", // Dark accent from palette
+      a: "#9a919b"  // Light accent from palette
     },
     tex: hatPackPng // Placeholder thumbnail
   },
@@ -236,10 +236,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "jacket",
     spineSkin: "default",
     maskRecolor: {
-      r: "#0066ff", // Blue primary color
-      g: "#ff6600", // Orange secondary color
-      b: "#333333", // Dark accent
-      a: "#666666"  // Light accent
+      r: "#5f80a6", // Blue primary color from palette
+      g: "#dc995d", // Orange secondary color from palette
+      b: "#2a202a", // Dark accent from palette
+      a: "#9a919b"  // Light accent from palette
     },
     tex: hatPackPng
   },
@@ -250,10 +250,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "jacket",
     spineSkin: "default",
     maskRecolor: {
-      r: "#1a1a1a", // Black primary color
-      g: "#ffd700", // Gold secondary color
-      b: "#333333", // Dark accent
-      a: "#666666"  // Light accent
+      r: "#2a202a", // Black primary color from palette
+      g: "#dec575", // Gold secondary color from palette
+      b: "#36373d", // Dark accent from palette
+      a: "#9a919b"  // Light accent from palette
     },
     tex: hatPackPng
   },
@@ -264,10 +264,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "jacket",
     spineSkin: "default",
     maskRecolor: {
-      r: "#ffffff", // White primary color
-      g: "#9400d3", // Purple secondary color
-      b: "#333333", // Dark accent
-      a: "#666666"  // Light accent
+      r: "#d9d3d9", // White primary color from palette
+      g: "#613661", // Purple secondary color from palette
+      b: "#2a202a", // Dark accent from palette
+      a: "#9a919b"  // Light accent from palette
     },
     tex: hatPackPng
   },
@@ -278,10 +278,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "jacket",
     spineSkin: "default",
     maskRecolor: {
-      r: "#228b22", // Forest green primary color
-      g: "#8b4513", // Brown secondary color
-      b: "#333333", // Dark accent
-      a: "#666666"  // Light accent
+      r: "#6f975e", // Forest green primary color from palette
+      g: "#865d56", // Brown secondary color from palette
+      b: "#2a202a", // Dark accent from palette
+      a: "#9a919b"  // Light accent from palette
     },
     tex: hatPackPng
   },
@@ -393,7 +393,7 @@ export const useCosmeticsStore = create<CosmeticsState>()(
     {
       name: "cosmetics_store_v4",
       storage: createJSONStorage(() => AsyncStorage),
-      version: 10,
+      version: 11,
       migrate: (state: any, from) => {
         const s = state ?? {};
         // Always update catalog to latest version to include new hats
