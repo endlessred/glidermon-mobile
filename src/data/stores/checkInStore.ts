@@ -67,6 +67,65 @@ const emptyDay = (): DailyCheckIns => ({
   evening: null,
 });
 
+/**
+ * Reads the gameStore CGM trail and returns a 0–1 adherence score for a goal.
+ * Returns 0.5 (neutral partial credit) if fewer than 3 readings exist in the window.
+ */
+function computeGlucoseAdherence(
+  goal: GlucoseGoal,
+  fromMs: number,
+  toMs: number
+): number {
+  const trail = useGameStore.getState().engine.trail;
+  const readings = trail.filter(r => r.ts >= fromMs && r.ts <= toMs);
+
+  if (readings.length < 3) return 0.5;
+
+  switch (goal.type) {
+    case "tir": {
+      const inRange = readings.filter(r => r.mgdl >= 70 && r.mgdl <= 180).length;
+      const actualPct = (inRange / readings.length) * 100;
+      return Math.min(1.0, actualPct / goal.target);
+    }
+    case "no_highs": {
+      const above = readings.filter(r => r.mgdl > goal.target).length;
+      return 1.0 - above / readings.length;
+    }
+    case "no_lows": {
+      const below = readings.filter(r => r.mgdl < goal.target).length;
+      return 1.0 - below / readings.length;
+    }
+  }
+}
+
+/**
+ * Recomputes the full cap multiplier from today's completed check-ins.
+ * Adherence bonuses are only applied once evening is completed.
+ */
+function computeCapMultiplier(today: DailyCheckIns): number {
+  let m = 1.0;
+
+  if (today.morning) m += 0.17;
+  if (today.midday)  m += 0.17;
+
+  if (today.evening) {
+    m += 0.17;
+    // Glucose adherence bonus (up to 0.10) from full-day window
+    m += today.evening.glucoseAdherence * 0.10;
+
+    // Lifestyle adherence from evening's final self-report
+    if (today.morning) {
+      today.morning.lifestyleGoals.forEach((goal, i) => {
+        const met = today.evening!.lifestyleProgress[i] ?? false;
+        if (goal.category === "meal")     m += met ? 0.10 : 0;
+        if (goal.category === "activity") m += met ? 0.06 : 0;
+      });
+    }
+  }
+
+  return Math.min(1.77, m);
+}
+
 // ─── Store type ───────────────────────────────────────────────────────────────
 
 export type CheckInState = {
@@ -121,10 +180,76 @@ export const useCheckInStore = create<CheckInState>()(
         return null;
       },
 
-      // Stubs — implemented in Tasks 3 & 4
-      completeMorningCheckIn: () => {},
-      completeMiddayCheckIn: () => {},
-      completeEveningCheckIn: () => {},
+      completeMorningCheckIn: (glucoseGoal: GlucoseGoal, lifestyleGoals: LifestyleGoal[]) => {
+        get().resetDailyIfNeeded();
+        const morningData: MorningCheckIn = {
+          completedAt: new Date().toISOString(),
+          glucoseGoal: { ...glucoseGoal, startMs: Date.now() },
+          lifestyleGoals,
+        };
+        const nextToday = { ...get().today, morning: morningData };
+        set({ today: nextToday });
+
+        // Slot completion bonus only — adherence unknown until evening
+        useProgressionStore.getState().setCheckInCapMultiplier(
+          computeCapMultiplier(nextToday)
+        );
+        // XP burst + small acorn celebration
+        useProgressionStore.getState().grantCheckInXp(50, 5);
+      },
+
+      completeMiddayCheckIn: (lifestyleProgress: boolean[]) => {
+        const s = get();
+        if (!s.today.morning) return; // can't check in midday without morning
+
+        const morningGoal = s.today.morning.glucoseGoal;
+        const adherence = computeGlucoseAdherence(
+          morningGoal,
+          morningGoal.startMs,
+          Date.now()
+        );
+
+        const midday: MidEveningCheckIn = {
+          slot: "midday",
+          completedAt: new Date().toISOString(),
+          lifestyleProgress,
+          glucoseAdherence: adherence,
+        };
+        const nextToday = { ...s.today, midday };
+        set({ today: nextToday });
+
+        useProgressionStore.getState().setCheckInCapMultiplier(
+          computeCapMultiplier(nextToday)
+        );
+        useProgressionStore.getState().grantCheckInXp(30, 3);
+      },
+
+      completeEveningCheckIn: (lifestyleProgress: boolean[]) => {
+        const s = get();
+        if (!s.today.morning) return;
+
+        const morningGoal = s.today.morning.glucoseGoal;
+        const adherence = computeGlucoseAdherence(
+          morningGoal,
+          morningGoal.startMs,
+          Date.now()
+        );
+
+        const evening: MidEveningCheckIn = {
+          slot: "evening",
+          completedAt: new Date().toISOString(),
+          lifestyleProgress,
+          glucoseAdherence: adherence,
+        };
+        const nextToday = { ...s.today, evening };
+        set({ today: nextToday });
+
+        // Full multiplier including all adherence bonuses
+        useProgressionStore.getState().setCheckInCapMultiplier(
+          computeCapMultiplier(nextToday)
+        );
+        useProgressionStore.getState().grantCheckInXp(80, 8);
+      },
     }),
     {
       name: "glidermon/checkin-v1",
