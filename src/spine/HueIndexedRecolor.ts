@@ -68,10 +68,6 @@ export function makeHueIndexedRecolorMaterial(
 
   // NOTE: we now linearize the sampled texture and encode result to the renderer's output space.
   const frag = `
-    #ifdef GL_OES_standard_derivatives
-    #extension GL_OES_standard_derivatives : enable
-    #endif
-
     // --- Color-space conversion helpers (portable fallback) ---
     vec3 SRGBToLinear(vec3 srgb) {
       return pow(srgb, vec3(2.2));

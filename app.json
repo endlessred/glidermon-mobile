@@ -5,11 +5,25 @@
     "scheme": "glidermon",
     "orientation": "portrait",
     "plugins": [
-      ["react-native-ble-plx"],
-      ["react-native-health", {
-        "healthSharePermission": "This app reads blood glucose data to monitor your virtual pet's health.",
-        "healthUpdatePermission": "This app may write health data for tracking purposes."
-      }]
+      [
+        "react-native-ble-plx"
+      ],
+      [
+        "react-native-health",
+        {
+          "healthSharePermission": "This app reads blood glucose data to monitor your virtual pet's health.",
+          "healthUpdatePermission": "This app may write health data for tracking purposes."
+        }
+      ],
+      "expo-asset",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
+        }
+      ]
     ],
     "ios": {
       "bundleIdentifier": "com.kevin.glidermon",
