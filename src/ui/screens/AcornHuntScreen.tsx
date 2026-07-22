@@ -4,10 +4,10 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   ScrollView,
   Alert
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../data/hooks/useTheme';
 import { useProgressionStore } from '../../data/stores/progressionStore';
 import { useLevelUpStore } from '../../data/stores/levelUpStore';

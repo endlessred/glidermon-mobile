@@ -4,10 +4,10 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   Dimensions,
   Alert
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../data/hooks/useTheme';
 import { useProgressionStore } from '../../data/stores/progressionStore';
 import FlappyCanvas, { FlappyCanvasRef } from './FlappyCanvas';

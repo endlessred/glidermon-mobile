@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, ScrollView, Pressable, Modal, SafeAreaView } from "react-native";
+import { View, Text, ScrollView, Pressable, Modal } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../../data/hooks/useTheme";
 import { useOutfitStore } from "../../data/stores/outfitStore";
 import { useCosmeticsStore } from "../../data/stores/cosmeticsStore";

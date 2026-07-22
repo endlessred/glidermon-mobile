@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  SafeAreaView,
   View,
   Text,
   TouchableOpacity,
@@ -12,6 +11,7 @@ import {
   Alert,
   Animated as RNAnimated,
 } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
   useSharedValue,
   withRepeat,
@@ -20,7 +20,6 @@ import Animated, {
   Easing,
   cancelAnimation,
 } from "react-native-reanimated";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../data/hooks/useTheme";
 import SpineCharacterPortrait from "../components/SpineCharacterPortrait";
 import { EmotionType } from "../../data/types/conversation";

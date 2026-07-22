@@ -1,7 +1,8 @@
 // App.tsx
 // import './src/spine/spinePhysicsShim'; // Temporarily removed to debug physics issues
 import React, { useState, useEffect } from "react";
-import { Platform, SafeAreaView, View, Text, Pressable, AppState, ScrollView } from "react-native";
+import { Platform, View, Text, Pressable, AppState, ScrollView } from "react-native";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { useProgressionStore } from "./src/data/stores/progressionStore";
 import { useUserStore } from "./src/data/stores/userStore";
 import HomeScreen from "./src/ui/screens/HudScreen"; // HudScreen serves as HomeScreen
@@ -185,17 +186,20 @@ export default function App() {
   // Show onboarding screen if user hasn't completed it
   if (showOnboarding) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background.primary }}>
-        <OnboardingScreen onComplete={() => {
-          // Onboarding completion is handled by the OnboardingScreen component
-          // The state will update automatically via the store
-        }} />
-      </SafeAreaView>
+      <SafeAreaProvider>
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background.primary }}>
+          <OnboardingScreen onComplete={() => {
+            // Onboarding completion is handled by the OnboardingScreen component
+            // The state will update automatically via the store
+          }} />
+        </SafeAreaView>
+      </SafeAreaProvider>
     );
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background.primary }}>
+    <SafeAreaProvider>
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background.primary }}>
       {/* top tabs */}
       <View style={{
         backgroundColor: colors.background.secondary,
@@ -255,6 +259,7 @@ export default function App() {
       <ToastHost />
       <LevelUpOverlay />
       <LevelUpTestButton />
-    </SafeAreaView>
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }

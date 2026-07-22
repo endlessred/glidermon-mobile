@@ -1,8 +1,8 @@
 import React, { useState, useCallback } from "react";
 import {
   Modal, View, Text, TouchableOpacity, ScrollView,
-  SafeAreaView,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import SpineCharacter from "../../game/view/SpineCharacter";
 import { GoalPicker } from "./GoalPicker";
 import { useCheckInStore, CheckInSlot, GlucoseGoal, LifestyleGoal } from "../../data/stores/checkInStore";
