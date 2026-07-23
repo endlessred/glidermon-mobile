@@ -1,6 +1,7 @@
 // Main housing system exports
 export { default as IsometricHousing } from './view/IsometricHousing';
 export { default as IsometricHousingThreeJS } from './view/IsometricHousingThreeJS';
+export { default as IsometricRoomView } from './view/IsometricRoomView';
 
 // Core types and utilities
 export * from './types';

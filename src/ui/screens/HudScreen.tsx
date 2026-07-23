@@ -13,7 +13,13 @@ import GlucoseWindTrail from "../components/GlucoseWindTrail";
 import { useGlucoseHistory } from "../../data/hooks/useGlucoseHistory";
 import { useComplimentShower } from "../components/ComplimentShower";
 import { useActiveLocalOutfit } from "../../data/stores/outfitStore";
-import { IsometricHousingThreeJS } from "../../game/housing";
+import { IsometricHousingThreeJS, IsometricRoomView } from "../../game/housing";
+
+// Fallback switch for the housing renderer rewrite (Phase 1): the plain-quad
+// IsometricRoomView replaces the Spine-room-skeleton IsometricHousingThreeJS,
+// which was the root cause of choppy character animation (see plan). Flip
+// this back to true to restore the old renderer if the new one regresses.
+const HOUSING_USE_LEGACY_SPINE_ROOM = false;
 import { UIThemeProvider, useUITokens } from "../theme/UIThemeProvider";
 import { FramedCard } from "../components/FramedCard";
 import { BadgeChip } from "../components/BadgeChip";
@@ -228,14 +234,25 @@ export default function HudScreen() {
               borderRadius: 8,
               alignSelf: 'center'
             }}>
-              <IsometricHousingThreeJS
-                width={300}
-                height={250}
-                gridColumn={1}
-                gridRow={0}
-                characterScale={0.3}
-                outfit={localOutfit ?? undefined}
-              />
+              {HOUSING_USE_LEGACY_SPINE_ROOM ? (
+                <IsometricHousingThreeJS
+                  width={300}
+                  height={250}
+                  gridColumn={1}
+                  gridRow={0}
+                  characterScale={0.3}
+                  outfit={localOutfit ?? undefined}
+                />
+              ) : (
+                <IsometricRoomView
+                  width={300}
+                  height={250}
+                  gridColumn={1}
+                  gridRow={0}
+                  characterScale={0.3}
+                  outfit={localOutfit ?? undefined}
+                />
+              )}
             </View>
           </FramedCard>
         </View>

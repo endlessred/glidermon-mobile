@@ -137,6 +137,37 @@ export interface FurnitureVariant {
   skin?: string;
   /** Optional tint color for this variant */
   tint?: string;
+  /**
+   * Source filename stem (from the Exports/ asset pack, e.g.
+   * "1x1_WoodChair_Front_Green") for this variant's idle rest-pose art.
+   * Used by the quad-based renderer to draw furniture as a static sprite
+   * when it isn't being actively animated as a Spine skeleton.
+   */
+  restPoseAsset?: string;
+}
+
+// --- Plain-data grid/slot model for the quad-based room renderer ---
+// (Phase 1: replaces Spine-slot-name coupling with plain row/col data.
+// Does not replace the set/variant types above, which are shared with the
+// legacy Spine-based renderer.)
+
+export interface RoomGridConfig {
+  width: number;
+  height: number;
+  /** Variant is always auto-computed per tile (corner/edge/interior) -- not settable here. */
+  defaultFloor: { set: FloorSetName };
+  /** Variant is always auto-computed per wall-run position -- not settable here. */
+  defaultWall: { set: WallSetName };
+  /** Sparse per-tile floor overrides; row/col are 0-based, variant is explicit (not auto-computed). */
+  floorOverrides?: { row: number; col: number; set: FloorSetName; variant: FloorVariant }[];
+}
+
+export interface FurnitureSlot {
+  /** Stable id, independent of room-size tier (e.g. "floor-1", "wall-3"). */
+  slotId: string;
+  row: number;
+  col: number;
+  kind: 'floor' | 'wall';
 }
 
 export interface FurnitureDef {

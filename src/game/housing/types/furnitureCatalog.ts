@@ -26,7 +26,7 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
       { id: "wood_chair_black", skin: "WoodChair_Black" },
       { id: "wood_chair_blue", skin: "WoodChair_Blue" },
       { id: "wood_chair_brown", skin: "WoodChair_Brown" },
-      { id: "wood_chair_green", skin: "WoodChair_Green" }
+      { id: "wood_chair_green", skin: "WoodChair_Green", restPoseAsset: "1x1_WoodChair_Front_Green" }
     ]
   },
 

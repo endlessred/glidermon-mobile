@@ -55,11 +55,13 @@ def slugify(text: str) -> str:
     return text.strip("_").lower()
 
 
-def make_atlas_id(category: str, stem: str) -> str:
-    if category == "FloorTiles" and stem.startswith("WoodFloor_"):
-        return f"floor_wood_{slugify(stem[len('WoodFloor_') :])}"
-    if category == "WallTiles" and stem.startswith("WoodWall_"):
-        return f"wall_wood_{slugify(stem[len('WoodWall_') :])}"
+def make_atlas_id(category: str, theme: str | None, stem: str) -> str:
+    # For floor/wall tiles, produce ids that match RoomConfig's set naming
+    # (e.g. "YellowCarpet_Sides2", "Brown1WoodPaneling_EndWallTop") so the
+    # quad-texture loader can look tiles up directly as `${set}_${variant}`.
+    if category in ("FloorTiles", "WallTiles") and theme and "_" in stem:
+        kind, variant = stem.split("_", 1)
+        return f"{theme}{kind}_{variant}"
     return slugify(f"{category}_{stem}")
 
 
@@ -101,7 +103,7 @@ def process_asset(rel_path: str):
     source_rel = Path("../../../../assets/Isometric/Ultimate_Isometric_Interior/Exports") / rel_path
 
     return {
-        "id": make_atlas_id(category, stem),
+        "id": make_atlas_id(category, theme, stem),
         "category": category,
         "theme": theme,
         "name": stem,

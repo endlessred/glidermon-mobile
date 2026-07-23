@@ -23,7 +23,7 @@ export interface RoomAtlasEntry {
 
 export const startingApartmentAtlasManifest: RoomAtlasEntry[] = [
   {
-    id: 'floor_wood_cornerbottom',
+    id: 'Brown1WoodFloor_CornerBottom',
     category: 'FloorTiles',
     theme: "Brown1",
     name: 'WoodFloor_CornerBottom',
@@ -52,7 +52,7 @@ export const startingApartmentAtlasManifest: RoomAtlasEntry[] = [
       }
   },
   {
-    id: 'floor_wood_cornerleft',
+    id: 'Brown1WoodFloor_CornerLeft',
     category: 'FloorTiles',
     theme: "Brown1",
     name: 'WoodFloor_CornerLeft',
@@ -81,7 +81,7 @@ export const startingApartmentAtlasManifest: RoomAtlasEntry[] = [
       }
   },
   {
-    id: 'floor_wood_cornerright',
+    id: 'Brown1WoodFloor_CornerRight',
     category: 'FloorTiles',
     theme: "Brown1",
     name: 'WoodFloor_CornerRight',
@@ -110,7 +110,7 @@ export const startingApartmentAtlasManifest: RoomAtlasEntry[] = [
       }
   },
   {
-    id: 'floor_wood_cornertop',
+    id: 'Brown1WoodFloor_CornerTop',
     category: 'FloorTiles',
     theme: "Brown1",
     name: 'WoodFloor_CornerTop',
@@ -139,7 +139,7 @@ export const startingApartmentAtlasManifest: RoomAtlasEntry[] = [
       }
   },
   {
-    id: 'floor_wood_sidebottomleft',
+    id: 'Brown1WoodFloor_SideBottomLeft',
     category: 'FloorTiles',
     theme: "Brown1",
     name: 'WoodFloor_SideBottomLeft',
@@ -168,7 +168,7 @@ export const startingApartmentAtlasManifest: RoomAtlasEntry[] = [
       }
   },
   {
-    id: 'floor_wood_sidebottomright',
+    id: 'Brown1WoodFloor_SideBottomRight',
     category: 'FloorTiles',
     theme: "Brown1",
     name: 'WoodFloor_SideBottomRight',
@@ -197,65 +197,7 @@ export const startingApartmentAtlasManifest: RoomAtlasEntry[] = [
       }
   },
   {
-    id: 'floor_wood_sides1',
-    category: 'FloorTiles',
-    theme: "Brown1",
-    name: 'WoodFloor_Sides1',
-    mode: 'floor',
-    requirePath: require('../../../../assets/Isometric/Ultimate_Isometric_Interior/Processed/FloorTiles/Brown1/WoodFloor_Sides1.png'),
-    metadata: {
-            "sourcePath": "../../../../assets/Isometric/Ultimate_Isometric_Interior/Exports/FloorTiles/Brown1/WoodFloor_Sides1.png",
-            "originalSize": {
-                  "width": 500,
-                  "height": 500
-            },
-            "trimmedRect": {
-                  "x": 49,
-                  "y": 2,
-                  "width": 404,
-                  "height": 271
-            },
-            "contactY": 165,
-            "skirt": 108,
-            "constants": {
-                  "TILE_W": 404,
-                  "TILE_H": 202,
-                  "TILE_SKIRT": 69
-            },
-            "notes": "floor mode: TILE_H assumed = TILE_W/2 (2:1 iso)."
-      }
-  },
-  {
-    id: 'floor_wood_sides2',
-    category: 'FloorTiles',
-    theme: "Brown1",
-    name: 'WoodFloor_Sides2',
-    mode: 'floor',
-    requirePath: require('../../../../assets/Isometric/Ultimate_Isometric_Interior/Processed/FloorTiles/Brown1/WoodFloor_Sides2.png'),
-    metadata: {
-            "sourcePath": "../../../../assets/Isometric/Ultimate_Isometric_Interior/Exports/FloorTiles/Brown1/WoodFloor_Sides2.png",
-            "originalSize": {
-                  "width": 500,
-                  "height": 500
-            },
-            "trimmedRect": {
-                  "x": 49,
-                  "y": 2,
-                  "width": 404,
-                  "height": 271
-            },
-            "contactY": 165,
-            "skirt": 108,
-            "constants": {
-                  "TILE_W": 404,
-                  "TILE_H": 202,
-                  "TILE_SKIRT": 69
-            },
-            "notes": "floor mode: TILE_H assumed = TILE_W/2 (2:1 iso)."
-      }
-  },
-  {
-    id: 'floor_wood_sidetopleft',
+    id: 'Brown1WoodFloor_SideTopLeft',
     category: 'FloorTiles',
     theme: "Brown1",
     name: 'WoodFloor_SideTopLeft',
@@ -284,7 +226,7 @@ export const startingApartmentAtlasManifest: RoomAtlasEntry[] = [
       }
   },
   {
-    id: 'floor_wood_sidetopright',
+    id: 'Brown1WoodFloor_SideTopRight',
     category: 'FloorTiles',
     theme: "Brown1",
     name: 'WoodFloor_SideTopRight',
@@ -313,7 +255,65 @@ export const startingApartmentAtlasManifest: RoomAtlasEntry[] = [
       }
   },
   {
-    id: 'wall_wood_endwallbottom',
+    id: 'Brown1WoodFloor_Sides1',
+    category: 'FloorTiles',
+    theme: "Brown1",
+    name: 'WoodFloor_Sides1',
+    mode: 'floor',
+    requirePath: require('../../../../assets/Isometric/Ultimate_Isometric_Interior/Processed/FloorTiles/Brown1/WoodFloor_Sides1.png'),
+    metadata: {
+            "sourcePath": "../../../../assets/Isometric/Ultimate_Isometric_Interior/Exports/FloorTiles/Brown1/WoodFloor_Sides1.png",
+            "originalSize": {
+                  "width": 500,
+                  "height": 500
+            },
+            "trimmedRect": {
+                  "x": 49,
+                  "y": 2,
+                  "width": 404,
+                  "height": 271
+            },
+            "contactY": 165,
+            "skirt": 108,
+            "constants": {
+                  "TILE_W": 404,
+                  "TILE_H": 202,
+                  "TILE_SKIRT": 69
+            },
+            "notes": "floor mode: TILE_H assumed = TILE_W/2 (2:1 iso)."
+      }
+  },
+  {
+    id: 'Brown1WoodFloor_Sides2',
+    category: 'FloorTiles',
+    theme: "Brown1",
+    name: 'WoodFloor_Sides2',
+    mode: 'floor',
+    requirePath: require('../../../../assets/Isometric/Ultimate_Isometric_Interior/Processed/FloorTiles/Brown1/WoodFloor_Sides2.png'),
+    metadata: {
+            "sourcePath": "../../../../assets/Isometric/Ultimate_Isometric_Interior/Exports/FloorTiles/Brown1/WoodFloor_Sides2.png",
+            "originalSize": {
+                  "width": 500,
+                  "height": 500
+            },
+            "trimmedRect": {
+                  "x": 49,
+                  "y": 2,
+                  "width": 404,
+                  "height": 271
+            },
+            "contactY": 165,
+            "skirt": 108,
+            "constants": {
+                  "TILE_W": 404,
+                  "TILE_H": 202,
+                  "TILE_SKIRT": 69
+            },
+            "notes": "floor mode: TILE_H assumed = TILE_W/2 (2:1 iso)."
+      }
+  },
+  {
+    id: 'Brown1WoodWall_EndWallBottom',
     category: 'WallTiles',
     theme: "Brown1",
     name: 'WoodWall_EndWallBottom',
@@ -342,7 +342,7 @@ export const startingApartmentAtlasManifest: RoomAtlasEntry[] = [
       }
   },
   {
-    id: 'wall_wood_endwalltop',
+    id: 'Brown1WoodWall_EndWallTop',
     category: 'WallTiles',
     theme: "Brown1",
     name: 'WoodWall_EndWallTop',
@@ -371,7 +371,7 @@ export const startingApartmentAtlasManifest: RoomAtlasEntry[] = [
       }
   },
   {
-    id: 'wall_wood_sides1',
+    id: 'Brown1WoodWall_Sides1',
     category: 'WallTiles',
     theme: "Brown1",
     name: 'WoodWall_Sides1',
@@ -400,7 +400,7 @@ export const startingApartmentAtlasManifest: RoomAtlasEntry[] = [
       }
   },
   {
-    id: 'wall_wood_sides2',
+    id: 'Brown1WoodWall_Sides2',
     category: 'WallTiles',
     theme: "Brown1",
     name: 'WoodWall_Sides2',
