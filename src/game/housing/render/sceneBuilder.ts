@@ -4,7 +4,7 @@
 // the O(n^2) Spine refreshMeshes() cost that was starving Glidermon's frame
 // budget (see plan: Housing System Rewrite Phase 1).
 import * as THREE from 'three';
-import { isoToScreen, zFromFeetScreenY, TILE_SKIRT, WALL_SKIRT } from '../coords';
+import { isoToScreen, zFromFeetScreenY } from '../coords';
 import { renderOrderFromFeetY } from '../anchors';
 import { determineFloorVariant, determineWallVariant, RoomDimensions } from '../grid';
 import { loadFloorTexture, loadWallTexture } from '../assets/quadTextures';
@@ -50,7 +50,7 @@ export async function buildRoomScene({ grid, furniture = [] }: RoomSceneInput): 
 
       const mesh = makeSpritePlane(tex.texture, tex.width, tex.height);
       const p = isoToScreen(col, row);
-      const feetY = p.y - TILE_SKIRT;
+      const feetY = p.y - tex.skirt;
       mesh.position.set(p.x, feetY, zFromFeetScreenY(p.y));
       // Larger feetY (row+col) renders toward the TOP of the screen (back of
       // the room) under this camera setup, not the bottom -- so the sign is
@@ -62,32 +62,44 @@ export async function buildRoomScene({ grid, furniture = [] }: RoomSceneInput): 
   }
 
   const wallSet = grid.defaultWall.set;
+  // The room's back corner -- where both walls meet -- is the tile with the
+  // LARGEST row+col (renders at the TOP of the diamond), not (0,0) (which is
+  // the FRONT corner nearest the viewer, confirmed by a color-tinted-tile
+  // test earlier: smallest row+col renders at the bottom). Anchoring walls
+  // at (0,0) was the root cause of the misalignment -- the walls were
+  // rooted at the front of the room instead of the back.
+  const backRow = dims.height - 1;
+  const backCol = dims.width - 1;
 
-  // LeftBack run: along the col=0 edge, one piece per row.
-  for (let row = 0; row < dims.height; row++) {
-    const variant = determineWallVariant(row, dims.height);
+  // LeftBack run: from the shared back corner (backRow, backCol) out to the
+  // left corner (backRow, 0) -- row fixed, col decreasing.
+  for (let index = 0; index < dims.width; index++) {
+    const variant = determineWallVariant(index, dims.width);
     const tex = await loadWallTexture(wallSet, variant);
     if (!tex) continue;
 
+    const col = backCol - index;
     const mesh = makeSpritePlane(tex.texture, tex.width, tex.height);
-    const p = isoToScreen(0, row);
-    const feetY = p.y - WALL_SKIRT;
+    const p = isoToScreen(col, backRow);
+    const feetY = p.y - tex.skirt;
     mesh.position.set(p.x, feetY, zFromFeetScreenY(p.y));
     mesh.renderOrder = renderOrderFromFeetY(WALL_RENDER_BASE, -feetY);
     group.add(mesh);
   }
 
-  // RightBack run: along the row=0 edge, one piece per col. Mirrored
-  // horizontally to face the opposite direction, matching the legacy
-  // wallAnchors.ts `needsFlip` convention for RightBack walls.
-  for (let col = 0; col < dims.width; col++) {
-    const variant = determineWallVariant(col, dims.width);
+  // RightBack run: from the shared back corner out to the right corner
+  // (0, backCol) -- col fixed, row decreasing. Mirrored horizontally to
+  // face the opposite direction, matching the legacy wallAnchors.ts
+  // `needsFlip` convention for RightBack walls.
+  for (let index = 0; index < dims.height; index++) {
+    const variant = determineWallVariant(index, dims.height);
     const tex = await loadWallTexture(wallSet, variant);
     if (!tex) continue;
 
+    const row = backRow - index;
     const mesh = makeSpritePlane(tex.texture, tex.width, tex.height);
-    const p = isoToScreen(col, 0);
-    const feetY = p.y - WALL_SKIRT;
+    const p = isoToScreen(backCol, row);
+    const feetY = p.y - tex.skirt;
     mesh.position.set(p.x, feetY, zFromFeetScreenY(p.y));
     mesh.scale.x *= -1;
     mesh.renderOrder = renderOrderFromFeetY(WALL_RENDER_BASE, -feetY);

@@ -1,12 +1,16 @@
 // Real isometric tile dimensions from asset analysis
-export const TILE_W = 404;    // Top diamond width in px
-export const TILE_H = 202;    // Top diamond height in px (2:1 iso ratio)
-export const TILE_SKIRT = 69; // Thickness below the diamond
+export const TILE_W = 404;     // Top diamond width in px
+export const TILE_H = 202;     // Top diamond height in px (2:1 iso ratio)
+// Fallback skirt when a texture's own measured metadata.skirt isn't
+// available (see quadTextures.ts) -- matches the actual measured skirt for
+// the housingCore floor/carpet set (YellowCarpet/RedCarpet, all variants).
+export const TILE_SKIRT = 108;
 
 // Wall dimensions based on asset analysis
 export const WALL_W = 235;      // Total sprite width
-export const WALL_H = 585;      // Height above floor line
-export const WALL_SKIRT = 16;   // Bevel below floor line
+export const WALL_H = 601;      // Height above floor line
+// Fallback skirt, matching the measured skirt for Brown1WoodPaneling.
+export const WALL_SKIRT = 120;
 
 // Exact isometric constants
 export const HALF_W = TILE_W / 2;   // 202

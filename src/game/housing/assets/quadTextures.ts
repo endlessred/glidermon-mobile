@@ -8,6 +8,10 @@ export interface QuadTexture {
   texture: THREE.Texture;
   width: number;
   height: number;
+  /** Measured skirt (px) from the asset-analysis pipeline -- how far the
+   * decorative border extends below the tile's actual floor-contact line.
+   * Falls back to 0 if the analyzer couldn't detect it. */
+  skirt: number;
 }
 
 const manifestById = new Map<string, RoomAtlasEntry>(
@@ -45,6 +49,7 @@ async function loadEntry(entry: RoomAtlasEntry): Promise<QuadTexture> {
     texture,
     width: entry.metadata.trimmedRect.width,
     height: entry.metadata.trimmedRect.height,
+    skirt: entry.metadata.skirt ?? 0,
   };
 }
 
