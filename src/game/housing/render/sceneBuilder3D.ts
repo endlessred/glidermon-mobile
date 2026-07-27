@@ -11,8 +11,8 @@
 import * as THREE from 'three';
 import { RoomGridConfig } from '../types/RoomConfig';
 import { getFloorTexture, getWallTexture } from './proceduralTextures';
+import { TILE_SIZE, roomHalfExtents, gridToWorld } from './grid3D';
 
-const TILE_SIZE = 1;
 const FLOOR_THICKNESS = 0.1;
 const WALL_HEIGHT = 1.6;
 const WALL_THICKNESS = 0.1;
@@ -26,8 +26,7 @@ export interface Built3DRoom {
 
 export function buildRoomScene3D(grid: RoomGridConfig): Built3DRoom {
   const group = new THREE.Group();
-  const halfWidth = (grid.width * TILE_SIZE) / 2;
-  const halfDepth = (grid.height * TILE_SIZE) / 2;
+  const { halfWidth, halfDepth } = roomHalfExtents(grid);
 
   const floorTexture = getFloorTexture(grid.defaultFloor.set);
   floorTexture.repeat.set(1, 1);
@@ -37,11 +36,8 @@ export function buildRoomScene3D(grid: RoomGridConfig): Built3DRoom {
   for (let row = 0; row < grid.height; row++) {
     for (let col = 0; col < grid.width; col++) {
       const tile = new THREE.Mesh(floorGeometry, floorMaterial);
-      tile.position.set(
-        -halfWidth + TILE_SIZE / 2 + col * TILE_SIZE,
-        -FLOOR_THICKNESS / 2,
-        -halfDepth + TILE_SIZE / 2 + row * TILE_SIZE
-      );
+      const { x, z } = gridToWorld(row, col, grid);
+      tile.position.set(x, -FLOOR_THICKNESS / 2, z);
       group.add(tile);
     }
   }

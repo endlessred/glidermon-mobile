@@ -16,6 +16,7 @@ import { useCosmeticsStore } from '../../../data/stores/cosmeticsStore';
 import { OutfitSlot } from '../../../data/types/outfitTypes';
 import { useHousingStore, ROOM_SIZE_TIERS } from '../../../data/stores/housingStore';
 import { buildRoomScene } from './../render/sceneBuilder';
+import { computeNativeCharacterHeight } from '../render/characterScale';
 import { RoomGridConfig } from '../types/RoomConfig';
 
 interface IsometricRoomViewProps {
@@ -30,18 +31,6 @@ interface IsometricRoomViewProps {
 
 const DEFAULT_CHARACTER_SCALE = 1;
 const CHARACTER_DESIRED_TILE_HEIGHT = 1.5;
-
-function computeNativeCharacterHeight(mesh: THREE.Object3D): number | null {
-  try {
-    mesh.updateMatrixWorld(true);
-    const bounds = new THREE.Box3().setFromObject(mesh);
-    const height = bounds.max.y - bounds.min.y;
-    if (Number.isFinite(height) && height > 0) return height;
-  } catch (error) {
-    if (__DEV__) console.warn('Failed to compute character height', error);
-  }
-  return null;
-}
 
 export default function IsometricRoomView({
   width = 300,

@@ -247,7 +247,14 @@ export default function HudScreen() {
                   outfit={localOutfit ?? undefined}
                 />
               ) : HOUSING_RENDERER === 'primitive3d' ? (
-                <IsometricRoomView3D width={300} height={250} />
+                <IsometricRoomView3D
+                  width={300}
+                  height={250}
+                  gridColumn={1}
+                  gridRow={0}
+                  characterScale={0.3}
+                  outfit={localOutfit ?? undefined}
+                />
               ) : (
                 <IsometricRoomView
                   width={300}

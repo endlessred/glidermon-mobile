@@ -1,11 +1,15 @@
 import * as THREE from "three";
 
-export function makeSpritePlane(tex: THREE.Texture, w: number, h: number) {
+export function makeSpritePlane(tex: THREE.Texture, w: number, h: number, opts?: { depthTest?: boolean }) {
   const geom = new THREE.PlaneGeometry(w, h);
-  // depthTest/depthWrite disabled: draw order is controlled entirely via
-  // renderOrder (painter's algorithm), matching the proven approach from
-  // the legacy Spine-based room renderer (see FURNITURE-SYSTEM.md).
-  const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false });
+  // Default (depthTest/depthWrite disabled): draw order is controlled
+  // entirely via renderOrder (painter's algorithm), matching the proven
+  // approach from the legacy Spine-based room renderer (see
+  // FURNITURE-SYSTEM.md). Pass depthTest:true for scenes with a real depth
+  // buffer (e.g. the 3D-primitive room shell), where occlusion against
+  // opaque geometry should just work instead of needing manual ordering.
+  const depthEnabled = opts?.depthTest ?? false;
+  const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthTest: depthEnabled, depthWrite: depthEnabled });
   const mesh = new THREE.Mesh(geom, mat);
   // default plane is centered; we want "feet" at (x,y): shift origin
   mesh.position.set(0, 0, 0);
