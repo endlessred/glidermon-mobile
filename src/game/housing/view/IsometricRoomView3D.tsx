@@ -30,7 +30,16 @@ interface IsometricRoomView3DProps {
 }
 
 const DEFAULT_CHARACTER_SCALE = 1;
-const CHARACTER_DESIRED_TILE_HEIGHT = 1.5;
+// NOTE: this constant is NOT comparable to the same-named constant in
+// IsometricRoomView.tsx (quad renderer) or IsometricHousingThreeJS.tsx
+// (legacy). Those renderers divide by a separate `roomScale` (fit-to-view)
+// factor and apply extra empirically-tuned fudge multipliers on top, so
+// their constants only make sense inside their own pixel-space chains. This
+// renderer computes world-unit height directly with no such chain, so the
+// constant here is tuned fresh against the `characterScale` value actually
+// passed in from HudScreen.tsx (0.3) to land at a sensible size relative to
+// TILE_SIZE/WALL_HEIGHT/furniture.
+const CHARACTER_DESIRED_TILE_HEIGHT = 4.5;
 const PHYSICS: any = Physics as any;
 
 export default function IsometricRoomView3D({
