@@ -31,7 +31,7 @@ export function buildRoomScene3D(grid: RoomGridConfig): Built3DRoom {
   const floorTexture = getFloorTexture(grid.defaultFloor.set);
   floorTexture.repeat.set(1, 1);
   const floorMaterial = new THREE.MeshStandardMaterial({ map: floorTexture });
-  const floorGeometry = new THREE.BoxGeometry(TILE_SIZE * 0.95, FLOOR_THICKNESS, TILE_SIZE * 0.95);
+  const floorGeometry = new THREE.BoxGeometry(TILE_SIZE, FLOOR_THICKNESS, TILE_SIZE);
 
   for (let row = 0; row < grid.height; row++) {
     for (let col = 0; col < grid.width; col++) {
