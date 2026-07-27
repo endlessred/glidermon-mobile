@@ -14,7 +14,7 @@ import { getFloorTexture, getWallTexture } from './proceduralTextures';
 import { TILE_SIZE, roomHalfExtents, gridToWorld } from './grid3D';
 
 const FLOOR_THICKNESS = 0.1;
-const WALL_HEIGHT = 1.6;
+export const WALL_HEIGHT = 1.6;
 const WALL_THICKNESS = 0.1;
 
 export interface Built3DRoom {
@@ -22,6 +22,8 @@ export interface Built3DRoom {
   /** Half-extents of the floor footprint, useful for framing the camera. */
   halfWidth: number;
   halfDepth: number;
+  /** Wall top height (y), the other dimension the camera needs to frame. */
+  wallHeight: number;
 }
 
 export function buildRoomScene3D(grid: RoomGridConfig): Built3DRoom {
@@ -68,5 +70,5 @@ export function buildRoomScene3D(grid: RoomGridConfig): Built3DRoom {
   backWallZ.position.set(-halfWidth, WALL_HEIGHT / 2, 0);
   group.add(backWallZ);
 
-  return { group, halfWidth, halfDepth };
+  return { group, halfWidth, halfDepth, wallHeight: WALL_HEIGHT };
 }

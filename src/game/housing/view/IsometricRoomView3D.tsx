@@ -13,11 +13,12 @@ import { useHousingStore, ROOM_SIZE_TIERS } from '../../../data/stores/housingSt
 import { useCosmeticsStore } from '../../../data/stores/cosmeticsStore';
 import { OutfitSlot } from '../../../data/types/outfitTypes';
 import { createSpineCharacterController, SpineCharacterController } from '../../../spine/createSpineCharacterController';
-import { buildRoomScene3D } from '../render/sceneBuilder3D';
+import { buildRoomScene3D, WALL_HEIGHT } from '../render/sceneBuilder3D';
 import { buildFurnitureBillboard3D } from '../render/furnitureBillboard3D';
 import { computeBillboardQuaternion } from '../render/billboard3D';
 import { computeNativeCharacterHeight } from '../render/characterScale';
 import { gridToWorld, TILE_SIZE } from '../render/grid3D';
+import { createSkyTexture, getSkyPalette, paintSky, rgbToHex } from '../render/sky3D';
 
 interface IsometricRoomView3DProps {
   width?: number;
@@ -47,8 +48,15 @@ const PHYSICS: any = Physics as any;
 // origin; zoomed in: Glidermon). Translating position+target together by
 // the same offset keeps the viewing angle identical in both modes.
 const CAMERA_OFFSET = new THREE.Vector3(10, 10, 10);
-const OVERVIEW_MARGIN = 1.5;
+// Fraction of extra breathing room added around the room's exact projected
+// bounding box in overview mode -- big enough that walls don't touch the
+// frame edge, small enough that the room still fills nearly all of it.
+const OVERVIEW_MARGIN_RATIO = 0.06;
 const ZOOMED_IN_HALF_EXTENT = 2;
+
+// How often the sky/lighting palette is re-sampled from the clock. Time of
+// day drifts slowly, so there's no need to recompute every frame.
+const SKY_UPDATE_INTERVAL_MS = 30000;
 
 export default function IsometricRoomView3D({
   width = 300,
@@ -74,8 +82,13 @@ export default function IsometricRoomView3D({
   const rafRef = useRef<number | null>(null);
   const cameraRef = useRef<THREE.OrthographicCamera | null>(null);
   const glSizeRef = useRef({ w: width, h: height });
-  const roomHalfExtentRef = useRef({ halfWidth: 2, halfDepth: 2 });
+  const roomBoundsRef = useRef({ halfWidth: 2, halfDepth: 2, wallHeight: WALL_HEIGHT });
   const characterTargetRef = useRef(new THREE.Vector3(0, 0, 0));
+  const skyTextureRef = useRef<THREE.DataTexture | null>(null);
+  const skyDataRef = useRef<Uint8Array | null>(null);
+  const ambientLightRef = useRef<THREE.AmbientLight | null>(null);
+  const sunLightRef = useRef<THREE.DirectionalLight | null>(null);
+  const lastSkyUpdateRef = useRef<number | null>(null);
 
   const scaleRef = useRef(characterScale);
   useEffect(() => {
@@ -102,14 +115,63 @@ export default function IsometricRoomView3D({
     camera.position.copy(target).add(CAMERA_OFFSET);
     camera.lookAt(target);
 
-    const halfExtent = zoomedIn
-      ? ZOOMED_IN_HALF_EXTENT
-      : Math.max(roomHalfExtentRef.current.halfWidth, roomHalfExtentRef.current.halfDepth) + OVERVIEW_MARGIN;
+    if (zoomedIn) {
+      const halfExtent = ZOOMED_IN_HALF_EXTENT;
+      camera.left = -halfExtent * aspect;
+      camera.right = halfExtent * aspect;
+      camera.top = halfExtent;
+      camera.bottom = -halfExtent;
+      camera.updateProjectionMatrix();
+      return;
+    }
 
-    camera.left = -halfExtent * aspect;
-    camera.right = halfExtent * aspect;
-    camera.top = halfExtent;
-    camera.bottom = -halfExtent;
+    // Overview mode: fit the frustum to the room's exact projected bounding
+    // box instead of a fixed/guessed extent. The isometric angle foreshortens
+    // the floor footprint (X/Z) and the wall height (Y) by different amounts,
+    // so a fixed extent either clips the walls or leaves a lot of dead space
+    // -- projecting the actual room corners into camera space and fitting to
+    // that gets the tightest frame that still shows the whole room. Camera
+    // space is used directly (not world space) since OrthographicCamera's
+    // left/right/top/bottom are defined in that space.
+    camera.updateMatrixWorld(true);
+    const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+    const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
+    const { halfWidth, halfDepth, wallHeight } = roomBoundsRef.current;
+
+    let minU = Infinity;
+    let maxU = -Infinity;
+    let minV = Infinity;
+    let maxV = -Infinity;
+    const corner = new THREE.Vector3();
+    for (const x of [-halfWidth, halfWidth]) {
+      for (const y of [0, wallHeight]) {
+        for (const z of [-halfDepth, halfDepth]) {
+          corner.set(x, y, z).sub(camera.position);
+          const u = corner.dot(right);
+          const v = corner.dot(up);
+          minU = Math.min(minU, u);
+          maxU = Math.max(maxU, u);
+          minV = Math.min(minV, v);
+          maxV = Math.max(maxV, v);
+        }
+      }
+    }
+
+    const contentWidth = (maxU - minU) * (1 + OVERVIEW_MARGIN_RATIO);
+    const contentHeight = (maxV - minV) * (1 + OVERVIEW_MARGIN_RATIO);
+    const centerU = (minU + maxU) / 2;
+    const centerV = (minV + maxV) / 2;
+
+    // Whichever dimension is aspect-starved dictates the final span, so the
+    // frustum keeps the viewport's aspect ratio (otherwise the room would
+    // render stretched) while still fully containing the other dimension.
+    const finalHeight = Math.max(contentHeight, contentWidth / aspect);
+    const finalWidth = finalHeight * aspect;
+
+    camera.left = centerU - finalWidth / 2;
+    camera.right = centerU + finalWidth / 2;
+    camera.bottom = centerV - finalHeight / 2;
+    camera.top = centerV + finalHeight / 2;
     camera.updateProjectionMatrix();
   }, []);
 
@@ -125,6 +187,7 @@ export default function IsometricRoomView3D({
         rafRef.current = null;
       }
       rendererRef.current?.dispose();
+      skyTextureRef.current?.dispose();
     },
     []
   );
@@ -146,7 +209,12 @@ export default function IsometricRoomView3D({
       renderer.setClearColor(0x1a1c2c, 1);
 
       const scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x1a1c2c);
+      const initialSkyPalette = getSkyPalette();
+      const { texture: skyTexture, data: skyData } = createSkyTexture();
+      scene.background = skyTexture;
+      skyTextureRef.current = skyTexture;
+      skyDataRef.current = skyData;
+      lastSkyUpdateRef.current = performance.now();
 
       const dims = ROOM_SIZE_TIERS[roomSizeTier] ?? ROOM_SIZE_TIERS[0];
       const grid = {
@@ -157,12 +225,19 @@ export default function IsometricRoomView3D({
       };
       const built = buildRoomScene3D(grid);
       scene.add(built.group);
-      roomHalfExtentRef.current = { halfWidth: built.halfWidth, halfDepth: built.halfDepth };
+      roomBoundsRef.current = { halfWidth: built.halfWidth, halfDepth: built.halfDepth, wallHeight: built.wallHeight };
 
-      scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-      const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+      const ambient = new THREE.AmbientLight(
+        rgbToHex(initialSkyPalette.ambientColor),
+        initialSkyPalette.ambientIntensity
+      );
+      scene.add(ambient);
+      ambientLightRef.current = ambient;
+
+      const sun = new THREE.DirectionalLight(rgbToHex(initialSkyPalette.sunColor), initialSkyPalette.sunIntensity);
       sun.position.set(3, 5, 2);
       scene.add(sun);
+      sunLightRef.current = sun;
 
       // True isometric camera: equal offset on all three axes + lookAt the
       // origin. No hand-derived projection math -- Three.js's own camera
@@ -244,6 +319,23 @@ export default function IsometricRoomView3D({
           // Only the character skeleton updates/refreshes per frame -- the
           // room shell and furniture were built once above.
           controller.update(deltaSeconds);
+
+          if (now - (lastSkyUpdateRef.current ?? 0) > SKY_UPDATE_INTERVAL_MS) {
+            lastSkyUpdateRef.current = now;
+            const palette = getSkyPalette();
+            if (skyDataRef.current && skyTextureRef.current) {
+              paintSky(skyDataRef.current, palette);
+              skyTextureRef.current.needsUpdate = true;
+            }
+            if (ambientLightRef.current) {
+              ambientLightRef.current.color.setHex(rgbToHex(palette.ambientColor));
+              ambientLightRef.current.intensity = palette.ambientIntensity;
+            }
+            if (sunLightRef.current) {
+              sunLightRef.current.color.setHex(rgbToHex(palette.sunColor));
+              sunLightRef.current.intensity = palette.sunIntensity;
+            }
+          }
 
           renderer.render(scene, camera);
           gl.endFrameEXP();
