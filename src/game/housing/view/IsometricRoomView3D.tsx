@@ -4,7 +4,7 @@
 // furniture are built once and never touched again, same principle as the
 // `quad` renderer (see sceneBuilder.ts).
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View } from 'react-native';
+import { View, TouchableOpacity, Text } from 'react-native';
 import * as THREE from 'three';
 import { Physics } from '@esotericsoftware/spine-core';
 import { GLView } from 'expo-gl';
@@ -42,6 +42,14 @@ const DEFAULT_CHARACTER_SCALE = 1;
 const CHARACTER_DESIRED_TILE_HEIGHT = 4.5;
 const PHYSICS: any = Physics as any;
 
+// Fixed camera offset from whatever point it's looking at -- the isometric
+// *direction* never changes, only the look-at point does (overview: room
+// origin; zoomed in: Glidermon). Translating position+target together by
+// the same offset keeps the viewing angle identical in both modes.
+const CAMERA_OFFSET = new THREE.Vector3(10, 10, 10);
+const OVERVIEW_MARGIN = 1.5;
+const ZOOMED_IN_HALF_EXTENT = 2;
+
 export default function IsometricRoomView3D({
   width = 300,
   height = 250,
@@ -58,11 +66,16 @@ export default function IsometricRoomView3D({
   const furniturePlacements = useHousingStore((s) => s.furniturePlacements);
 
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isZoomedIn, setIsZoomedIn] = useState(false);
   const initializedRef = useRef(false);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const spineRef = useRef<SpineCharacterController | null>(null);
   const lastTimeRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
+  const cameraRef = useRef<THREE.OrthographicCamera | null>(null);
+  const glSizeRef = useRef({ w: width, h: height });
+  const roomHalfExtentRef = useRef({ halfWidth: 2, halfDepth: 2 });
+  const characterTargetRef = useRef(new THREE.Vector3(0, 0, 0));
 
   const scaleRef = useRef(characterScale);
   useEffect(() => {
@@ -80,6 +93,30 @@ export default function IsometricRoomView3D({
     outfitRef.current = outfit ?? undefined;
     if (spineRef.current) spineRef.current.applyOutfit(outfitRef.current);
   }, [outfit]);
+
+  const updateCameraForZoom = useCallback((camera: THREE.OrthographicCamera, zoomedIn: boolean) => {
+    const { w: glW, h: glH } = glSizeRef.current;
+    const aspect = glW / glH;
+
+    const target = zoomedIn ? characterTargetRef.current : new THREE.Vector3(0, 0, 0);
+    camera.position.copy(target).add(CAMERA_OFFSET);
+    camera.lookAt(target);
+
+    const halfExtent = zoomedIn
+      ? ZOOMED_IN_HALF_EXTENT
+      : Math.max(roomHalfExtentRef.current.halfWidth, roomHalfExtentRef.current.halfDepth) + OVERVIEW_MARGIN;
+
+    camera.left = -halfExtent * aspect;
+    camera.right = halfExtent * aspect;
+    camera.top = halfExtent;
+    camera.bottom = -halfExtent;
+    camera.updateProjectionMatrix();
+  }, []);
+
+  useEffect(() => {
+    const camera = cameraRef.current;
+    if (camera) updateCameraForZoom(camera, isZoomedIn);
+  }, [isZoomedIn, updateCameraForZoom]);
 
   useEffect(
     () => () => {
@@ -99,6 +136,7 @@ export default function IsometricRoomView3D({
     try {
       const w = gl.drawingBufferWidth;
       const h = gl.drawingBufferHeight;
+      glSizeRef.current = { w, h };
       gl.viewport(0, 0, w, h);
 
       const renderer = new Renderer({ gl });
@@ -119,6 +157,7 @@ export default function IsometricRoomView3D({
       };
       const built = buildRoomScene3D(grid);
       scene.add(built.group);
+      roomHalfExtentRef.current = { halfWidth: built.halfWidth, halfDepth: built.halfDepth };
 
       scene.add(new THREE.AmbientLight(0xffffff, 0.6));
       const sun = new THREE.DirectionalLight(0xffffff, 0.8);
@@ -127,24 +166,20 @@ export default function IsometricRoomView3D({
 
       // True isometric camera: equal offset on all three axes + lookAt the
       // origin. No hand-derived projection math -- Three.js's own camera
-      // matrix does the isometric projection for us.
-      const maxHalfExtent = Math.max(built.halfWidth, built.halfDepth) + 1.5;
-      const aspect = w / h;
-      const camera = new THREE.OrthographicCamera(
-        -maxHalfExtent * aspect,
-        maxHalfExtent * aspect,
-        maxHalfExtent,
-        -maxHalfExtent,
-        0.1,
-        100
-      );
-      camera.position.set(10, 10, 10);
-      camera.lookAt(0, 0, 0);
+      // matrix does the isometric projection for us. Bounds are placeholder
+      // here -- updateCameraForZoom sets the real framing once the room and
+      // character are both built below.
+      const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
+      cameraRef.current = camera;
 
       // Every billboard (furniture, character) shares this one fixed
       // rotation instead of each computing its own lookAt -- see
       // billboard3D.ts for why that matters under an orthographic camera.
-      const billboardQuaternion = computeBillboardQuaternion(camera.position);
+      // Uses the fixed CAMERA_OFFSET direction rather than the live
+      // camera.position, since that position now pans during zoom -- the
+      // viewing *direction* (and therefore correct billboard facing) never
+      // changes, only where it's centered.
+      const billboardQuaternion = computeBillboardQuaternion(CAMERA_OFFSET);
 
       for (const placement of furniturePlacements) {
         const billboard = await buildFurnitureBillboard3D(placement, dims, billboardQuaternion);
@@ -161,10 +196,12 @@ export default function IsometricRoomView3D({
       const characterGroup = new THREE.Group();
       characterGroup.quaternion.copy(billboardQuaternion);
 
+      let characterWorldHeight = TILE_SIZE * CHARACTER_DESIRED_TILE_HEIGHT * DEFAULT_CHARACTER_SCALE;
       const nativeHeight = computeNativeCharacterHeight(controller.mesh);
       if (nativeHeight && nativeHeight > 0) {
         const scaleMultiplier = scaleRef.current > 0 ? scaleRef.current : DEFAULT_CHARACTER_SCALE;
         const desiredWorldHeight = TILE_SIZE * CHARACTER_DESIRED_TILE_HEIGHT * scaleMultiplier;
+        characterWorldHeight = desiredWorldHeight;
         const finalScale = desiredWorldHeight / nativeHeight;
 
         if (Number.isFinite(finalScale)) {
@@ -187,6 +224,11 @@ export default function IsometricRoomView3D({
       const { x: charX, z: charZ } = gridToWorld(gridRow, gridColumn, dims);
       characterGroup.position.set(charX, 0, charZ);
       built.group.add(characterGroup);
+
+      // Zoomed-in framing centers on the character's mid-height, not their
+      // feet, so the camera doesn't look like it's aimed at the floor.
+      characterTargetRef.current.set(charX, characterWorldHeight / 2, charZ);
+      updateCameraForZoom(camera, isZoomedIn);
 
       rendererRef.current = renderer;
       spineRef.current = controller;
@@ -217,6 +259,7 @@ export default function IsometricRoomView3D({
     } finally {
       setIsLoaded(true);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomSizeTier, activeFloorSet, activeWallSet, furniturePlacements, catalog, gridColumn, gridRow]);
 
   return (
@@ -233,6 +276,24 @@ export default function IsometricRoomView3D({
             backgroundColor: 'rgba(26, 28, 44, 0.4)',
           }}
         />
+      )}
+      {isLoaded && (
+        <TouchableOpacity
+          style={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            borderRadius: 16,
+          }}
+          onPress={() => setIsZoomedIn(!isZoomedIn)}
+        >
+          <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>
+            {isZoomedIn ? '🏠 Overview' : '🔍 Zoom In'}
+          </Text>
+        </TouchableOpacity>
       )}
     </View>
   );
