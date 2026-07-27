@@ -120,7 +120,7 @@ const GlucoseSection = () => {
 };
 
 export default function HudScreen() {
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const { colors, spacing, borderRadius, typography } = useTheme();
 
   // Progression (live)
@@ -151,8 +151,13 @@ export default function HudScreen() {
     resetDailyIfNeeded();
   }, []);
 
-  // Optional: slightly smaller canvas on tiny screens
-  const canvasScale = width < 380 ? 0.9 : 1;
+  // Glidermon room fills the top third of the screen; its GL view is sized
+  // to whatever that box measures out to via onLayout, rather than a fixed
+  // pixel size, since the box itself now depends on window height.
+  const [roomBoxSize, setRoomBoxSize] = useState<{ width: number; height: number } | null>(null);
+  const roomSectionHeight = Math.round(height / 3);
+  const roomCardWidth = width - spacing.lg * 2;
+  const roomCardHeight = roomSectionHeight - spacing.sm * 2;
 
   // Check for new reactions and trigger compliment shower
   useEffect(() => {
@@ -171,108 +176,118 @@ export default function HudScreen() {
   }, [myEntry, getNewReactions, clearNewReactions, triggerShower]);
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: colors.background.primary }}
-      contentContainerStyle={{
-        padding: spacing.lg,
-        gap: spacing.lg,
-        paddingBottom: spacing['3xl'],
-      }}
-    >
-      {/* ===== Progress Section (Cozy Theme) ===== */}
+    <View style={{ flex: 1, backgroundColor: colors.background.primary }}>
+      {/* ===== Glidermon Room (top third of the screen) ===== */}
       <UIThemeProvider mode="cozy">
-        <FramedCard width={width - spacing.lg * 2} height={140}>
-          <View style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: spacing.md,
-            marginBottom: spacing.md,
-          }}>
-            <BadgeChip
-              text={`${acorns}`}
-              tone="accent"
-              width={100}
-              height={36}
-              LeftIcon={Acorn ? <Acorn size={16} weight="fill" /> : <Text style={{ fontSize: 16 }}>🌰</Text>}
-            />
-            <View style={{ flex: 1 }}>
-              <LevelBar level={level} current={xpInto} next={nextXp} />
-            </View>
-          </View>
-          <View style={{ paddingBottom: spacing.sm }}>
-            <DailyCapBar value={dailyEarn} cap={dailyCap} rested={restedBank} />
-          </View>
-        </FramedCard>
-      </UIThemeProvider>
-
-      {/* ===== Check-In Card (appears when a slot is active) ===== */}
-      {availableSlot && (
-        <UIThemeProvider mode="cozy">
-          <CheckInCard onPress={() => setCheckInOpen(true)} />
-        </UIThemeProvider>
-      )}
-
-      {/* ===== Game Canvas (Cozy Theme) ===== */}
-      <UIThemeProvider mode="cozy">
-        <View style={{ alignItems: "center", transform: [{ scale: canvasScale }] }}>
-          <FramedCard width={300 + spacing.lg * 2} height={250 + spacing.lg * 2 + (glidermonName ? 40 : 0)}>
+        <View style={{
+          height: roomSectionHeight,
+          paddingHorizontal: spacing.lg,
+          paddingVertical: spacing.sm,
+        }}>
+          <FramedCard width={roomCardWidth} height={roomCardHeight}>
             {glidermonName && (
               <Text style={{
                 fontSize: typography.size.lg,
                 fontWeight: typography.weight.semibold as any,
                 color: colors.text.primary,
-                marginBottom: spacing.md,
+                marginBottom: spacing.sm,
                 textAlign: "center",
               }}>
                 {glidermonName}
               </Text>
             )}
             {/* Isometric room with character at B3 */}
-            <View style={{
-              width: 300,
-              height: 250,
-              overflow: 'hidden',
-              borderRadius: 8,
-              alignSelf: 'center'
-            }}>
-              {HOUSING_RENDERER === 'legacy' ? (
-                <IsometricHousingThreeJS
-                  width={300}
-                  height={250}
-                  gridColumn={1}
-                  gridRow={0}
-                  characterScale={0.3}
-                  outfit={localOutfit ?? undefined}
-                />
-              ) : HOUSING_RENDERER === 'primitive3d' ? (
-                <IsometricRoomView3D
-                  width={300}
-                  height={250}
-                  gridColumn={1}
-                  gridRow={0}
-                  characterScale={0.3}
-                  outfit={localOutfit ?? undefined}
-                />
-              ) : (
-                <IsometricRoomView
-                  width={300}
-                  height={250}
-                  gridColumn={1}
-                  gridRow={0}
-                  characterScale={0.3}
-                  outfit={localOutfit ?? undefined}
-                />
+            <View
+              style={{ flex: 1, overflow: 'hidden', borderRadius: 8 }}
+              onLayout={(e) => {
+                const rw = Math.round(e.nativeEvent.layout.width);
+                const rh = Math.round(e.nativeEvent.layout.height);
+                setRoomBoxSize((prev) => (prev && prev.width === rw && prev.height === rh) ? prev : { width: rw, height: rh });
+              }}
+            >
+              {roomBoxSize && (
+                HOUSING_RENDERER === 'legacy' ? (
+                  <IsometricHousingThreeJS
+                    width={roomBoxSize.width}
+                    height={roomBoxSize.height}
+                    gridColumn={1}
+                    gridRow={0}
+                    characterScale={0.3}
+                    outfit={localOutfit ?? undefined}
+                  />
+                ) : HOUSING_RENDERER === 'primitive3d' ? (
+                  <IsometricRoomView3D
+                    width={roomBoxSize.width}
+                    height={roomBoxSize.height}
+                    gridColumn={1}
+                    gridRow={0}
+                    characterScale={0.3}
+                    outfit={localOutfit ?? undefined}
+                  />
+                ) : (
+                  <IsometricRoomView
+                    width={roomBoxSize.width}
+                    height={roomBoxSize.height}
+                    gridColumn={1}
+                    gridRow={0}
+                    characterScale={0.3}
+                    outfit={localOutfit ?? undefined}
+                  />
+                )
               )}
             </View>
           </FramedCard>
         </View>
       </UIThemeProvider>
 
-      {/* ===== Glucose Section (Clinical Theme) ===== */}
-      <UIThemeProvider mode="clinical">
-        <GlucoseSection />
-      </UIThemeProvider>
+      {/* ===== Rest of the HUD, scrollable below the room ===== */}
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          padding: spacing.lg,
+          gap: spacing.lg,
+          paddingBottom: spacing['3xl'],
+        }}
+      >
+        {/* ===== Progress Section (Cozy Theme) ===== */}
+        <UIThemeProvider mode="cozy">
+          <FramedCard width={width - spacing.lg * 2} height={140}>
+            <View style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: spacing.md,
+              marginBottom: spacing.md,
+            }}>
+              <BadgeChip
+                text={`${acorns}`}
+                tone="accent"
+                width={100}
+                height={36}
+                LeftIcon={Acorn ? <Acorn size={16} weight="fill" /> : <Text style={{ fontSize: 16 }}>🌰</Text>}
+              />
+              <View style={{ flex: 1 }}>
+                <LevelBar level={level} current={xpInto} next={nextXp} />
+              </View>
+            </View>
+            <View style={{ paddingBottom: spacing.sm }}>
+              <DailyCapBar value={dailyEarn} cap={dailyCap} rested={restedBank} />
+            </View>
+          </FramedCard>
+        </UIThemeProvider>
+
+        {/* ===== Check-In Card (appears when a slot is active) ===== */}
+        {availableSlot && (
+          <UIThemeProvider mode="cozy">
+            <CheckInCard onPress={() => setCheckInOpen(true)} />
+          </UIThemeProvider>
+        )}
+
+        {/* ===== Glucose Section (Clinical Theme) ===== */}
+        <UIThemeProvider mode="clinical">
+          <GlucoseSection />
+        </UIThemeProvider>
+      </ScrollView>
 
       {/* Compliment Shower Animation Overlay */}
       {ComplimentShowerComponent}
@@ -282,7 +297,7 @@ export default function HudScreen() {
         slot={availableSlot}
         onClose={() => setCheckInOpen(false)}
       />
-    </ScrollView>
+    </View>
   );
 }
 

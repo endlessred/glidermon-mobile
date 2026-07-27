@@ -200,11 +200,24 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.background.primary }}>
-      {/* top tabs */}
+      {/* content */}
+      <View style={{ flex: 1 }}>
+        {tab === "HOME" && <HomeScreen />}
+        {/* DEXCOM tab removed - component preserved for future Bluetooth device integration */}
+        {/* GAME tab removed - GameCanvas is now embedded in Home (formerly HUD) screen */}
+
+        {tab === "SHOP" && <ShopScreen />}
+        {tab === "OUTFIT" && <OutfitScreen />}
+        {tab === "🎨 GALLERY" && <GalleryScreen />}
+        {tab === "🕹️ ARCADE" && <ArcadeScreen />}
+        {tab === "SETTINGS" && <SettingsScreen />}
+      </View>
+
+      {/* bottom tabs */}
       <View style={{
         backgroundColor: colors.background.secondary,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.gray[200],
+        borderTopWidth: 1,
+        borderTopColor: colors.gray[200],
       }}>
         <ScrollView
           horizontal
@@ -240,19 +253,6 @@ export default function App() {
             </Pressable>
           ))}
         </ScrollView>
-      </View>
-
-      {/* content */}
-      <View style={{ flex: 1 }}>
-        {tab === "HOME" && <HomeScreen />}
-        {/* DEXCOM tab removed - component preserved for future Bluetooth device integration */}
-        {/* GAME tab removed - GameCanvas is now embedded in Home (formerly HUD) screen */}
-
-        {tab === "SHOP" && <ShopScreen />}
-        {tab === "OUTFIT" && <OutfitScreen />}
-        {tab === "🎨 GALLERY" && <GalleryScreen />}
-        {tab === "🕹️ ARCADE" && <ArcadeScreen />}
-        {tab === "SETTINGS" && <SettingsScreen />}
       </View>
 
       {/* global overlays */}
