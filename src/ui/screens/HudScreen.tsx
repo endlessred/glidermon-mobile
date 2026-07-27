@@ -13,13 +13,16 @@ import GlucoseWindTrail from "../components/GlucoseWindTrail";
 import { useGlucoseHistory } from "../../data/hooks/useGlucoseHistory";
 import { useComplimentShower } from "../components/ComplimentShower";
 import { useActiveLocalOutfit } from "../../data/stores/outfitStore";
-import { IsometricHousingThreeJS, IsometricRoomView } from "../../game/housing";
+import { IsometricHousingThreeJS, IsometricRoomView, IsometricRoomView3D } from "../../game/housing";
 
-// Fallback switch for the housing renderer rewrite (Phase 1): the plain-quad
-// IsometricRoomView replaces the Spine-room-skeleton IsometricHousingThreeJS,
-// which was the root cause of choppy character animation (see plan). Flip
-// this back to true to restore the old renderer if the new one regresses.
-const HOUSING_USE_LEGACY_SPINE_ROOM = false;
+// Housing renderer switch: 'legacy' is the original Spine-room-skeleton
+// renderer (root cause of choppy character animation, kept only as a
+// fallback); 'quad' is the Phase 1 flat-sprite-plane rewrite (current
+// default); 'primitive3d' is the real-3D-primitive room shell (chosen as
+// the long-term direction) -- still missing furniture/character, so not yet
+// the default. See the housing plan for the phased rollout.
+type HousingRenderer = 'legacy' | 'quad' | 'primitive3d';
+const HOUSING_RENDERER: HousingRenderer = 'quad';
 import { UIThemeProvider, useUITokens } from "../theme/UIThemeProvider";
 import { FramedCard } from "../components/FramedCard";
 import { BadgeChip } from "../components/BadgeChip";
@@ -234,7 +237,7 @@ export default function HudScreen() {
               borderRadius: 8,
               alignSelf: 'center'
             }}>
-              {HOUSING_USE_LEGACY_SPINE_ROOM ? (
+              {HOUSING_RENDERER === 'legacy' ? (
                 <IsometricHousingThreeJS
                   width={300}
                   height={250}
@@ -243,6 +246,8 @@ export default function HudScreen() {
                   characterScale={0.3}
                   outfit={localOutfit ?? undefined}
                 />
+              ) : HOUSING_RENDERER === 'primitive3d' ? (
+                <IsometricRoomView3D width={300} height={250} />
               ) : (
                 <IsometricRoomView
                   width={300}

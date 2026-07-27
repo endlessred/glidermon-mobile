@@ -2,6 +2,7 @@
 export { default as IsometricHousing } from './view/IsometricHousing';
 export { default as IsometricHousingThreeJS } from './view/IsometricHousingThreeJS';
 export { default as IsometricRoomView } from './view/IsometricRoomView';
+export { default as IsometricRoomView3D } from './view/IsometricRoomView3D';
 
 // Core types and utilities
 export * from './types';

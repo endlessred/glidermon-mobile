@@ -4,7 +4,7 @@
 // the O(n^2) Spine refreshMeshes() cost that was starving Glidermon's frame
 // budget (see plan: Housing System Rewrite Phase 1).
 import * as THREE from 'three';
-import { isoToScreen, zFromFeetScreenY } from '../coords';
+import { isoToScreen, zFromFeetScreenY, WALL_W } from '../coords';
 import { renderOrderFromFeetY } from '../anchors';
 import { determineFloorVariant, determineWallVariant, RoomDimensions } from '../grid';
 import { loadFloorTexture, loadWallTexture } from '../assets/quadTextures';
@@ -100,7 +100,15 @@ export async function buildRoomScene({ grid, furniture = [] }: RoomSceneInput): 
     const mesh = makeSpritePlane(tex.texture, tex.width, tex.height);
     const p = isoToScreen(backCol, row);
     const feetY = p.y - tex.skirt;
-    mesh.position.set(p.x, feetY, zFromFeetScreenY(p.y));
+    // makeSpritePlane pivots meshes at their LEFT edge (mesh.position.x is
+    // where local x=0 lands), so LeftBack's corner piece spans
+    // [p.x, p.x + width] -- its right edge is at p.x + width. Mirroring via
+    // scale.x=-1 keeps p.x as the FLIPPED mesh's right edge instead, so
+    // without correction both walls' corner pieces radiate outward from the
+    // *same* shared point rather than meeting edge to edge (the cause of
+    // the crossed-peaks look). Shifting by 2*WALL_W moves this wall's left
+    // edge to sit exactly where LeftBack's corner piece ends.
+    mesh.position.set(p.x + 2 * WALL_W, feetY, zFromFeetScreenY(p.y));
     mesh.scale.x *= -1;
     mesh.renderOrder = renderOrderFromFeetY(WALL_RENDER_BASE, -feetY);
     group.add(mesh);
