@@ -1,14 +1,14 @@
 // App.tsx
 // import './src/spine/spinePhysicsShim'; // Temporarily removed to debug physics issues
 import React, { useState, useEffect } from "react";
-import { Platform, View, Text, Pressable, AppState, ScrollView } from "react-native";
+import { Platform, View, Text, Pressable, AppState, ScrollView, Linking } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { useProgressionStore } from "./src/data/stores/progressionStore";
 import { useUserStore } from "./src/data/stores/userStore";
 import HomeScreen from "./src/ui/screens/HudScreen"; // HudScreen serves as HomeScreen
 // import DexcomEgvsScreen from "./src/ui/screens/DexcomEgvsScreen"; // Preserved for future Bluetooth device integration
 import GameCanvas from "./src/game/view/GameCanvas";
-import ShopScreen from "./src/ui/screens/ShopScreen";
+import ShopScreen, { ShopCategory } from "./src/ui/screens/ShopScreen";
 import EquipScreen from "./src/ui/screens/EquipScreen";
 import OutfitScreen from "./src/ui/screens/OutfitScreen";
 import SettingsScreen from "./src/ui/screens/SettingsScreen";
@@ -34,6 +34,30 @@ import { useHealthKit } from "./src/data/hooks/useHealthKit";
 
 const TABS = ["HOME", "SHOP", "OUTFIT", "🎨 GALLERY", "🕹️ ARCADE", "SETTINGS"] as const;
 type Tab = typeof TABS[number];
+
+// Dev/test deep links, e.g.:
+//   adb shell am start -a android.intent.action.VIEW -d "glidermon://shop/floors"
+// Arcade is intentionally left unlinked.
+const DEEP_LINK_TABS: Record<string, Tab> = {
+  home: "HOME",
+  shop: "SHOP",
+  outfit: "OUTFIT",
+  gallery: "🎨 GALLERY",
+  settings: "SETTINGS",
+};
+const SHOP_CATEGORIES: ShopCategory[] = ["cosmetics", "floors", "walls"];
+
+function parseGlidermonUrl(url: string): { tab: Tab; shopCategory?: ShopCategory } | null {
+  const match = url.match(/^glidermon:\/\/([^/?]+)\/?([^/?]*)/i);
+  if (!match) return null;
+  const tab = DEEP_LINK_TABS[match[1].toLowerCase()];
+  if (!tab) return null;
+  const sub = match[2].toLowerCase();
+  if (tab === "SHOP" && SHOP_CATEGORIES.includes(sub as ShopCategory)) {
+    return { tab, shopCategory: sub as ShopCategory };
+  }
+  return { tab };
+}
 
 export default function App() {
   // ---- theme ----
@@ -78,6 +102,27 @@ export default function App() {
 
   // ---- tabs ----
   const [tab, setTab] = useState<Tab>("HOME");
+  const [shopCategory, setShopCategory] = useState<ShopCategory | undefined>(undefined);
+  const [shopLinkNonce, setShopLinkNonce] = useState(0);
+
+  // ---- dev/test deep links (glidermon://<tab>[/<shop-category>]) ----
+  useEffect(() => {
+    const handleUrl = (url: string) => {
+      const parsed = parseGlidermonUrl(url);
+      if (!parsed) return;
+      setTab(parsed.tab);
+      if (parsed.shopCategory) {
+        setShopCategory(parsed.shopCategory);
+        setShopLinkNonce((n) => n + 1);
+      }
+    };
+
+    Linking.getInitialURL().then((url) => {
+      if (url) handleUrl(url);
+    });
+    const sub = Linking.addEventListener("url", (e) => handleUrl(e.url));
+    return () => sub.remove();
+  }, []);
 
   // ---- sim wiring & health integration ----
   const onEgvs = useGameStore.getState().onEgvs; // stable reference is fine
@@ -206,7 +251,7 @@ export default function App() {
         {/* DEXCOM tab removed - component preserved for future Bluetooth device integration */}
         {/* GAME tab removed - GameCanvas is now embedded in Home (formerly HUD) screen */}
 
-        {tab === "SHOP" && <ShopScreen />}
+        {tab === "SHOP" && <ShopScreen key={shopLinkNonce} initialCategory={shopCategory} />}
         {tab === "OUTFIT" && <OutfitScreen />}
         {tab === "🎨 GALLERY" && <GalleryScreen />}
         {tab === "🕹️ ARCADE" && <ArcadeScreen />}

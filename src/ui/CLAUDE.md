@@ -144,11 +144,16 @@ Navigation structure and routing logic.
 
 ## Navigation Structure
 
-### `AppNavigator.tsx`
-- **Pattern**: Bottom tab navigation
-- **Tabs**: Home (HUD), Shop, Equip, Settings
-- **State Persistence**: Maintains tab state across app launches
-- **Deep Linking**: Supports URL-based navigation
+There is no router (`@react-navigation/*` is not wired up — a dead `AppNavigator.tsx`/`PebbleTabBar.tsx` pair existed briefly and was removed). Navigation is a plain `tab` `useState` in [`App.tsx`](../../App.tsx) at the project root, rendered via `TABS.map(...)` as a row of `Pressable`s and `{tab === "X" && <XScreen />}` conditionals. Screens are plain components with no `navigation`/`route` props — pass data in as regular React props instead.
+
+### Deep links
+`App.tsx` also listens for `glidermon://` URLs (via `Linking.getInitialURL`/`addEventListener` + `parseGlidermonUrl`) and maps them onto that same `tab` state, purely for local dev/testing — jump straight to a surface instead of tapping through the app after every reload:
+```bash
+adb shell am start -a android.intent.action.VIEW -d "glidermon://shop/floors"
+```
+Supported today: `home`, `shop` (optionally `shop/cosmetics|floors|walls`, which also skips ShopScreen's walk-up intro), `outfit`, `gallery`, `settings`. Arcade is deliberately excluded.
+
+**Adding a link for a new surface:** add an entry to the `DEEP_LINK_TABS` map in `App.tsx` (path segment → `Tab` value); if the surface takes a sub-parameter like shop's category, follow the same pattern as `shopCategory`/`shopLinkNonce` — parse it in `parseGlidermonUrl`, hold it in state, and pass it into the screen as a prop (with a `key` bump if the screen only reads its initial value once). This only requires a JS change — no native rebuild — *unless* `android/app/src/main/java/com/kevin/glidermon/MainActivity.kt`'s `onNewIntent` override is ever lost (e.g. a `pnpm expo prebuild` regenerating the file), in which case links stop working while the app is already running (cold-start links still work without it) and the override needs to be re-added.
 
 ## Design System Integration
 

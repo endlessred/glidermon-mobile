@@ -1,5 +1,6 @@
 package com.kevin.glidermon
 
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 
@@ -24,6 +25,15 @@ class MainActivity : ReactActivity() {
    * rendering of the component.
    */
   override fun getMainComponentName(): String = "main"
+
+  /**
+   * Forward re-delivered intents (e.g. deep links opened while the app is
+   * already running) so React Native's Linking module picks up the new URL.
+   */
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+  }
 
   /**
    * Returns the instance of the [ReactActivityDelegate]. We use [DefaultReactActivityDelegate]

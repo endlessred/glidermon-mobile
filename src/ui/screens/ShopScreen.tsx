@@ -17,13 +17,13 @@ import {
   WallPatternItem,
 } from "../../game/housing/types/proceduralPatternCatalog";
 
-type ShopCategory = "cosmetics" | "floors" | "walls";
+export type ShopCategory = "cosmetics" | "floors" | "walls";
 
-export default function ShopScreen() {
+export default function ShopScreen({ initialCategory }: { initialCategory?: ShopCategory }) {
   const { width, height } = useWindowDimensions();
   const { colors, spacing, borderRadius, typography, shadows } = useTheme();
-  const [showStore, setShowStore] = useState(false);
-  const [category, setCategory] = useState<ShopCategory>("cosmetics");
+  const [showStore, setShowStore] = useState(!!initialCategory);
+  const [category, setCategory] = useState<ShopCategory>(initialCategory ?? "cosmetics");
 
   // Ambient conversations
   const {

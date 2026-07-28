@@ -8,11 +8,11 @@ full MVP goal features are listed at docs/MVP-PLAN.md
 
 An Android emulator (AVD `Pixel_8`) is available and driven directly via `adb` — unlike the iOS/iostunnel flow above, you can reload, inspect logs, and screenshot it yourself without asking the user.
 
-If `adb`/`emulator` aren't on PATH in a given shell (fresh Claude Code shells sometimes don't pick up the user env vars yet), export them for that shell:
-```
-ANDROID_HOME=C:\Users\watch\AppData\Local\Android\Sdk
-JAVA_HOME=C:\Program Files\Android\Android Studio\jbr
-PATH=$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH
+If `adb`/`emulator` aren't on PATH in a given shell (fresh Claude Code shells sometimes don't pick up the user env vars yet), export them for that shell — **quote the values**, an unquoted `\` is stripped by bash and silently mangles the path (e.g. `ANDROID_HOME` becomes `C:UserswatchAppDataLocalAndroidSdk`), which breaks native builds (`pnpm run android`) even though `adb` itself keeps working off the pre-existing PATH:
+```bash
+export ANDROID_HOME="C:\Users\watch\AppData\Local\Android\Sdk"
+export JAVA_HOME="C:\Program Files\Android\Android Studio\jbr"
+export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
 ```
 
 After each meaningful UI change:
@@ -31,3 +31,13 @@ After each meaningful UI change:
 9. Before calling the task done, run `pnpm exec tsc --noEmit` and `pnpm run lint`.
 
 Do not clear app data (`adb shell pm clear com.kevin.glidermon`) unless the task specifically calls for testing first-run/fresh-install state.
+
+## Deep links
+
+The app registers the `glidermon://` scheme for jumping straight to a surface during testing, instead of tapping through the app after every reload:
+```bash
+adb shell am start -a android.intent.action.VIEW -d "glidermon://shop/floors"
+```
+Supported today: `home`, `shop` (optionally `shop/cosmetics|floors|walls`), `outfit`, `gallery`, `settings`. This works whether the app is already running or not.
+
+If you're working on a surface (tab) that doesn't have a link yet, add one — see the "Deep links" note under Navigation Structure in [src/ui/CLAUDE.md](src/ui/CLAUDE.md) for where the mapping lives and how to extend it.
