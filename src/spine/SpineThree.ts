@@ -79,10 +79,26 @@ export function normalizeMaterialForSlot(slot: Slot, mat: THREE.Material) {
   const isShaderAttachment = SHADER_SLOT_REGEX.test(attName);
 
   if (m.isShaderMaterial) {
-    // Hue-indexed shader materials are always opaque cutouts (no mask recolor logic needed)
+    // Hue-indexed shader materials stay in the *opaque* queue (transparent: false) --
+    // this is load-bearing, not incidental: three.js renders the whole opaque queue
+    // before the whole transparent queue, and every non-shader facial/accessory slot
+    // (eyes, pupils, mouth, brows, hat, shoes) uses transparent:true. That two-pass split
+    // is what keeps those details drawn on top of the recolored skin underneath them --
+    // switching this to transparent:true merges everything into one queue sorted by
+    // renderOrder, and facial slots ended up hidden behind the head/cheeks. (See the git
+    // history around this line for the reverted attempt.)
+    //
+    // The wall-occlusion problem this used to cause -- parts of the character getting
+    // clipped by 3D room geometry (IsometricRoomView3D) behind it -- is instead fixed by
+    // disabling depthTest. The character mesh already never writes depth (depthWrite:
+    // false below), so it can't corrupt the depth buffer for anything drawn after it;
+    // turning off depthTest just stops it from being discarded by whatever the room
+    // already wrote there, while renderOrder (assigned per slot in SpineThree's
+    // refreshMeshes, always > the room's default 0) still keeps it drawing after the
+    // room within the opaque queue.
     if (isShaderAttachment) {
-      m.transparent = false;  // ⬅️ render in opaque pass
-      m.depthTest = true;
+      m.transparent = false;
+      m.depthTest = false;
       m.depthWrite = false;
       // No setMaskRecolorOpaque call needed - hue-indexed materials handle this internally
       return;

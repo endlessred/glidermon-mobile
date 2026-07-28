@@ -168,7 +168,17 @@ export function makeHueIndexedRecolorMaterial(
         // Blue: avoid double-darkening; bias toward target
         outLinear = mix(texRGB, target, uStrength);
       } else {
-        vec3 shaded = mix(target, target * Y, uShadeMode);
+        // The mask art is a flat classification color (pure red/green/yellow), not a
+        // painted shading pass, so its raw luma isn't meaningful brightness data -- pure
+        // red has linear luma ~0.30 and pure green ~0.59, so multiplying by raw Y crushed
+        // red-classified regions ~2x darker than green ones for no intentional reason.
+        // Normalize against the reference primary's own luma first so a pixel painted at
+        // the "pure" classification color reproduces the target color at full brightness,
+        // and only genuine highlight/shadow brushwork (departure from the pure color)
+        // still modulates it.
+        float refY = (id == 0) ? 0.299 : (id == 1) ? 0.587 : 0.886; // red / green / yellow
+        float shadeFactor = clamp(Y / max(refY, 1e-4), 0.4, 1.3);
+        vec3 shaded = mix(target, target * shadeFactor, uShadeMode);
         outLinear = mix(texRGB, shaded, uStrength);
       }
 
