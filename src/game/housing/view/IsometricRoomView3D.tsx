@@ -69,8 +69,8 @@ export default function IsometricRoomView3D({
 }: IsometricRoomView3DProps) {
   const catalog = useCosmeticsStore((state) => state.catalog);
   const roomSizeTier = useHousingStore((s) => s.roomSizeTier);
-  const activeFloorSet = useHousingStore((s) => s.activeFloorSet);
-  const activeWallSet = useHousingStore((s) => s.activeWallSet);
+  const activeFloorPatternId = useHousingStore((s) => s.activeFloorPatternId);
+  const activeWallPatternId = useHousingStore((s) => s.activeWallPatternId);
   const furniturePlacements = useHousingStore((s) => s.furniturePlacements);
 
   const [isLoaded, setIsLoaded] = useState(false);
@@ -220,8 +220,8 @@ export default function IsometricRoomView3D({
       const grid = {
         width: dims.width,
         height: dims.height,
-        defaultFloor: { set: activeFloorSet },
-        defaultWall: { set: activeWallSet },
+        floorPatternId: activeFloorPatternId,
+        wallPatternId: activeWallPatternId,
       };
       const built = buildRoomScene3D(grid);
       scene.add(built.group);
@@ -352,7 +352,7 @@ export default function IsometricRoomView3D({
       setIsLoaded(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomSizeTier, activeFloorSet, activeWallSet, furniturePlacements, catalog, gridColumn, gridRow]);
+  }, [roomSizeTier, activeFloorPatternId, activeWallPatternId, furniturePlacements, catalog, gridColumn, gridRow]);
 
   return (
     <View style={{ width, height, backgroundColor: 'transparent' }}>

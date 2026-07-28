@@ -3,16 +3,27 @@ import { View, Text, FlatList, Image, TouchableOpacity, useWindowDimensions } fr
 import { useCosmeticsStore } from "../../data/stores/cosmeticsStore";
 import { useProgressionStore } from "../../data/stores/progressionStore";
 import { useToastStore } from "../../data/stores/toastStore";
+import { useHousingStore } from "../../data/stores/housingStore";
 import { useTheme } from "../../data/hooks/useTheme";
 import { useAmbientConversations } from "../../data/hooks/useAmbientConversations";
 import HatPreview from "../components/HatPreview";
+import PatternSwatch from "../components/PatternSwatch";
 import ShadedShopViewport from "../components/ShadedShopViewport";
 import AmbientConversationDisplay from "../components/AmbientConversation";
+import {
+  FLOOR_PATTERN_CATALOG,
+  WALL_PATTERN_CATALOG,
+  FloorPatternItem,
+  WallPatternItem,
+} from "../../game/housing/types/proceduralPatternCatalog";
+
+type ShopCategory = "cosmetics" | "floors" | "walls";
 
 export default function ShopScreen() {
   const { width, height } = useWindowDimensions();
-  const { colors, spacing, borderRadius, typography } = useTheme();
+  const { colors, spacing, borderRadius, typography, shadows } = useTheme();
   const [showStore, setShowStore] = useState(false);
+  const [category, setCategory] = useState<ShopCategory>("cosmetics");
 
   // Ambient conversations
   const {
@@ -41,6 +52,36 @@ export default function ShopScreen() {
   const spend  = useProgressionStore(s => s.spend);
 
   const addToast = useToastStore(s => s.addToast);
+
+  // Housing patterns (floors/walls) -- separate procedural catalog from the
+  // cosmetics one above, see proceduralPatternCatalog.ts for why.
+  const unlockedFloorPatternIds = useHousingStore(s => s.unlockedFloorPatternIds);
+  const unlockedWallPatternIds  = useHousingStore(s => s.unlockedWallPatternIds);
+  const activeFloorPatternId    = useHousingStore(s => s.activeFloorPatternId);
+  const activeWallPatternId     = useHousingStore(s => s.activeWallPatternId);
+  const unlockFloorPattern      = useHousingStore(s => s.unlockFloorPattern);
+  const unlockWallPattern       = useHousingStore(s => s.unlockWallPattern);
+  const setActiveFloorPattern   = useHousingStore(s => s.setActiveFloorPattern);
+  const setActiveWallPattern    = useHousingStore(s => s.setActiveWallPattern);
+
+  const unlockedPatternIds = category === "floors" ? unlockedFloorPatternIds : unlockedWallPatternIds;
+  const activePatternId    = category === "floors" ? activeFloorPatternId : activeWallPatternId;
+
+  const handlePatternPurchase = (item: FloorPatternItem | WallPatternItem) => {
+    if (acorns < item.cost) {
+      addToast("Not enough acorns!");
+      return;
+    }
+    if (category === "floors") unlockFloorPattern(item.id);
+    else unlockWallPattern(item.id);
+    spend(item.cost);
+    addToast(`Purchased ${item.name}!`);
+  };
+
+  const handleApplyPattern = (item: FloorPatternItem | WallPatternItem) => {
+    if (category === "floors") setActiveFloorPattern(item.id);
+    else setActiveWallPattern(item.id);
+  };
 
   useEffect(() => { loadCatalog(); }, [loadCatalog]);
 
@@ -179,7 +220,38 @@ export default function ShopScreen() {
               </View>
             </View>
 
+            {/* Category selector */}
+            <View style={{ flexDirection: 'row', marginBottom: spacing.md }}>
+              {(['cosmetics', 'floors', 'walls'] as ShopCategory[]).map((cat) => {
+                const isSelected = category === cat;
+                const label = cat === 'cosmetics' ? 'Cosmetics' : cat === 'floors' ? 'Floors' : 'Walls';
+                return (
+                  <TouchableOpacity
+                    key={cat}
+                    onPress={() => setCategory(cat)}
+                    style={{
+                      flex: 1,
+                      paddingVertical: spacing.sm,
+                      marginRight: cat !== 'walls' ? spacing.sm : 0,
+                      borderRadius: borderRadius.md,
+                      alignItems: 'center',
+                      backgroundColor: isSelected ? colors.primary[500] : colors.background.tertiary,
+                    }}
+                  >
+                    <Text style={{
+                      fontSize: typography.size.xs,
+                      color: isSelected ? colors.text.inverse : colors.text.primary,
+                      fontWeight: 'bold',
+                    }}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
             {/* Store items */}
+            {category === 'cosmetics' ? (
             <FlatList
               data={catalog}
               keyExtractor={(item) => item.id}
@@ -278,6 +350,110 @@ export default function ShopScreen() {
                 );
               }}
             />
+            ) : (
+            <FlatList<FloorPatternItem | WallPatternItem>
+              data={category === 'floors' ? FLOOR_PATTERN_CATALOG : WALL_PATTERN_CATALOG}
+              keyExtractor={(item) => item.id}
+              numColumns={2}
+              renderItem={({ item }) => {
+                const isOwned = unlockedPatternIds.includes(item.id);
+                const isActive = item.id === activePatternId;
+                const canAfford = acorns >= item.cost;
+
+                return (
+                  <View style={{
+                    flex: 1,
+                    margin: spacing.sm,
+                    backgroundColor: colors.background.primary,
+                    borderRadius: borderRadius.md,
+                    padding: spacing.md,
+                    alignItems: 'center',
+                    ...shadows.sm,
+                    borderWidth: isActive ? 2 : 1,
+                    borderColor: isActive ? colors.primary[500] : colors.gray[200],
+                  }}>
+                    <PatternSwatch
+                      family={item.family}
+                      style={item.style}
+                      size={60}
+                    />
+                    <Text style={{
+                      fontSize: typography.size.xs,
+                      color: colors.text.primary,
+                      textAlign: 'center',
+                      fontWeight: '600',
+                      marginTop: spacing.sm,
+                      marginBottom: spacing.xs,
+                    }}>
+                      {item.name}
+                    </Text>
+                    <View style={{
+                      backgroundColor: colors.background.tertiary,
+                      paddingHorizontal: spacing.sm,
+                      paddingVertical: spacing.xs,
+                      borderRadius: borderRadius.sm,
+                      marginBottom: spacing.sm,
+                    }}>
+                      <Text style={{ fontSize: typography.size.base, color: colors.text.primary, fontWeight: 'bold' }}>
+                        {item.cost} 🌰
+                      </Text>
+                    </View>
+
+                    {isActive ? (
+                      <View style={{
+                        backgroundColor: colors.accent.mint,
+                        paddingHorizontal: spacing.md,
+                        paddingVertical: spacing.sm,
+                        borderRadius: borderRadius.sm,
+                      }}>
+                        <Text style={{ fontSize: typography.size.xs, color: colors.text.primary, fontWeight: 'bold' }}>
+                          ✓ Active
+                        </Text>
+                      </View>
+                    ) : isOwned ? (
+                      <TouchableOpacity
+                        style={{
+                          backgroundColor: colors.primary[500],
+                          paddingHorizontal: spacing.md,
+                          paddingVertical: spacing.sm,
+                          borderRadius: borderRadius.sm,
+                          minWidth: 60,
+                          alignItems: 'center',
+                        }}
+                        onPress={() => handleApplyPattern(item)}
+                      >
+                        <Text style={{ fontSize: typography.size.xs, color: colors.text.inverse, fontWeight: 'bold' }}>
+                          Apply
+                        </Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity
+                        style={{
+                          backgroundColor: canAfford ? colors.primary[500] : colors.background.tertiary,
+                          paddingHorizontal: spacing.md,
+                          paddingVertical: spacing.sm,
+                          borderRadius: borderRadius.sm,
+                          minWidth: 60,
+                          alignItems: 'center',
+                          opacity: canAfford ? 1 : 0.6,
+                        }}
+                        onPress={() => canAfford && handlePatternPurchase(item)}
+                        disabled={!canAfford}
+                      >
+                        <Text style={{
+                          fontSize: typography.size.xs,
+                          color: canAfford ? colors.text.inverse : colors.text.secondary,
+                          fontWeight: 'bold',
+                        }}>
+                          {canAfford ? 'Buy' : 'Too Expensive'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                );
+              }}
+            />
+            )}
           </View>
         </View>
       )}

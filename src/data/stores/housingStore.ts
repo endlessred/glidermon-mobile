@@ -3,6 +3,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { FloorSetName, WallSetName } from "../../game/housing/types/RoomConfig";
+import { DEFAULT_FLOOR_PATTERN_ID, DEFAULT_WALL_PATTERN_ID } from "../../game/housing/types/proceduralPatternCatalog";
 
 export interface RoomSizeTier {
   width: number;
@@ -35,6 +36,14 @@ type HousingState = {
   activeFloorSet: FloorSetName;
   activeWallSet: WallSetName;
   furniturePlacements: FurniturePlacement[];
+  // Procedural pattern catalog (proceduralPatternCatalog.ts) for the
+  // 3D-primitive room shell -- kept separate from the asset-backed fields
+  // above, which the `quad`/`legacy` renderers still use. See the housing
+  // plan for why these two systems are deliberately not unified.
+  activeFloorPatternId: string;
+  activeWallPatternId: string;
+  unlockedFloorPatternIds: string[];
+  unlockedWallPatternIds: string[];
   _hasHydrated: boolean;
 
   unlockRoomTier: (tier: number) => void;
@@ -42,6 +51,10 @@ type HousingState = {
   unlockWallSet: (set: WallSetName) => void;
   setActiveFloor: (set: FloorSetName) => void;
   setActiveWall: (set: WallSetName) => void;
+  unlockFloorPattern: (id: string) => void;
+  unlockWallPattern: (id: string) => void;
+  setActiveFloorPattern: (id: string) => void;
+  setActiveWallPattern: (id: string) => void;
   placeFurniture: (placement: FurniturePlacement) => void;
   removeFurniture: (id: string) => void;
 };
@@ -62,6 +75,10 @@ export const useHousingStore = create<HousingState>()(
       activeFloorSet: "YellowCarpet",
       activeWallSet: "Brown1WoodPaneling",
       furniturePlacements: DEFAULT_FURNITURE,
+      activeFloorPatternId: DEFAULT_FLOOR_PATTERN_ID,
+      activeWallPatternId: DEFAULT_WALL_PATTERN_ID,
+      unlockedFloorPatternIds: [DEFAULT_FLOOR_PATTERN_ID],
+      unlockedWallPatternIds: [DEFAULT_WALL_PATTERN_ID],
       _hasHydrated: false,
 
       unlockRoomTier: (tier) => {
@@ -87,6 +104,24 @@ export const useHousingStore = create<HousingState>()(
         set({ activeWallSet: setName });
       },
 
+      unlockFloorPattern: (id) => {
+        set((s) => (s.unlockedFloorPatternIds.includes(id) ? s : { unlockedFloorPatternIds: [...s.unlockedFloorPatternIds, id] }));
+      },
+
+      unlockWallPattern: (id) => {
+        set((s) => (s.unlockedWallPatternIds.includes(id) ? s : { unlockedWallPatternIds: [...s.unlockedWallPatternIds, id] }));
+      },
+
+      setActiveFloorPattern: (id) => {
+        if (!get().unlockedFloorPatternIds.includes(id)) return;
+        set({ activeFloorPatternId: id });
+      },
+
+      setActiveWallPattern: (id) => {
+        if (!get().unlockedWallPatternIds.includes(id)) return;
+        set({ activeWallPatternId: id });
+      },
+
       placeFurniture: (placement) => {
         set((s) => ({
           furniturePlacements: [...s.furniturePlacements.filter((p) => p.id !== placement.id), placement],
@@ -100,7 +135,7 @@ export const useHousingStore = create<HousingState>()(
     {
       name: "housing_store_v1",
       storage: createJSONStorage(() => AsyncStorage),
-      version: 1,
+      version: 2,
       migrate: (persisted: any, fromVersion: number) => {
         const s = persisted ?? {};
         s.roomSizeTier = typeof s.roomSizeTier === "number" ? s.roomSizeTier : 1;
@@ -109,6 +144,21 @@ export const useHousingStore = create<HousingState>()(
         s.activeFloorSet = s.unlockedFloorSets.includes(s.activeFloorSet) ? s.activeFloorSet : s.unlockedFloorSets[0];
         s.activeWallSet = s.unlockedWallSets.includes(s.activeWallSet) ? s.activeWallSet : s.unlockedWallSets[0];
         s.furniturePlacements = Array.isArray(s.furniturePlacements) ? s.furniturePlacements : DEFAULT_FURNITURE;
+
+        // v2: procedural pattern catalog for the 3D room shell, added
+        // alongside (not replacing) the asset-backed fields above.
+        s.unlockedFloorPatternIds = Array.isArray(s.unlockedFloorPatternIds) && s.unlockedFloorPatternIds.length > 0
+          ? s.unlockedFloorPatternIds
+          : [DEFAULT_FLOOR_PATTERN_ID];
+        s.unlockedWallPatternIds = Array.isArray(s.unlockedWallPatternIds) && s.unlockedWallPatternIds.length > 0
+          ? s.unlockedWallPatternIds
+          : [DEFAULT_WALL_PATTERN_ID];
+        s.activeFloorPatternId = s.unlockedFloorPatternIds.includes(s.activeFloorPatternId)
+          ? s.activeFloorPatternId
+          : s.unlockedFloorPatternIds[0];
+        s.activeWallPatternId = s.unlockedWallPatternIds.includes(s.activeWallPatternId)
+          ? s.activeWallPatternId
+          : s.unlockedWallPatternIds[0];
         return s;
       },
       onRehydrateStorage: () => (state) => {

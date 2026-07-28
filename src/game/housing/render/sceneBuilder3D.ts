@@ -9,13 +9,19 @@
 // that art bakes in its own perspective, which would double-distort when
 // mapped onto real 3D box faces viewed through a true 3D camera.
 import * as THREE from 'three';
-import { RoomGridConfig } from '../types/RoomConfig';
 import { getFloorTexture, getWallTexture } from './proceduralTextures';
 import { TILE_SIZE, roomHalfExtents, gridToWorld } from './grid3D';
 
 const FLOOR_THICKNESS = 0.1;
 export const WALL_HEIGHT = 1.6;
 const WALL_THICKNESS = 0.1;
+
+export interface Room3DConfig {
+  width: number;
+  height: number;
+  floorPatternId: string;
+  wallPatternId: string;
+}
 
 export interface Built3DRoom {
   group: THREE.Group;
@@ -26,11 +32,11 @@ export interface Built3DRoom {
   wallHeight: number;
 }
 
-export function buildRoomScene3D(grid: RoomGridConfig): Built3DRoom {
+export function buildRoomScene3D(grid: Room3DConfig): Built3DRoom {
   const group = new THREE.Group();
   const { halfWidth, halfDepth } = roomHalfExtents(grid);
 
-  const floorTexture = getFloorTexture(grid.defaultFloor.set);
+  const floorTexture = getFloorTexture(grid.floorPatternId);
   floorTexture.repeat.set(1, 1);
   const floorMaterial = new THREE.MeshStandardMaterial({ map: floorTexture });
   const floorGeometry = new THREE.BoxGeometry(TILE_SIZE, FLOOR_THICKNESS, TILE_SIZE);
@@ -44,7 +50,7 @@ export function buildRoomScene3D(grid: RoomGridConfig): Built3DRoom {
     }
   }
 
-  const wallTexture = getWallTexture(grid.defaultWall.set);
+  const wallTexture = getWallTexture(grid.wallPatternId);
 
   // Back wall along the X axis, at the far Z edge -- one box spanning the
   // whole room width. No per-tile segments needed.
