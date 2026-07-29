@@ -11,12 +11,23 @@ export const DAILY_GOAL_ACORNS = 300;
 /** Max streak freezes a player can hold at once. Earn-only (7-day milestones), no purchase. */
 export const MAX_FREEZES = 2;
 
-export type SplashKind = "continued" | "started" | "lost" | "frozen";
+/** Streak-day tiers that get a distinct celebration + Acorn reward instead of the plain "continued" splash. */
+export const MILESTONE_REWARDS: Record<number, number> = {
+  7: 100,
+  30: 500,
+  100: 2000,
+  365: 10000,
+};
+
+const milestoneRewardFor = (streak: number): number | undefined => MILESTONE_REWARDS[streak];
+
+export type SplashKind = "continued" | "started" | "lost" | "frozen" | "milestone";
 export type PendingSplash = {
   kind: SplashKind;
   streak: number;
   lostFrom?: number;
   freezesUsed?: number;
+  milestoneReward?: number;
 };
 
 type StreakState = {
@@ -101,26 +112,37 @@ export const useStreakStore = create<StreakState>()(
           if (gapDays === 0) {
             const nextStreak = s.currentStreak + 1;
             const earnedFreeze = nextStreak % 7 === 0;
+            const milestoneReward = milestoneRewardFor(nextStreak);
             set({
               currentStreak: nextStreak,
               longestStreak: Math.max(s.longestStreak, nextStreak),
               freezesAvailable: earnedFreeze ? Math.min(MAX_FREEZES, s.freezesAvailable + 1) : s.freezesAvailable,
               lastGoalMetDate: today,
               lastEvaluatedDate: today,
-              pendingSplash: { kind: s.lastGoalMetDate === null ? "started" : "continued", streak: nextStreak },
+              pendingSplash: milestoneReward
+                ? { kind: "milestone", streak: nextStreak, milestoneReward }
+                : { kind: s.lastGoalMetDate === null ? "started" : "continued", streak: nextStreak },
             });
+            // Grant after set(): lastGoalMetDate is now today, so the recursive
+            // evaluate() this triggers (via the progressionStore subscribe) hits
+            // the early-return guard instead of re-entering this same branch.
+            if (milestoneReward) useProgressionStore.getState().grantAcorns(milestoneReward);
           } else if (s.freezesAvailable >= gapDays) {
             const nextStreak = s.currentStreak + 1;
             const earnedFreeze = nextStreak % 7 === 0;
             const freezesLeft = s.freezesAvailable - gapDays;
+            const milestoneReward = milestoneRewardFor(nextStreak);
             set({
               currentStreak: nextStreak,
               longestStreak: Math.max(s.longestStreak, nextStreak),
               freezesAvailable: earnedFreeze ? Math.min(MAX_FREEZES, freezesLeft + 1) : freezesLeft,
               lastGoalMetDate: today,
               lastEvaluatedDate: today,
-              pendingSplash: { kind: "continued", streak: nextStreak, freezesUsed: gapDays },
+              pendingSplash: milestoneReward
+                ? { kind: "milestone", streak: nextStreak, freezesUsed: gapDays, milestoneReward }
+                : { kind: "continued", streak: nextStreak, freezesUsed: gapDays },
             });
+            if (milestoneReward) useProgressionStore.getState().grantAcorns(milestoneReward);
           } else {
             set({
               currentStreak: 1,

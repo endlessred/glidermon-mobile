@@ -104,6 +104,21 @@ export function setStreakNearMilestone() {
   });
 }
 
+/** Sets streak to tier-1 (yesterday counted) and immediately hits today's goal, landing exactly on the milestone tier. */
+export function triggerMilestone(tier: number) {
+  useProgressionStore.setState({ dailyEarned: 0 });
+  useStreakStore.setState({
+    currentStreak: tier - 1,
+    longestStreak: tier - 1,
+    freezesAvailable: 0,
+    lastGoalMetDate: daysAgo(1),
+    lastEvaluatedDate: daysAgo(1),
+    pendingSplash: null,
+    hasCommitted: true,
+  });
+  hitTodaysGoal();
+}
+
 export function triggerCommitmentModal() {
   useProgressionStore.setState({ dailyEarned: 0 });
   useStreakStore.setState({

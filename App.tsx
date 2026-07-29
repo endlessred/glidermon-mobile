@@ -35,6 +35,7 @@ import {
   simulateFrozenGap,
   simulateSkippedDay,
   triggerCommitmentModal,
+  triggerMilestone,
 } from "./src/data/stores/streakTestScenarios";
 import { configureNotificationHandler } from "./src/notifications/streakReminder";
 import { useTheme } from "./src/data/hooks/useTheme";
@@ -68,6 +69,10 @@ const STREAK_SCENARIOS: Record<string, () => void> = {
   frozen: simulateFrozenGap,
   lost: simulateSkippedDay,
   commitment: triggerCommitmentModal,
+  milestone7: () => triggerMilestone(7),
+  milestone30: () => triggerMilestone(30),
+  milestone100: () => triggerMilestone(100),
+  milestone365: () => triggerMilestone(365),
 };
 
 function parseGlidermonUrl(url: string): { tab: Tab; shopCategory?: ShopCategory } | { streakScenario: string } | null {

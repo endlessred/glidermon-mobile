@@ -44,7 +44,7 @@ export default function StreakSplashOverlay() {
 
   if (!visible) return null;
 
-  const { kind, streak, lostFrom, freezesUsed } = pendingSplash!;
+  const { kind, streak, lostFrom, freezesUsed, milestoneReward } = pendingSplash!;
   const freezeNote = freezesUsed ? `🧊 Used ${freezesUsed} freeze${freezesUsed > 1 ? "s" : ""} to keep it going. ` : "";
 
   const copy = {
@@ -55,6 +55,10 @@ export default function StreakSplashOverlay() {
         : "Keep it up tomorrow to grow it.",
     },
     continued: { title: `${streak} Day Streak!`, subtitle: `${freezeNote}Nice work keeping it going.` },
+    milestone: {
+      title: `🏆 ${streak}-Day Milestone!`,
+      subtitle: `${freezeNote}+${(milestoneReward ?? 0).toLocaleString()} Acorns! Keep the streak alive.`,
+    },
     frozen: {
       title: "Streak protected!",
       subtitle: `Used ${freezesUsed} freeze${(freezesUsed ?? 1) > 1 ? "s" : ""} to cover yesterday. Keep it going today!`,
@@ -66,6 +70,7 @@ export default function StreakSplashOverlay() {
   }[kind];
 
   const lottieSource = kind === "lost" ? HEART_BROKEN_LOTTIE : FIRE_LOTTIE;
+  const cardBorderColor = kind === "milestone" ? "#e2b93a" : "#233043";
 
   return (
     <View style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center", pointerEvents: "auto" }}>
@@ -86,7 +91,7 @@ export default function StreakSplashOverlay() {
           backgroundColor: "#0b1220",
           borderRadius: 20,
           borderWidth: 2,
-          borderColor: "#233043",
+          borderColor: cardBorderColor,
           alignItems: "center",
           transform: [{ scale: cardS }],
           opacity: cardA,
