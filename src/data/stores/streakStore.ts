@@ -21,6 +21,27 @@ export const MILESTONE_REWARDS: Record<number, number> = {
 
 const milestoneRewardFor = (streak: number): number | undefined => MILESTONE_REWARDS[streak];
 
+/** Milestone tiers in ascending order, e.g. [7, 30, 100, 365]. */
+export const MILESTONE_TIERS = Object.keys(MILESTONE_REWARDS).map(Number).sort((a, b) => a - b);
+
+export type MilestoneProgress = {
+  previousTier: number;
+  nextTier: number | null; // null once every tier has been reached
+  stretchLength: number;   // days between previousTier and nextTier
+  daysIntoStretch: number; // days completed since previousTier
+  daysLeft: number;        // days remaining until nextTier
+};
+
+/** Progress through the current milestone stretch (resets at each tier), for the streak detail screen. */
+export function getMilestoneProgress(currentStreak: number): MilestoneProgress {
+  const previousTier = [0, ...MILESTONE_TIERS].filter((t) => t <= currentStreak).pop() ?? 0;
+  const nextTier = MILESTONE_TIERS.find((t) => t > currentStreak) ?? null;
+  const stretchLength = nextTier ? nextTier - previousTier : 0;
+  const daysIntoStretch = currentStreak - previousTier;
+  const daysLeft = nextTier ? nextTier - currentStreak : 0;
+  return { previousTier, nextTier, stretchLength, daysIntoStretch, daysLeft };
+}
+
 export type SplashKind = "continued" | "started" | "lost" | "frozen" | "milestone";
 export type PendingSplash = {
   kind: SplashKind;

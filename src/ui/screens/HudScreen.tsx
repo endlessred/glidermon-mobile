@@ -28,6 +28,7 @@ import { BadgeChip } from "../components/BadgeChip";
 import StreakBadge from "../components/StreakBadge";
 import { CheckInCard } from "../components/CheckInCard";
 import { CheckInFlowModal } from "../components/CheckInFlowModal";
+import StreakDetailModal from "../components/StreakDetailModal";
 import { useCheckInStore } from "../../data/stores/checkInStore";
 
 // Phosphor icons - fallback if not available
@@ -145,6 +146,7 @@ export default function HudScreen() {
 
   // Check-in state
   const [checkInOpen, setCheckInOpen] = useState(false);
+  const [streakDetailOpen, setStreakDetailOpen] = useState(false);
   const availableSlot = useCheckInStore(s => s.availableSlot());
   const resetDailyIfNeeded = useCheckInStore(s => s.resetDailyIfNeeded);
 
@@ -267,7 +269,7 @@ export default function HudScreen() {
                 height={36}
                 LeftIcon={Acorn ? <Acorn size={16} weight="fill" /> : <Text style={{ fontSize: 16 }}>🌰</Text>}
               />
-              <StreakBadge />
+              <StreakBadge onPress={() => setStreakDetailOpen(true)} />
               <View style={{ flex: 1 }}>
                 <LevelBar level={level} current={xpInto} next={nextXp} />
               </View>
@@ -298,6 +300,11 @@ export default function HudScreen() {
         visible={checkInOpen}
         slot={availableSlot}
         onClose={() => setCheckInOpen(false)}
+      />
+
+      <StreakDetailModal
+        visible={streakDetailOpen}
+        onClose={() => setStreakDetailOpen(false)}
       />
     </View>
   );

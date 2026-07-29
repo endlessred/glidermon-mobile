@@ -4,7 +4,9 @@ import { Text } from "react-native";
 import { BadgeChip } from "./BadgeChip";
 import { useStreakStore } from "../../data/stores/streakStore";
 
-export default function StreakBadge() {
+type Props = { onPress?: () => void };
+
+export default function StreakBadge({ onPress }: Props) {
   const currentStreak = useStreakStore((s) => s.currentStreak);
   const freezesAvailable = useStreakStore((s) => s.freezesAvailable);
 
@@ -17,6 +19,7 @@ export default function StreakBadge() {
       width={freezesAvailable > 0 ? 96 : 72}
       height={36}
       LeftIcon={<Text style={{ fontSize: 16 }}>🔥</Text>}
+      onPress={onPress}
     />
   );
 }
