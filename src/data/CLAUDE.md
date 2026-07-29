@@ -26,12 +26,21 @@ Configuration and integration points for external data sources.
 
 #### `checkInStore.ts`
 - **Purpose**: Daily check-in state, goal-setting, and adherence tracking
-- **State**: morning/midday/evening CheckIn objects (null until completed), daily streak, check-in cap multiplier
+- **State**: morning/midday/evening CheckIn objects (null until completed), check-in cap multiplier
 - **Actions**: `completeCheckIn(slot, goals)`, `computeGlucoseAdherence(goal, from, to)`, `resetDailyIfNeeded()`
 - **Integration**: Writes `checkInCapMultiplier` to progressionStore after each completed check-in; reads CGM trail from gameStore for glucose adherence scoring
 - **Availability windows**: Morning 6–11 AM, Midday 11 AM–4 PM, Evening 5 PM–midnight (local time)
-- **Persistence**: Resets daily; streak persists across days
+- **Persistence**: Resets daily
 - **Design spec**: `docs/superpowers/specs/2026-07-19-checkin-system-design.md`
+- **Note**: previously tracked its own "all 3 slots completed" daily streak; that has been replaced by the lower-friction, user-facing streak in `streakStore.ts` below.
+
+#### `streakStore.ts`
+- **Purpose**: Duolingo-style daily engagement streak
+- **State**: `currentStreak`, `longestStreak`, `lastGoalMetDate`, `pendingSplash` (queued celebration/loss splash), `hasCommitted` + `reminderHour` + `notificationPermission` (streak-reminder opt-in)
+- **Trigger**: a day "counts" when `progressionStore.dailyEarned` crosses `DAILY_GOAL_ACORNS` (300) — reused as-is, no separate activity metric
+- **Actions**: `evaluate()` (idempotent; call on app foreground/mount/tick and after any progressionStore change), `dismissSplash()`, `markCommitted(reminderHour, granted)`
+- **Integration**: subscribes to `progressionStore` directly (module-level `subscribe`); schedules/cancels local reminders via `src/notifications/streakReminder.ts`
+- **Persistence**: streak counters and commitment/reminder prefs persist across days
 
 #### `progressionStore.ts`
 - **Purpose**: Player progression, levels, achievements

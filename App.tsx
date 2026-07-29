@@ -25,6 +25,11 @@ import ToastHost from "./src/ui/components/ToastHost";
 import LevelUpOverlay from "./src/ui/components/LevelUpOverlay";
 import LevelUpTestButton from "./src/ui/components/LevelUpTestButton";
 import DevDebugPanel from "./src/ui/components/DevDebugPanel";
+import StreakSplashOverlay from "./src/ui/components/StreakSplashOverlay";
+import StreakCommitmentModal from "./src/ui/components/StreakCommitmentModal";
+import StreakTestButton from "./src/ui/components/StreakTestButton";
+import { useStreakStore } from "./src/data/stores/streakStore";
+import { configureNotificationHandler } from "./src/notifications/streakReminder";
 import { useTheme } from "./src/data/hooks/useTheme";
 import { initializeCosmeticSystem } from "./src/game/cosmetics/cosmeticDefinitions";
 import { useOutfitStore } from "./src/data/stores/outfitStore";
@@ -196,9 +201,17 @@ export default function App() {
     return () => handle.stop();
   }, [useSimulator, simSpeed, onEgvs, healthKit.isAvailable, healthKit.isObserving]);
 
+  // Notification handler + channel setup (idempotent)
+  useEffect(() => {
+    configureNotificationHandler();
+  }, []);
+
   // Daily reset guard (no Date arg; store handles its own clock)
   useEffect(() => {
-    const check = () => useProgressionStore.getState().resetDailyIfNeeded();
+    const check = () => {
+      useProgressionStore.getState().resetDailyIfNeeded();
+      useStreakStore.getState().evaluate();
+    };
 
     // 1) on mount
     check();
@@ -304,6 +317,9 @@ export default function App() {
       <ToastHost />
       <LevelUpOverlay />
       <LevelUpTestButton />
+      <StreakSplashOverlay />
+      <StreakCommitmentModal />
+      <StreakTestButton />
       </SafeAreaView>
     </SafeAreaProvider>
   );

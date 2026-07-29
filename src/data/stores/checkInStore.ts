@@ -130,7 +130,6 @@ function computeCapMultiplier(today: DailyCheckIns): number {
 
 export type CheckInState = {
   today: DailyCheckIns;
-  streak: number;
 
   // Actions
   resetDailyIfNeeded: () => void;
@@ -140,26 +139,18 @@ export type CheckInState = {
   completeEveningCheckIn: (lifestyleProgress: boolean[]) => void;
 };
 
-const STORE_VERSION = 1;
+const STORE_VERSION = 2;
 
 export const useCheckInStore = create<CheckInState>()(
   persist(
     (set, get) => ({
       today: emptyDay(),
-      streak: 0,
 
       resetDailyIfNeeded: () => {
         const today = ymd();
         const s = get();
         if (s.today.date !== today) {
-          const hadFullDay =
-            s.today.morning !== null &&
-            s.today.midday !== null &&
-            s.today.evening !== null;
-          set({
-            today: emptyDay(),
-            streak: hadFullDay ? s.streak + 1 : 0,
-          });
+          set({ today: emptyDay() });
         }
       },
 
@@ -257,12 +248,11 @@ export const useCheckInStore = create<CheckInState>()(
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => ({
         today: s.today,
-        streak: s.streak,
       }),
       migrate: (persisted: any) => {
         const s = persisted ?? {};
         s.today = s.today ?? emptyDay();
-        s.streak = typeof s.streak === "number" ? s.streak : 0;
+        delete s.streak;
         return s;
       },
     }

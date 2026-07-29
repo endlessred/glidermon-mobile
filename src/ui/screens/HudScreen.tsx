@@ -25,6 +25,7 @@ const HOUSING_RENDERER: HousingRenderer = 'primitive3d';
 import { UIThemeProvider, useUITokens } from "../theme/UIThemeProvider";
 import { FramedCard } from "../components/FramedCard";
 import { BadgeChip } from "../components/BadgeChip";
+import StreakBadge from "../components/StreakBadge";
 import { CheckInCard } from "../components/CheckInCard";
 import { CheckInFlowModal } from "../components/CheckInFlowModal";
 import { useCheckInStore } from "../../data/stores/checkInStore";
@@ -266,6 +267,7 @@ export default function HudScreen() {
                 height={36}
                 LeftIcon={Acorn ? <Acorn size={16} weight="fill" /> : <Text style={{ fontSize: 16 }}>🌰</Text>}
               />
+              <StreakBadge />
               <View style={{ flex: 1 }}>
                 <LevelBar level={level} current={xpInto} next={nextXp} />
               </View>
