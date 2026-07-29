@@ -19,6 +19,7 @@ import { computeBillboardQuaternion } from '../render/billboard3D';
 import { computeNativeCharacterHeight } from '../render/characterScale';
 import { gridToWorld, TILE_SIZE } from '../render/grid3D';
 import { createSkyTexture, getSkyPalette, paintSky, rgbToHex } from '../render/sky3D';
+import { createTreetopBackdrop3D } from '../render/treetopBackdrop3D';
 
 interface IsometricRoomView3DProps {
   width?: number;
@@ -89,6 +90,7 @@ export default function IsometricRoomView3D({
   const ambientLightRef = useRef<THREE.AmbientLight | null>(null);
   const sunLightRef = useRef<THREE.DirectionalLight | null>(null);
   const lastSkyUpdateRef = useRef<number | null>(null);
+  const treetopGroupRef = useRef<THREE.Group | null>(null);
 
   const scaleRef = useRef(characterScale);
   useEffect(() => {
@@ -188,6 +190,12 @@ export default function IsometricRoomView3D({
       }
       rendererRef.current?.dispose();
       skyTextureRef.current?.dispose();
+      const treetopMesh = treetopGroupRef.current?.children[0] as THREE.Mesh | undefined;
+      if (treetopMesh) {
+        treetopMesh.geometry.dispose();
+        (treetopMesh.material as THREE.MeshBasicMaterial).map?.dispose();
+        (treetopMesh.material as THREE.MeshBasicMaterial).dispose();
+      }
     },
     []
   );
@@ -247,14 +255,15 @@ export default function IsometricRoomView3D({
       const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
       cameraRef.current = camera;
 
-      // Every billboard (furniture, character) shares this one fixed
-      // rotation instead of each computing its own lookAt -- see
+      // Every billboard (furniture, character, treetop) shares this one
+      // fixed rotation instead of each computing its own lookAt -- see
       // billboard3D.ts for why that matters under an orthographic camera.
       // Uses the fixed CAMERA_OFFSET direction rather than the live
       // camera.position, since that position now pans during zoom -- the
       // viewing *direction* (and therefore correct billboard facing) never
       // changes, only where it's centered.
       const billboardQuaternion = computeBillboardQuaternion(CAMERA_OFFSET);
+      const treetopPromise = createTreetopBackdrop3D(built.halfWidth, built.halfDepth, billboardQuaternion);
 
       for (const placement of furniturePlacements) {
         const billboard = await buildFurnitureBillboard3D(placement, dims, billboardQuaternion);
@@ -303,6 +312,14 @@ export default function IsometricRoomView3D({
       // Zoomed-in framing centers on the character's mid-height, not their
       // feet, so the camera doesn't look like it's aimed at the floor.
       characterTargetRef.current.set(charX, characterWorldHeight / 2, charZ);
+
+      // Real world-space billboard (not screen-locked), so it naturally
+      // pans/scales with the room when the camera zooms in on the character
+      // -- same depth-tested approach as furniture (treetopBackdrop3D.ts).
+      const treetopGroup = await treetopPromise;
+      built.group.add(treetopGroup);
+      treetopGroupRef.current = treetopGroup;
+
       updateCameraForZoom(camera, isZoomedIn);
 
       rendererRef.current = renderer;
