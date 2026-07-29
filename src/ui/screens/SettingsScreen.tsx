@@ -10,6 +10,13 @@ import { useLevelUpStore } from "../../data/stores/levelUpStore";
 import { ThemeVariation, themeDisplayNames } from "../../styles/themeVariations";
 import { useHealthKit } from "../../data/hooks/useHealthKit";
 import { unifiedHealthService } from "../../health/healthService";
+import { useStreakStore, MAX_FREEZES } from "../../data/stores/streakStore";
+
+const formatHour = (hour: number) => {
+  const period = hour >= 12 ? "PM" : "AM";
+  const h12 = hour % 12 === 0 ? 12 : hour % 12;
+  return `${h12} ${period}`;
+};
 
 export default function SettingsScreen() {
   const { colors, spacing, borderRadius, typography } = useTheme();
@@ -53,6 +60,13 @@ export default function SettingsScreen() {
 
   const resetProgression = useProgressionStore(s => s.resetProgression);
   const addToast = useToastStore(s => s.addToast);
+
+  // Streak
+  const streakFreezes = useStreakStore(s => s.freezesAvailable);
+  const remindersEnabled = useStreakStore(s => s.remindersEnabled);
+  const reminderHour = useStreakStore(s => s.reminderHour);
+  const setRemindersEnabled = useStreakStore(s => s.setRemindersEnabled);
+  const setReminderHour = useStreakStore(s => s.setReminderHour);
 
   const section = (title: string, icon: string, children: React.ReactNode) => (
     <View style={{
@@ -662,6 +676,63 @@ export default function SettingsScreen() {
                 accessibilityLabel="Set text size to extra large: 1.5 times normal"
                 accessibilityHint="Makes all text 50 percent larger for much easier reading"
               />
+            </View>
+          </>
+        ))}
+
+        {section("🔥 Streak", "", (
+          <>
+            <View style={{
+              backgroundColor: colors.background.secondary,
+              borderRadius: borderRadius.md,
+              padding: spacing.md,
+              borderWidth: 1,
+              borderColor: colors.gray[200],
+              marginBottom: spacing.sm,
+            }}>
+              <Text style={{
+                color: colors.text.primary,
+                fontSize: typography.size.base,
+                fontWeight: typography.weight.medium,
+              }}>
+                Daily reminder: {remindersEnabled ? "🟢 Enabled" : "🔴 Disabled"} at {formatHour(reminderHour)}
+              </Text>
+              <Text style={{
+                color: colors.text.secondary,
+                fontSize: typography.size.sm,
+                marginTop: spacing.xs,
+              }}>
+                Nudges you in the evening if today's streak goal isn't met yet
+              </Text>
+              <Text style={{
+                color: colors.text.secondary,
+                fontSize: typography.size.sm,
+                marginTop: spacing.xs,
+              }}>
+                Freezes: {streakFreezes} / {MAX_FREEZES} (earned every 7-day streak)
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: "row", gap: spacing.sm, flexWrap: "wrap", marginBottom: spacing.md }}>
+              <Button
+                label={remindersEnabled ? "Disable Reminders" : "Enable Reminders"}
+                onPress={() => setRemindersEnabled(!remindersEnabled)}
+                variant="secondary"
+              />
+            </View>
+
+            <Text style={{
+              color: colors.text.secondary,
+              fontSize: typography.size.sm,
+              marginBottom: spacing.sm,
+            }}>
+              Reminder time
+            </Text>
+            <View style={{ flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" }}>
+              <Button label="6 PM" onPress={() => setReminderHour(18)} variant={reminderHour === 18 ? "primary" : "secondary"} />
+              <Button label="8 PM" onPress={() => setReminderHour(20)} variant={reminderHour === 20 ? "primary" : "secondary"} />
+              <Button label="9 PM" onPress={() => setReminderHour(21)} variant={reminderHour === 21 ? "primary" : "secondary"} />
+              <Button label="10 PM" onPress={() => setReminderHour(22)} variant={reminderHour === 22 ? "primary" : "secondary"} />
             </View>
           </>
         ))}

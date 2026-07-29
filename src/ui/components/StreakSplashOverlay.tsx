@@ -1,8 +1,12 @@
 // components/StreakSplashOverlay.tsx
 import React, { useEffect, useRef } from "react";
 import { View, Text, Pressable, Animated, Easing } from "react-native";
+import { DotLottie } from "@lottiefiles/dotlottie-react-native";
 import { useStreakStore } from "../../data/stores/streakStore";
 import { useTheme } from "../../data/hooks/useTheme";
+
+const FIRE_LOTTIE = require("../../assets/lottie/fire-streak-orange.lottie");
+const HEART_BROKEN_LOTTIE = require("../../assets/lottie/heart-broken.lottie");
 
 export default function StreakSplashOverlay() {
   const pendingSplash = useStreakStore((s) => s.pendingSplash);
@@ -40,17 +44,28 @@ export default function StreakSplashOverlay() {
 
   if (!visible) return null;
 
-  const { kind, streak, lostFrom } = pendingSplash!;
+  const { kind, streak, lostFrom, freezesUsed } = pendingSplash!;
+  const freezeNote = freezesUsed ? `🧊 Used ${freezesUsed} freeze${freezesUsed > 1 ? "s" : ""} to keep it going. ` : "";
 
   const copy = {
-    started: { emoji: "🔥", title: "Streak started!", subtitle: "Keep it up tomorrow to grow it." },
-    continued: { emoji: "🔥", title: `${streak} Day Streak!`, subtitle: "Nice work keeping it going." },
+    started: {
+      title: "Streak started!",
+      subtitle: lostFrom
+        ? `Your ${lostFrom}-day streak ended, but a new one just began. Keep it up tomorrow!`
+        : "Keep it up tomorrow to grow it.",
+    },
+    continued: { title: `${streak} Day Streak!`, subtitle: `${freezeNote}Nice work keeping it going.` },
+    frozen: {
+      title: "Streak protected!",
+      subtitle: `Used ${freezesUsed} freeze${(freezesUsed ?? 1) > 1 ? "s" : ""} to cover yesterday. Keep it going today!`,
+    },
     lost: {
-      emoji: "💔",
       title: "Streak lost",
       subtitle: lostFrom ? `Your ${lostFrom}-day streak ended. Start a new one today!` : "Start a new one today!",
     },
   }[kind];
+
+  const lottieSource = kind === "lost" ? HEART_BROKEN_LOTTIE : FIRE_LOTTIE;
 
   return (
     <View style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center", pointerEvents: "auto" }}>
@@ -78,7 +93,13 @@ export default function StreakSplashOverlay() {
           boxShadow: "0 15px 35px rgba(0,0,0,0.4)",
         }}
       >
-        <Text style={{ fontSize: 56, marginBottom: 8 }}>{copy.emoji}</Text>
+        <DotLottie
+          key={kind === "lost" ? "heart-broken" : "fire"}
+          source={lottieSource}
+          autoplay
+          loop={kind !== "lost"}
+          style={{ width: 96, height: 96, marginBottom: 8 }}
+        />
         <Text style={{ color: "#cfe6ff", fontWeight: "800", fontSize: 22, marginBottom: 6, textAlign: "center" }}>
           {copy.title}
         </Text>
@@ -103,7 +124,7 @@ export default function StreakSplashOverlay() {
           }}
         >
           <Text style={{ color: "#ffffff", fontWeight: "700", fontSize: 16 }}>
-            {kind === "lost" ? "Got it" : "Nice!"}
+            {kind === "lost" ? "Got it" : kind === "frozen" ? "Got it!" : "Nice!"}
           </Text>
         </Pressable>
       </Animated.View>

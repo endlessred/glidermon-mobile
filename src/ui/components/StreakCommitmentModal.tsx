@@ -1,10 +1,12 @@
 // components/StreakCommitmentModal.tsx
 import React from "react";
 import { View, Text, Pressable } from "react-native";
+import { DotLottie } from "@lottiefiles/dotlottie-react-native";
 import { useStreakStore } from "../../data/stores/streakStore";
 import { requestPermission } from "../../notifications/streakReminder";
 
 const DEFAULT_REMINDER_HOUR = 20;
+const HEART_LOVE_LOTTIE = require("../../assets/lottie/heart-love.lottie");
 
 export default function StreakCommitmentModal() {
   const currentStreak = useStreakStore((s) => s.currentStreak);
@@ -41,7 +43,12 @@ export default function StreakCommitmentModal() {
           boxShadow: "0 15px 35px rgba(0,0,0,0.4)",
         }}
       >
-        <Text style={{ fontSize: 48, marginBottom: 8 }}>🔥</Text>
+        <DotLottie
+          source={HEART_LOVE_LOTTIE}
+          autoplay
+          loop
+          style={{ width: 80, height: 80, marginBottom: 8 }}
+        />
         <Text style={{ color: "#cfe6ff", fontWeight: "800", fontSize: 20, marginBottom: 6, textAlign: "center" }}>
           Don't lose your streak!
         </Text>

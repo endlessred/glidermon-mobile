@@ -29,6 +29,13 @@ import StreakSplashOverlay from "./src/ui/components/StreakSplashOverlay";
 import StreakCommitmentModal from "./src/ui/components/StreakCommitmentModal";
 import StreakTestButton from "./src/ui/components/StreakTestButton";
 import { useStreakStore } from "./src/data/stores/streakStore";
+import {
+  triggerStartedSplash,
+  triggerContinuedSplash,
+  simulateFrozenGap,
+  simulateSkippedDay,
+  triggerCommitmentModal,
+} from "./src/data/stores/streakTestScenarios";
 import { configureNotificationHandler } from "./src/notifications/streakReminder";
 import { useTheme } from "./src/data/hooks/useTheme";
 import { initializeCosmeticSystem } from "./src/game/cosmetics/cosmeticDefinitions";
@@ -52,12 +59,29 @@ const DEEP_LINK_TABS: Record<string, Tab> = {
 };
 const SHOP_CATEGORIES: ShopCategory[] = ["cosmetics", "floors", "walls"];
 
-function parseGlidermonUrl(url: string): { tab: Tab; shopCategory?: ShopCategory } | null {
+// Dev/test deep links for jumping straight to a specific streak popup, e.g.:
+//   adb shell am start -a android.intent.action.VIEW -d "glidermon://streak/lost"
+// Forces the store into that scenario and shows HOME so the popup is visible.
+const STREAK_SCENARIOS: Record<string, () => void> = {
+  started: triggerStartedSplash,
+  continued: triggerContinuedSplash,
+  frozen: simulateFrozenGap,
+  lost: simulateSkippedDay,
+  commitment: triggerCommitmentModal,
+};
+
+function parseGlidermonUrl(url: string): { tab: Tab; shopCategory?: ShopCategory } | { streakScenario: string } | null {
   const match = url.match(/^glidermon:\/\/([^/?]+)\/?([^/?]*)/i);
   if (!match) return null;
-  const tab = DEEP_LINK_TABS[match[1].toLowerCase()];
-  if (!tab) return null;
+  const segment = match[1].toLowerCase();
   const sub = match[2].toLowerCase();
+
+  if (segment === "streak" && STREAK_SCENARIOS[sub]) {
+    return { streakScenario: sub };
+  }
+
+  const tab = DEEP_LINK_TABS[segment];
+  if (!tab) return null;
   if (tab === "SHOP" && SHOP_CATEGORIES.includes(sub as ShopCategory)) {
     return { tab, shopCategory: sub as ShopCategory };
   }
@@ -115,6 +139,13 @@ export default function App() {
     const handleUrl = (url: string) => {
       const parsed = parseGlidermonUrl(url);
       if (!parsed) return;
+
+      if ("streakScenario" in parsed) {
+        STREAK_SCENARIOS[parsed.streakScenario]();
+        setTab("HOME");
+        return;
+      }
+
       setTab(parsed.tab);
       if (parsed.shopCategory) {
         setShopCategory(parsed.shopCategory);

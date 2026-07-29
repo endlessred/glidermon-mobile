@@ -153,6 +153,8 @@ adb shell am start -a android.intent.action.VIEW -d "glidermon://shop/floors"
 ```
 Supported today: `home`, `shop` (optionally `shop/cosmetics|floors|walls`, which also skips ShopScreen's walk-up intro), `outfit`, `gallery`, `settings`. Arcade is deliberately excluded.
 
+Also `streak/<started|continued|frozen|lost|commitment>` — jumps straight to a specific streak popup by forcing `streakStore` into that scenario (via `src/data/stores/streakTestScenarios.ts`, shared with `StreakTestButton.tsx`'s on-screen panel) and switching to HOME, e.g. `adb shell am start -a android.intent.action.VIEW -d "glidermon://streak/lost"`. Useful for screenshotting a specific splash without the on-screen test panel in the way (both the panel and the full-screen splash capture touch, so there's no way to toggle the panel off once a splash is showing).
+
 **Adding a link for a new surface:** add an entry to the `DEEP_LINK_TABS` map in `App.tsx` (path segment → `Tab` value); if the surface takes a sub-parameter like shop's category, follow the same pattern as `shopCategory`/`shopLinkNonce` — parse it in `parseGlidermonUrl`, hold it in state, and pass it into the screen as a prop (with a `key` bump if the screen only reads its initial value once). This only requires a JS change — no native rebuild — *unless* `android/app/src/main/java/com/kevin/glidermon/MainActivity.kt`'s `onNewIntent` override is ever lost (e.g. a `pnpm expo prebuild` regenerating the file), in which case links stop working while the app is already running (cold-start links still work without it) and the override needs to be re-added.
 
 ## Design System Integration

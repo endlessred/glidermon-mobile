@@ -6,12 +6,15 @@ import { useStreakStore } from "../../data/stores/streakStore";
 
 export default function StreakBadge() {
   const currentStreak = useStreakStore((s) => s.currentStreak);
+  const freezesAvailable = useStreakStore((s) => s.freezesAvailable);
+
+  const text = freezesAvailable > 0 ? `${currentStreak} ❄️${freezesAvailable}` : `${currentStreak}`;
 
   return (
     <BadgeChip
-      text={`${currentStreak}`}
+      text={text}
       tone="accent"
-      width={72}
+      width={freezesAvailable > 0 ? 96 : 72}
       height={36}
       LeftIcon={<Text style={{ fontSize: 16 }}>🔥</Text>}
     />

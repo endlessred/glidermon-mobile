@@ -2,48 +2,20 @@
 import React from "react";
 import { View, Text, Pressable } from "react-native";
 import { useSettingsStore } from "../../data/stores/settingsStore";
-import { useStreakStore, ymd, DAILY_GOAL_ACORNS } from "../../data/stores/streakStore";
-import { useProgressionStore } from "../../data/stores/progressionStore";
-
-function daysAgo(n: number) {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return ymd(d);
-}
+import { useStreakStore, MAX_FREEZES } from "../../data/stores/streakStore";
+import {
+  resetFresh,
+  hitTodaysGoal,
+  simulateSkippedDay,
+  simulateFrozenGap,
+  simulateInsufficientFreezeGap,
+  setStreakNearMilestone,
+} from "../../data/stores/streakTestScenarios";
 
 export default function StreakTestButton() {
   const showLevelUpTest = useSettingsStore((s) => s.showLevelUpTest);
+  const freezesAvailable = useStreakStore((s) => s.freezesAvailable);
   if (!showLevelUpTest) return null;
-
-  const resetFresh = () => {
-    useProgressionStore.setState({ dailyEarned: 0 });
-    useStreakStore.setState({
-      currentStreak: 0,
-      longestStreak: 0,
-      lastGoalMetDate: null,
-      lastEvaluatedDate: ymd(),
-      lastSplashShownDate: null,
-      pendingSplash: null,
-      hasCommitted: false,
-    });
-  };
-
-  const hitTodaysGoal = () => {
-    // Real path: bumping dailyEarned fires streakStore's subscribe -> evaluate().
-    useProgressionStore.setState({ dailyEarned: DAILY_GOAL_ACORNS });
-  };
-
-  const simulateSkippedDay = () => {
-    useProgressionStore.setState({ dailyEarned: 0 });
-    useStreakStore.setState({
-      currentStreak: 5,
-      longestStreak: 5,
-      lastGoalMetDate: daysAgo(3),
-      lastEvaluatedDate: daysAgo(2),
-      pendingSplash: null,
-    });
-    useStreakStore.getState().evaluate();
-  };
 
   return (
     <View style={{
@@ -56,8 +28,11 @@ export default function StreakTestButton() {
       borderWidth: 1,
       borderColor: "#e29e4a",
     }}>
-      <Text style={{ color: "#ffd8a8", fontWeight: "600", fontSize: 12, marginBottom: 8, textAlign: "center" }}>
+      <Text style={{ color: "#ffd8a8", fontWeight: "600", fontSize: 12, marginBottom: 4, textAlign: "center" }}>
         Test Streak System
+      </Text>
+      <Text style={{ color: "#9cc4e4", fontSize: 11, marginBottom: 8, textAlign: "center" }}>
+        Freezes: {freezesAvailable} / {MAX_FREEZES}
       </Text>
 
       <Pressable
@@ -75,6 +50,33 @@ export default function StreakTestButton() {
       >
         <Text style={{ color: "#9cc4e4", fontWeight: "500", fontSize: 12, textAlign: "center" }}>
           Simulate skipped day (lost)
+        </Text>
+      </Pressable>
+
+      <Pressable
+        onPress={simulateFrozenGap}
+        style={{ paddingVertical: 6, paddingHorizontal: 12, backgroundColor: "#233043", borderRadius: 6, marginBottom: 6 }}
+      >
+        <Text style={{ color: "#9cc4e4", fontWeight: "500", fontSize: 12, textAlign: "center" }}>
+          Simulate 1-day gap (freeze covers)
+        </Text>
+      </Pressable>
+
+      <Pressable
+        onPress={simulateInsufficientFreezeGap}
+        style={{ paddingVertical: 6, paddingHorizontal: 12, backgroundColor: "#233043", borderRadius: 6, marginBottom: 6 }}
+      >
+        <Text style={{ color: "#9cc4e4", fontWeight: "500", fontSize: 12, textAlign: "center" }}>
+          Simulate 2-day gap (freeze insufficient)
+        </Text>
+      </Pressable>
+
+      <Pressable
+        onPress={setStreakNearMilestone}
+        style={{ paddingVertical: 6, paddingHorizontal: 12, backgroundColor: "#233043", borderRadius: 6, marginBottom: 6 }}
+      >
+        <Text style={{ color: "#9cc4e4", fontWeight: "500", fontSize: 12, textAlign: "center" }}>
+          Set streak to 6 (test milestone)
         </Text>
       </Pressable>
 

@@ -30,6 +30,9 @@ importers:
       '@expo/metro-runtime':
         specifier: ~6.1.2
         version: 6.1.2(expo@54.0.36)(react-dom@19.1.0(react@19.1.0))(react-native@0.81.5(@babel/core@7.28.3)(@react-native-community/cli@13.6.9(encoding@0.1.13))(@types/react@19.1.13)(react@19.1.0))(react@19.1.0)
+      '@lottiefiles/dotlottie-react-native':
+        specifier: ^0.12.0
+        version: 0.12.0(react-native@0.81.5(@babel/core@7.28.3)(@react-native-community/cli@13.6.9(encoding@0.1.13))(@types/react@19.1.13)(react@19.1.0))(react@19.1.0)
       '@react-native-async-storage/async-storage':
         specifier: ^2.2.0
         version: 2.2.0(react-native@0.81.5(@babel/core@7.28.3)(@react-native-community/cli@13.6.9(encoding@0.1.13))(@types/react@19.1.13)(react@19.1.0))
@@ -938,6 +941,22 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.30':
     resolution: {integrity: sha512-GQ7Nw5G2lTu/BtHTKfXhKHok2WGetd4XYcVKGx00SjAk8GMwgJM3zr6zORiPGuOE+/vkc90KtTosSSvaCjKb2Q==}
+
+  '@lottiefiles/dotlottie-react-native@0.12.0':
+    resolution: {integrity: sha512-cpMR992HZsVrTb2koRTApsFKSVFEAKOrdsMuDIUVC7Z2ioryHPhT9XFS3+XlRBnhGv4Jwil6Mhwy0WXh/yy94A==}
+    peerDependencies:
+      react: 19.1.0
+      react-native: '*'
+
+  '@lottiefiles/dotlottie-react@0.19.12':
+    resolution: {integrity: sha512-Onm0XUcfU8Io4E6zbNF23hW0AwHpwAWUhazII6z/mGAcGh8RFAqqrkFJW1sZ3Z6C9JXOiiud+MmrejNKikBShw==}
+    engines: {node: '>=18.17.0', npm: '>=9.5.0'}
+    peerDependencies:
+      react: 19.1.0
+
+  '@lottiefiles/dotlottie-web@0.78.2':
+    resolution: {integrity: sha512-ERBw7qATlekpFnR1xwNoTeXsXqw0FzCiEgei0IwPiquT277m36/o0aSWZDK7CgkhVd1NYre3M9fH+6n4waUfHA==}
+    engines: {node: '>=18.17.0', npm: '>=9.5.0'}
 
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
@@ -4991,6 +5010,19 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
+
+  '@lottiefiles/dotlottie-react-native@0.12.0(react-native@0.81.5(@babel/core@7.28.3)(@react-native-community/cli@13.6.9(encoding@0.1.13))(@types/react@19.1.13)(react@19.1.0))(react@19.1.0)':
+    dependencies:
+      '@lottiefiles/dotlottie-react': 0.19.12(react@19.1.0)
+      react: 19.1.0
+      react-native: 0.81.5(@babel/core@7.28.3)(@react-native-community/cli@13.6.9(encoding@0.1.13))(@types/react@19.1.13)(react@19.1.0)
+
+  '@lottiefiles/dotlottie-react@0.19.12(react@19.1.0)':
+    dependencies:
+      '@lottiefiles/dotlottie-web': 0.78.2
+      react: 19.1.0
+
+  '@lottiefiles/dotlottie-web@0.78.2': {}
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:

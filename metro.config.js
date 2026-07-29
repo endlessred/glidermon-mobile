@@ -19,6 +19,7 @@ module.exports = (async () => {
     ...config.resolver.assetExts,
     'atlas',  // Spine atlas files
     'skel',   // Spine binary skeleton files (if you use them)
+    'lottie', // dotLottie animation bundles
   ];
 
   return config;

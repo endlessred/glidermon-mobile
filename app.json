@@ -17,6 +17,7 @@
       ],
       "expo-asset",
       "expo-notifications",
+      "@lottiefiles/dotlottie-react-native/plugins/withDotLottie",
       [
         "expo-build-properties",
         {
