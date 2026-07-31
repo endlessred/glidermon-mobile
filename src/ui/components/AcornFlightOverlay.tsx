@@ -1,6 +1,6 @@
 // ui/components/AcornFlightOverlay.tsx
 //
-// Root-level overlay (mounted once in App.tsx, like ToastHost/LevelUpOverlay):
+// Root-level overlay (mounted once in App.tsx, like ToastHost):
 // consumes acornFxStore's burst queue and flies 3-7 staggered, curved acorn
 // particles from a reward's source to the acorn balance badge. If the real
 // badge isn't currently mounted (most tabs besides Home), it spawns a

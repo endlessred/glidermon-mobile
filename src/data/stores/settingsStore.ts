@@ -10,7 +10,7 @@ type Settings = {
   useSimulator: boolean;
   simSpeed: number; // 1 = normal; higher = faster ticks
   isDarkMode: boolean; // Dark mode preference
-  showLevelUpTest: boolean; // Show level up test button for debugging
+  showLevelUpTest: boolean; // Show on-screen dev test buttons (e.g. StreakTestButton) for debugging
   themeVariation: ThemeVariation; // Unlockable color theme
 
   // Visual Effects

@@ -23,8 +23,6 @@ import { useSettingsStore } from "./src/data/stores/settingsStore";
 import { startEgvsSimulator, stopEgvsSimulator } from "./src/engine/simCgms";
 import ToastHost from "./src/ui/components/ToastHost";
 import AcornFlightOverlay from "./src/ui/components/AcornFlightOverlay";
-import LevelUpOverlay from "./src/ui/components/LevelUpOverlay";
-import LevelUpTestButton from "./src/ui/components/LevelUpTestButton";
 import DevDebugPanel from "./src/ui/components/DevDebugPanel";
 import StreakSplashOverlay from "./src/ui/components/StreakSplashOverlay";
 import StreakCommitmentModal from "./src/ui/components/StreakCommitmentModal";
@@ -352,8 +350,6 @@ export default function App() {
 
       {/* global overlays */}
       <ToastHost />
-      <LevelUpOverlay />
-      <LevelUpTestButton />
       <StreakSplashOverlay />
       <StreakCommitmentModal />
       <StreakTestButton />

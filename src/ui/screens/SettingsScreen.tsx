@@ -6,7 +6,6 @@ import { useGameStore } from "../../data/stores/gameStore";
 import { useProgressionStore } from "../../data/stores/progressionStore";
 import { useToastStore } from "../../data/stores/toastStore";
 import { useTheme } from "../../data/hooks/useTheme";
-import { useLevelUpStore } from "../../data/stores/levelUpStore";
 import { ThemeVariation, themeDisplayNames } from "../../styles/themeVariations";
 import { useHealthKit } from "../../data/hooks/useHealthKit";
 import { unifiedHealthService } from "../../health/healthService";
@@ -52,8 +51,6 @@ export default function SettingsScreen() {
   // Health monitoring integration (HealthKit on iOS, Health Connect on Android)
   const healthKit = useHealthKit();
   const serviceName = unifiedHealthService.getServiceName();
-
-  const clearLevelUpQueue = useLevelUpStore(s => s.clearAll);
 
   const onEgvs = useGameStore(s => s.onEgvs);
   const syncProgressionToEngine = useGameStore(s => s.syncProgressionToEngine);
@@ -760,26 +757,21 @@ export default function SettingsScreen() {
                 fontSize: typography.size.base,
                 fontWeight: typography.weight.medium,
               }}>
-                Level Up Test UI: {showLevelUpTest ? "🟢 Enabled" : "🔴 Disabled"}
+                Dev Test Buttons: {showLevelUpTest ? "🟢 Enabled" : "🔴 Disabled"}
               </Text>
               <Text style={{
                 color: colors.text.secondary,
                 fontSize: typography.size.sm,
                 marginTop: spacing.xs,
               }}>
-                Shows test buttons for level up system debugging
+                Shows on-screen test buttons (e.g. streak scenarios) for debugging
               </Text>
             </View>
 
             <View style={{ flexDirection: "row", gap: spacing.sm, flexWrap: "wrap", marginBottom: spacing.md }}>
               <Button
-                label={showLevelUpTest ? "Hide Level Up Tests" : "Show Level Up Tests"}
+                label={showLevelUpTest ? "Hide Dev Test Buttons" : "Show Dev Test Buttons"}
                 onPress={() => setShowLevelUpTest(!showLevelUpTest)}
-                variant="secondary"
-              />
-              <Button
-                label="🚮 Clear Stuck Level Ups"
-                onPress={() => { clearLevelUpQueue(); addToast("Level up queue cleared"); }}
                 variant="secondary"
               />
             </View>

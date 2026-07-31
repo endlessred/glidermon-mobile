@@ -57,16 +57,6 @@ Navigation structure and routing logic.
 - **Features**: Auto-dismiss, queuing, different severity levels
 - **Pattern**: Non-blocking notifications for actions/errors
 
-#### `LevelUpOverlay.tsx`
-- **Purpose**: Celebration screen when player levels up
-- **Features**: Animations, unlock reveals, progression summary
-- **Integration**: Triggered by progression store changes
-
-#### `UnlockDisplay.tsx`
-- **Purpose**: Shows newly unlocked cosmetics/features
-- **Features**: Item preview, unlock conditions, call-to-action
-- **Usage**: Embedded in level-up flow
-
 ### Data Visualization
 
 #### `GlucoseWindTrail.tsx`
@@ -82,10 +72,6 @@ Navigation structure and routing logic.
 - **Features**: State inspection, action triggers, performance metrics
 - **Visibility**: Only shown in development builds
 
-#### `LevelUpTestButton.tsx`
-- **Purpose**: Testing tool for triggering level-up scenarios
-- **Usage**: Development and QA testing
-
 ### Utility Components
 
 #### `ErrorBoundary.tsx`
@@ -97,18 +83,12 @@ Navigation structure and routing logic.
 - **Purpose**: Visual effect for depth-of-field/focus effects
 - **Usage**: Game canvas enhancements, visual polish
 
-#### `CutsceneDisplay.tsx`
-- **Purpose**: Narrative sequence display
-- **Features**: Text animation, timing control, skip functionality
-- **Usage**: Tutorial, story moments, level-up celebrations
-
 ## Screen Architecture
 
 ### `HudScreen.tsx` (Main/Home)
-- **Purpose**: Primary gameplay screen with live glucose monitoring
-- **Components**: Glucose chart, pet display, acorn badge, level bar, CheckInCard (when slot is available)
-- **Real-time**: Updates with live health data
-- **Layout**: CheckInCard appears between the progress section and game canvas when a check-in window is active
+- **Purpose**: Primary gameplay screen, styled as a tamagotchi-like device
+- **Components**: Room/pet 3D view with a reserved status strip (name, acorn badge, streak badge) above the canvas, CheckInCard (when a slot is available)
+- **Layout**: The room card occupies the top third of the screen; CheckInCard renders below it in the scrollable area when active. No glucose display or level/XP bars on Home — glucose monitoring was moved off Home, and leveling is being phased out in favor of goal-based progression.
 
 ### `ShopScreen.tsx`
 - **Purpose**: In-game store for cosmetic purchases
@@ -268,7 +248,7 @@ try {
 ### Conditional Rendering
 ```typescript
 {isAuthorized && <HealthKitControls />}
-{hasUnlocks && <UnlockDisplay items={newUnlocks} />}
+{hasCheckIn && <CheckInCard onPress={openCheckIn} />}
 ```
 
 The UI system provides a complete, accessible, and performant interface that seamlessly integrates with the game engine and health monitoring systems.

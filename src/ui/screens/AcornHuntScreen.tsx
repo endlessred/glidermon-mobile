@@ -10,7 +10,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../data/hooks/useTheme';
 import { useProgressionStore } from '../../data/stores/progressionStore';
-import { useLevelUpStore } from '../../data/stores/levelUpStore';
 import { RunState, CharacterId, AcornHuntUIState } from '../../game/acornhunt/types';
 import { CHARACTERS } from '../../game/acornhunt/characters';
 import { generateAcornHuntMap } from '../../game/acornhunt/mapGenerator';
@@ -33,7 +32,6 @@ export default function AcornHuntScreen({ navigation }: AcornHuntScreenProps = {
   const grantAcorns = useProgressionStore(s => s.grantAcorns);
   const currentAcorns = useProgressionStore(s => s.acorns);
   const currentLevel = useProgressionStore(s => s.level);
-  const enqueueLevel = useLevelUpStore(s => s.enqueue);
 
   const [currentRun, setCurrentRun] = useState<RunState | null>(null);
   const [uiState, setUIState] = useState<AcornHuntUIState>({

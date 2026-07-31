@@ -3,7 +3,6 @@ import { Platform } from "react-native";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useLevelUpStore } from "./levelUpStore";
 
 /** Trend codes aligned with your pipeline (0=down,1=flat,2=up,3=uncertain) */
 export type TrendCode = 0 | 1 | 2 | 3;
@@ -131,12 +130,6 @@ export const useProgressionStore = create<ProgressionState>()(
         const rolled = consumeXpIntoLevels(s0.level, carry);
         const newTotalXp = s0.xpTotal + xp;
 
-        if (rolled.leveled > 0) {
-          useLevelUpStore.getState().enqueueRange(
-            s0.level, rolled.level, () => ({ acorns: ACORNS_PER_LEVEL })
-          );
-        }
-
         set({
           xpIntoCurrent: rolled.xpOverflow,
           level: rolled.level,
@@ -198,7 +191,6 @@ export const useProgressionStore = create<ProgressionState>()(
 
         let acornsFromLevels = 0;
         if (leveledCount > 0) {
-          useLevelUpStore.getState().enqueueRange(prevLevel, nextLevel, () => ({ acorns: ACORNS_PER_LEVEL }));
           acornsFromLevels = leveledCount * ACORNS_PER_LEVEL; // immediate reward
         }
 

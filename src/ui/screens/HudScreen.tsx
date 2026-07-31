@@ -1,16 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, ScrollView, useWindowDimensions, Platform } from "react-native";
-import { useProgressionStore } from "../../data/stores/progressionStore";
+import { View, Text, ScrollView, useWindowDimensions } from "react-native";
 import { useUserStore } from "../../data/stores/userStore";
 import { useGalleryStore } from "../../data/stores/galleryStore";
 import AcornBadge from "../components/AcornBadge";
-import LevelBar from "../components/LevelBar";
-import DailyCapBar from "../components/DailyCapBar";
-import { useHudVM } from "../../data/hooks/useHudVM";
 import { useTheme } from "../../data/hooks/useTheme";
-import { getGlucoseColor, getTrendIcon } from "../../styles/theme";
-import GlucoseWindTrail from "../components/GlucoseWindTrail";
-import { useGlucoseHistory } from "../../data/hooks/useGlucoseHistory";
 import { useComplimentShower } from "../components/ComplimentShower";
 import { useActiveLocalOutfit } from "../../data/stores/outfitStore";
 import { IsometricHousingThreeJS, IsometricRoomView, IsometricRoomView3D } from "../../game/housing";
@@ -22,7 +15,7 @@ import { IsometricHousingThreeJS, IsometricRoomView, IsometricRoomView3D } from 
 // default. Known gap vs 'quad': no zoom-in toggle yet (fast-follow).
 type HousingRenderer = 'legacy' | 'quad' | 'primitive3d';
 const HOUSING_RENDERER: HousingRenderer = 'primitive3d';
-import { UIThemeProvider, useUITokens } from "../theme/UIThemeProvider";
+import { UIThemeProvider } from "../theme/UIThemeProvider";
 import { FramedCard } from "../components/FramedCard";
 import AcornBadgeVisual from "../components/AcornBadgeVisual";
 import { useAcornBadgeAnchor } from "../hooks/useAcornBadgeAnchor";
@@ -32,98 +25,10 @@ import { CheckInFlowModal } from "../components/CheckInFlowModal";
 import StreakDetailModal from "../components/StreakDetailModal";
 import { useCheckInStore } from "../../data/stores/checkInStore";
 
-// Glucose section component that uses UI tokens
-const GlucoseSection = () => {
-  const uiTokens = useUITokens();
-  const { colors, spacing, borderRadius, typography } = useTheme();
-  const { mgdl, trendCode, minutesAgo } = useHudVM();
-  const glucoseHistory = useGlucoseHistory();
-
-  // Cross-platform shadow styles using UI tokens
-  const cardShadow = Platform.select({
-    web: {
-      boxShadow: `0 2px 4px ${uiTokens.shadow}`,
-    },
-    default: {
-      shadowColor: uiTokens.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.8,
-      shadowRadius: 4,
-      elevation: 2,
-    },
-  });
-
-  return (
-    <View style={{
-      backgroundColor: uiTokens.fill,
-      borderRadius: uiTokens.radius,
-      borderWidth: uiTokens.outline,
-      borderColor: uiTokens.outlineColor,
-      padding: uiTokens.padding * 1.2,
-      gap: spacing.md,
-      ...cardShadow,
-    }}>
-      <Text style={{
-        color: uiTokens.text,
-        fontWeight: typography.weight.bold as any,
-        fontSize: typography.size.lg,
-      }}>
-        🩺 Glucose Monitor
-      </Text>
-
-      <View style={{
-        backgroundColor: uiTokens.fillMuted,
-        borderRadius: uiTokens.radius * 0.75,
-        borderWidth: uiTokens.outline * 0.5,
-        borderColor: uiTokens.outlineColor,
-        padding: uiTokens.padding * 1.2,
-      }}>
-        <View style={{
-          flexDirection: "row",
-          alignItems: "baseline",
-          gap: spacing.sm,
-        }}>
-          <Text style={{
-            color: mgdl != null ? getGlucoseColor(mgdl) : uiTokens.textMuted,
-            fontSize: typography.size['3xl'],
-            fontWeight: typography.weight.extrabold as any,
-            lineHeight: typography.lineHeight.tight,
-          }}>
-            {mgdl != null ? `${mgdl} mg/dL` : "—"}
-          </Text>
-          <Text style={{
-            color: uiTokens.textMuted,
-            fontSize: typography.size.lg,
-          }}>
-            {getTrendIcon(trendCode)}
-          </Text>
-          <Text style={{
-            color: uiTokens.textMuted,
-            fontSize: typography.size.sm,
-          }}>
-            {minutesAgo != null ? `${minutesAgo}m ago` : "no data"}
-          </Text>
-        </View>
-
-        {/* Wind Trail Chart */}
-        <GlucoseWindTrail readings={glucoseHistory} height={100} />
-      </View>
-    </View>
-  );
-};
-
 export default function HudScreen() {
   const { width, height } = useWindowDimensions();
   const { colors, spacing, borderRadius, typography } = useTheme();
   const { viewRef: acornBadgeAnchorRef, onLayout: onAcornBadgeLayout } = useAcornBadgeAnchor();
-
-  // Progression (live)
-  const level      = useProgressionStore(s => s.level);
-  const xpInto     = useProgressionStore(s => s.xpIntoCurrent);
-  const nextXp     = useProgressionStore(s => s.nextXp);
-  const dailyEarn  = useProgressionStore(s => s.dailyEarned);
-  const dailyCap   = useProgressionStore(s => s.dailyCap);
-  const restedBank = useProgressionStore(s => s.restedBank);
 
   // User data
   const glidermonName = useUserStore(s => s.glidermonName);
@@ -179,56 +84,69 @@ export default function HudScreen() {
           paddingVertical: spacing.sm,
         }}>
           <FramedCard width={roomCardWidth} height={roomCardHeight}>
-            {glidermonName && (
-              <Text style={{
-                fontSize: typography.size.lg,
-                fontWeight: typography.weight.semibold as any,
-                color: colors.text.primary,
+            <View style={{ flex: 1 }}>
+              {/* ===== Status row: name + acorns + streak (reserved strip, doesn't overlap the scene below) ===== */}
+              <View style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: spacing.sm,
                 marginBottom: spacing.sm,
-                textAlign: "center",
               }}>
-                {glidermonName}
-              </Text>
-            )}
-            {/* Isometric room with character at B3 */}
-            <View
-              style={{ flex: 1, overflow: 'hidden', borderRadius: 8 }}
-              onLayout={(e) => {
-                const rw = Math.round(e.nativeEvent.layout.width);
-                const rh = Math.round(e.nativeEvent.layout.height);
-                setRoomBoxSize((prev) => (prev && prev.width === rw && prev.height === rh) ? prev : { width: rw, height: rh });
-              }}
-            >
-              {roomBoxSize && (
-                HOUSING_RENDERER === 'legacy' ? (
-                  <IsometricHousingThreeJS
-                    width={roomBoxSize.width}
-                    height={roomBoxSize.height}
-                    gridColumn={1}
-                    gridRow={0}
-                    characterScale={0.3}
-                    outfit={localOutfit ?? undefined}
-                  />
-                ) : HOUSING_RENDERER === 'primitive3d' ? (
-                  <IsometricRoomView3D
-                    width={roomBoxSize.width}
-                    height={roomBoxSize.height}
-                    gridColumn={1}
-                    gridRow={0}
-                    characterScale={0.3}
-                    outfit={localOutfit ?? undefined}
-                  />
-                ) : (
-                  <IsometricRoomView
-                    width={roomBoxSize.width}
-                    height={roomBoxSize.height}
-                    gridColumn={1}
-                    gridRow={0}
-                    characterScale={0.3}
-                    outfit={localOutfit ?? undefined}
-                  />
-                )
-              )}
+                {glidermonName && (
+                  <Text style={{
+                    fontSize: typography.size.base,
+                    fontWeight: typography.weight.semibold as any,
+                    color: colors.text.primary,
+                  }}>
+                    {glidermonName}
+                  </Text>
+                )}
+                <View ref={acornBadgeAnchorRef} onLayout={onAcornBadgeLayout}>
+                  <AcornBadgeVisual width={90} height={32} />
+                </View>
+                <StreakBadge onPress={() => setStreakDetailOpen(true)} />
+              </View>
+
+              {/* Isometric room with character at B3 */}
+              <View
+                style={{ flex: 1, overflow: 'hidden', borderRadius: 8 }}
+                onLayout={(e) => {
+                  const rw = Math.round(e.nativeEvent.layout.width);
+                  const rh = Math.round(e.nativeEvent.layout.height);
+                  setRoomBoxSize((prev) => (prev && prev.width === rw && prev.height === rh) ? prev : { width: rw, height: rh });
+                }}
+              >
+                {roomBoxSize && (
+                  HOUSING_RENDERER === 'legacy' ? (
+                    <IsometricHousingThreeJS
+                      width={roomBoxSize.width}
+                      height={roomBoxSize.height}
+                      gridColumn={1}
+                      gridRow={0}
+                      characterScale={0.3}
+                      outfit={localOutfit ?? undefined}
+                    />
+                  ) : HOUSING_RENDERER === 'primitive3d' ? (
+                    <IsometricRoomView3D
+                      width={roomBoxSize.width}
+                      height={roomBoxSize.height}
+                      gridColumn={1}
+                      gridRow={0}
+                      characterScale={0.3}
+                      outfit={localOutfit ?? undefined}
+                    />
+                  ) : (
+                    <IsometricRoomView
+                      width={roomBoxSize.width}
+                      height={roomBoxSize.height}
+                      gridColumn={1}
+                      gridRow={0}
+                      characterScale={0.3}
+                      outfit={localOutfit ?? undefined}
+                    />
+                  )
+                )}
+              </View>
             </View>
           </FramedCard>
         </View>
@@ -243,41 +161,12 @@ export default function HudScreen() {
           paddingBottom: spacing['3xl'],
         }}
       >
-        {/* ===== Progress Section (Cozy Theme) ===== */}
-        <UIThemeProvider mode="cozy">
-          <FramedCard width={width - spacing.lg * 2} height={140}>
-            <View style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: spacing.md,
-              marginBottom: spacing.md,
-            }}>
-              <View ref={acornBadgeAnchorRef} onLayout={onAcornBadgeLayout}>
-                <AcornBadgeVisual width={100} height={36} />
-              </View>
-              <StreakBadge onPress={() => setStreakDetailOpen(true)} />
-              <View style={{ flex: 1 }}>
-                <LevelBar level={level} current={xpInto} next={nextXp} />
-              </View>
-            </View>
-            <View style={{ paddingBottom: spacing.sm }}>
-              <DailyCapBar value={dailyEarn} cap={dailyCap} rested={restedBank} />
-            </View>
-          </FramedCard>
-        </UIThemeProvider>
-
         {/* ===== Check-In Card (appears when a slot is active) ===== */}
         {availableSlot && (
           <UIThemeProvider mode="cozy">
             <CheckInCard onPress={() => setCheckInOpen(true)} />
           </UIThemeProvider>
         )}
-
-        {/* ===== Glucose Section (Clinical Theme) ===== */}
-        <UIThemeProvider mode="clinical">
-          <GlucoseSection />
-        </UIThemeProvider>
       </ScrollView>
 
       {/* Compliment Shower Animation Overlay */}

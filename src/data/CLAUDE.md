@@ -71,12 +71,6 @@ Configuration and integration points for external data sources.
 - **Integration**: Used across app for user feedback
 - **Cleanup**: Automatic message pruning with `useAutoPruneToasts`
 
-#### `levelUpStore.ts`
-- **Purpose**: Level-up flow and celebration management
-- **State**: Level-up queue, unlock reveals, celebration state
-- **Features**: Manages level-up sequences, unlock presentations
-- **Integration**: Triggered by progression store changes
-
 ### Data Flow Patterns
 
 #### Real-time Health Data
@@ -95,10 +89,13 @@ Button Press → Purchase Item → Update Inventory → Refresh Display
 
 #### Progression Flow
 ```
-Game Events → Progression Calculation → Level/Unlock Check → Celebration
-     ↓              ↓                         ↓                ↓
-Glucose Data → XP Award → Level Up Detection → Level Up UI
+Game Events → Progression Calculation → Currency/XP Award
+     ↓              ↓                         ↓
+Glucose Data → Tick Scoring → acorns/xp credited to progressionStore
 ```
+(Level-up no longer has a dedicated celebration UI — leveling is being phased
+out in favor of goal-based progression. `progressionStore` still tracks
+level/XP internally and still grants the per-level acorn bonus.)
 
 ## React Hooks
 
