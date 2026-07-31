@@ -32,6 +32,19 @@ Navigation structure and routing logic.
 - **Features**: Progress visualization, streak indicators
 - **Mechanics**: Encourages daily engagement
 
+### Daily Goals Components
+
+#### `GoalsList.tsx`
+- **Purpose**: Vertical stack of small auto-generated diabetes-management goal cards, rendered on the HUD home screen (one goal per row, not a horizontal scroller)
+- **Behavior**: Generates a fixed daily batch (`goalsStore.resetDailyIfNeeded`) once per day; renders only currently-visible goals (pending, not snoozed)
+- **Integration**: Reads `goalsStore`; renders one `GoalCard` per visible goal
+
+#### `GoalCard.tsx`
+- **Purpose**: Single goal row — icon on the left, title, an acorn reward chip, a circular checkmark button, and a "⋯" button that swaps the checkmark+⋯ segment for inline Skip/Snooze actions
+- **Props**: `goal: ActiveGoalWithDef` (a `goalsStore` active-goal instance joined with its catalog definition)
+- **Reward flow**: on checkmark tap, calls `progressionStore.grantAcorns` then `useAcornSource().spawnFromRef` to fly acorns from the row to the balance badge (same reusable pattern as `CheckInFlowModal`)
+- **Integration**: `goalsStore.completeGoal` / `skipGoal` / `snoozeGoal`
+
 ### Check-In Components (planned — see `docs/superpowers/specs/2026-07-19-checkin-system-design.md`)
 
 #### `CheckInCard.tsx`
@@ -87,8 +100,8 @@ Navigation structure and routing logic.
 
 ### `HudScreen.tsx` (Main/Home)
 - **Purpose**: Primary gameplay screen, styled as a tamagotchi-like device
-- **Components**: Room/pet 3D view with a reserved status strip (name, acorn badge, streak badge) above the canvas, CheckInCard (when a slot is available)
-- **Layout**: The room card occupies the top third of the screen; CheckInCard renders below it in the scrollable area when active. No glucose display or level/XP bars on Home — glucose monitoring was moved off Home, and leveling is being phased out in favor of goal-based progression.
+- **Components**: Room/pet 3D view with a reserved status strip (name, acorn badge, streak badge) above the canvas, GoalsList, CheckInCard (when a slot is available)
+- **Layout**: The room card occupies the top third of the screen; below it in the scrollable area is GoalsList, then CheckInCard when active. No glucose display or level/XP bars on Home — glucose monitoring was moved off Home, and leveling is being phased out in favor of goal-based progression (GoalsList is the first concrete piece of that).
 
 ### `ShopScreen.tsx`
 - **Purpose**: In-game store for cosmetic purchases

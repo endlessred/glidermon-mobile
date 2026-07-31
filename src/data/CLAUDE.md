@@ -34,6 +34,15 @@ Configuration and integration points for external data sources.
 - **Design spec**: `docs/superpowers/specs/2026-07-19-checkin-system-design.md`
 - **Note**: previously tracked its own "all 3 slots completed" daily streak; that has been replaced by the lower-friction, user-facing streak in `streakStore.ts` below.
 
+#### `goalsStore.ts`
+- **Purpose**: Home-screen "goals system" — small auto-generated diabetes-management goals (e.g. "Correct a low," "Go for a walk"), each worth 5 or 10 acorns
+- **State**: `activeGoals: ActiveGoal[]` (`{ instanceId, defId, status: "pending"|"completed"|"skipped", snoozedUntil? }`), `lastResetDay`
+- **Actions**: `resetDailyIfNeeded(ctx)` generates a fixed daily batch from `src/data/goals/goalCatalog.ts`; `completeGoal(id, ctx)` / `skipGoal(id, ctx)` / `snoozeGoal(id, ctx)` resolve a goal and auto-refill its slot from the catalog (`ctx` is live glucose context — `{ mgdl, low, high, veryHigh }` — used to decide which condition-based goals like "Correct a low" are currently eligible)
+- **Selector**: `selectVisibleGoals(activeGoals)` — pure function of the `activeGoals` array (not the whole store, to keep it memoizable) returning pending, non-snoozed goals joined with their catalog def, for `GoalsList` to render
+- **Integration**: Independent of `checkInStore` (that store is tightly coupled to its fixed 3-slot morning/midday/evening model and isn't a fit for an arbitrary-count regenerating goal list). Reward flow reuses `progressionStore.grantAcorns` + the acorn-flight system (`acornFxStore`/`useAcornSource`), same as everywhere else acorns are granted.
+- **Lifecycle**: fixed daily batch, not continuously reactive to glucose changes — see `src/data/goals/goalCatalog.ts` for the eligibility rules applied at generation/refill time
+- **Persistence**: today's goal state persists across restarts; resets on a new day
+
 #### `streakStore.ts`
 - **Purpose**: Duolingo-style daily engagement streak
 - **State**: `currentStreak`, `longestStreak`, `lastGoalMetDate`, `pendingSplash` (queued celebration/loss splash), `hasCommitted` + `reminderHour` + `notificationPermission` (streak-reminder opt-in)

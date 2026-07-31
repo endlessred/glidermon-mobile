@@ -21,6 +21,7 @@ import AcornBadgeVisual from "../components/AcornBadgeVisual";
 import { useAcornBadgeAnchor } from "../hooks/useAcornBadgeAnchor";
 import StreakBadge from "../components/StreakBadge";
 import { CheckInCard } from "../components/CheckInCard";
+import GoalsList from "../components/GoalsList";
 import { CheckInFlowModal } from "../components/CheckInFlowModal";
 import StreakDetailModal from "../components/StreakDetailModal";
 import { useCheckInStore } from "../../data/stores/checkInStore";
@@ -161,6 +162,9 @@ export default function HudScreen() {
           paddingBottom: spacing['3xl'],
         }}
       >
+        {/* ===== Goals list: small auto-generated diabetes-management goals ===== */}
+        <GoalsList />
+
         {/* ===== Check-In Card (appears when a slot is active) ===== */}
         {availableSlot && (
           <UIThemeProvider mode="cozy">
