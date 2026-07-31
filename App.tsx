@@ -22,6 +22,7 @@ import { useGameStore } from "./src/data/stores/gameStore";
 import { useSettingsStore } from "./src/data/stores/settingsStore";
 import { startEgvsSimulator, stopEgvsSimulator } from "./src/engine/simCgms";
 import ToastHost from "./src/ui/components/ToastHost";
+import AcornFlightOverlay from "./src/ui/components/AcornFlightOverlay";
 import LevelUpOverlay from "./src/ui/components/LevelUpOverlay";
 import LevelUpTestButton from "./src/ui/components/LevelUpTestButton";
 import DevDebugPanel from "./src/ui/components/DevDebugPanel";
@@ -356,6 +357,8 @@ export default function App() {
       <StreakSplashOverlay />
       <StreakCommitmentModal />
       <StreakTestButton />
+      {/* Acorn flight particles render last so they stay above any modal-style overlay above (e.g. the streak splash) */}
+      <AcornFlightOverlay />
       </SafeAreaView>
     </SafeAreaProvider>
   );

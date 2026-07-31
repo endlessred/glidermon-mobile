@@ -4,6 +4,7 @@ import { View, Text, Pressable, Animated, Easing } from "react-native";
 import { DotLottie } from "@lottiefiles/dotlottie-react-native";
 import { useStreakStore } from "../../data/stores/streakStore";
 import { useTheme } from "../../data/hooks/useTheme";
+import { useAcornSource } from "../hooks/useAcornSource";
 
 const FIRE_LOTTIE = require("../../assets/lottie/fire-streak-orange.lottie");
 const HEART_BROKEN_LOTTIE = require("../../assets/lottie/heart-broken.lottie");
@@ -16,6 +17,7 @@ export default function StreakSplashOverlay() {
   const bgA = useRef(new Animated.Value(0)).current;
   const cardS = useRef(new Animated.Value(0.7)).current;
   const cardA = useRef(new Animated.Value(0)).current;
+  const { sourceRef: milestoneRewardRef, spawnFromRef } = useAcornSource();
 
   const visible = !!pendingSplash;
 
@@ -41,6 +43,15 @@ export default function StreakSplashOverlay() {
     ]).start();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, pendingSplash?.kind, pendingSplash?.streak, reduceMotion]);
+
+  // Milestone acorns are granted synchronously by streakStore.evaluate() before this
+  // splash ever appears — fly them from the reward line once the card has popped in.
+  useEffect(() => {
+    if (pendingSplash?.kind !== "milestone" || !pendingSplash.milestoneReward) return;
+    const t = setTimeout(() => spawnFromRef(pendingSplash.milestoneReward!), 420);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingSplash?.kind, pendingSplash?.streak]);
 
   if (!visible) return null;
 
@@ -113,9 +124,11 @@ export default function StreakSplashOverlay() {
             {streak}
           </Text>
         )}
-        <Text style={{ color: "#9cc4e4", fontSize: 14, textAlign: "center", marginBottom: 20 }}>
-          {copy.subtitle}
-        </Text>
+        <View ref={milestoneRewardRef}>
+          <Text style={{ color: "#9cc4e4", fontSize: 14, textAlign: "center", marginBottom: 20 }}>
+            {copy.subtitle}
+          </Text>
+        </View>
 
         <Pressable
           onPress={dismissSplash}

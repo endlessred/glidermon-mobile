@@ -24,22 +24,13 @@ type HousingRenderer = 'legacy' | 'quad' | 'primitive3d';
 const HOUSING_RENDERER: HousingRenderer = 'primitive3d';
 import { UIThemeProvider, useUITokens } from "../theme/UIThemeProvider";
 import { FramedCard } from "../components/FramedCard";
-import { BadgeChip } from "../components/BadgeChip";
+import AcornBadgeVisual from "../components/AcornBadgeVisual";
+import { useAcornBadgeAnchor } from "../hooks/useAcornBadgeAnchor";
 import StreakBadge from "../components/StreakBadge";
 import { CheckInCard } from "../components/CheckInCard";
 import { CheckInFlowModal } from "../components/CheckInFlowModal";
 import StreakDetailModal from "../components/StreakDetailModal";
 import { useCheckInStore } from "../../data/stores/checkInStore";
-
-// Phosphor icons - fallback if not available
-let PhosphorIcons: any = {};
-try {
-  PhosphorIcons = require("phosphor-react-native");
-} catch {
-  // Fallback if phosphor is not installed yet
-}
-
-const { Acorn } = PhosphorIcons;
 
 // Glucose section component that uses UI tokens
 const GlucoseSection = () => {
@@ -124,9 +115,9 @@ const GlucoseSection = () => {
 export default function HudScreen() {
   const { width, height } = useWindowDimensions();
   const { colors, spacing, borderRadius, typography } = useTheme();
+  const { viewRef: acornBadgeAnchorRef, onLayout: onAcornBadgeLayout } = useAcornBadgeAnchor();
 
   // Progression (live)
-  const acorns     = useProgressionStore(s => s.acorns);
   const level      = useProgressionStore(s => s.level);
   const xpInto     = useProgressionStore(s => s.xpIntoCurrent);
   const nextXp     = useProgressionStore(s => s.nextXp);
@@ -262,13 +253,9 @@ export default function HudScreen() {
               gap: spacing.md,
               marginBottom: spacing.md,
             }}>
-              <BadgeChip
-                text={`${acorns}`}
-                tone="accent"
-                width={100}
-                height={36}
-                LeftIcon={Acorn ? <Acorn size={16} weight="fill" /> : <Text style={{ fontSize: 16 }}>🌰</Text>}
-              />
+              <View ref={acornBadgeAnchorRef} onLayout={onAcornBadgeLayout}>
+                <AcornBadgeVisual width={100} height={36} />
+              </View>
               <StreakBadge onPress={() => setStreakDetailOpen(true)} />
               <View style={{ flex: 1 }}>
                 <LevelBar level={level} current={xpInto} next={nextXp} />

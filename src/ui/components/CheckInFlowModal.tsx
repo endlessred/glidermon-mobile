@@ -7,6 +7,11 @@ import SpineCharacter from "../../game/view/SpineCharacter";
 import { GoalPicker } from "./GoalPicker";
 import { useCheckInStore, CheckInSlot, GlucoseGoal, LifestyleGoal } from "../../data/stores/checkInStore";
 import { useTheme } from "../../data/hooks/useTheme";
+import { useAcornSource } from "../hooks/useAcornSource";
+
+// Bonus acorns granted alongside XP by checkInStore's completeXCheckIn actions
+// (kept in sync with the literal values passed to grantCheckInXp there).
+const CHECK_IN_BONUS_ACORNS: Record<CheckInSlot, number> = { morning: 5, midday: 3, evening: 8 };
 
 // ─── Glucose goal options ─────────────────────────────────────────────────────
 
@@ -91,6 +96,7 @@ type Props = {
 export function CheckInFlowModal({ visible, slot, onClose }: Props) {
   const { colors, spacing, typography, borderRadius } = useTheme();
   const { completeMorningCheckIn, completeMiddayCheckIn, completeEveningCheckIn, today } = useCheckInStore();
+  const { sourceRef: acornSourceRef, spawnFromRef } = useAcornSource();
 
   // Morning state
   const [step, setStep] = useState(0);
@@ -163,6 +169,7 @@ export function CheckInFlowModal({ visible, slot, onClose }: Props) {
               setShowActivityPicker={setShowActivityPicker}
               onComplete={(glucoseGoal: GlucoseGoal, lifestyleGoals: LifestyleGoal[]) => {
                 completeMorningCheckIn(glucoseGoal, lifestyleGoals);
+                spawnFromRef(CHECK_IN_BONUS_ACORNS.morning);
                 handleClose();
               }}
               colors={colors}
@@ -170,6 +177,7 @@ export function CheckInFlowModal({ visible, slot, onClose }: Props) {
               typography={typography}
               borderRadius={borderRadius}
               accentColor={accentColor}
+              acornSourceRef={acornSourceRef}
             />
           )}
           {(slot === "midday" || slot === "evening") && (
@@ -183,6 +191,7 @@ export function CheckInFlowModal({ visible, slot, onClose }: Props) {
               onComplete={(progress: boolean[]) => {
                 if (slot === "midday") completeMiddayCheckIn(progress);
                 else completeEveningCheckIn(progress);
+                spawnFromRef(CHECK_IN_BONUS_ACORNS[slot]);
                 handleClose();
               }}
               colors={colors}
@@ -190,6 +199,7 @@ export function CheckInFlowModal({ visible, slot, onClose }: Props) {
               typography={typography}
               borderRadius={borderRadius}
               accentColor={accentColor}
+              acornSourceRef={acornSourceRef}
             />
           )}
         </ScrollView>
@@ -208,6 +218,7 @@ function MorningFlow({
   showActivityPicker, setShowActivityPicker,
   onComplete,
   colors, spacing, typography, borderRadius, accentColor,
+  acornSourceRef,
 }: any) {
   const NextButton = ({ onPress, disabled, label = "Next →" }: { onPress: () => void; disabled?: boolean; label?: string }) => (
     <TouchableOpacity
@@ -281,19 +292,21 @@ function MorningFlow({
             onSelect={setSelectedActivityGoal}
           />
         )}
-        <NextButton
-          onPress={() => {
-            const glucoseOption = GLUCOSE_OPTIONS.find(o => o.label === selectedGlucoseLabel);
-            if (!glucoseOption) return;
-            const lifestyleGoals: LifestyleGoal[] = [];
-            const mealMatch = selectedMealGoal ? MEAL_GOALS.find(g => g.text === selectedMealGoal) : undefined;
-            const activityMatch = selectedActivityGoal ? ACTIVITY_GOALS.find(g => g.text === selectedActivityGoal) : undefined;
-            if (mealMatch) lifestyleGoals.push(mealMatch);
-            if (activityMatch) lifestyleGoals.push(activityMatch);
-            onComplete(glucoseOption.goal, lifestyleGoals);
-          }}
-          label="Confirm →"
-        />
+        <View ref={acornSourceRef}>
+          <NextButton
+            onPress={() => {
+              const glucoseOption = GLUCOSE_OPTIONS.find(o => o.label === selectedGlucoseLabel);
+              if (!glucoseOption) return;
+              const lifestyleGoals: LifestyleGoal[] = [];
+              const mealMatch = selectedMealGoal ? MEAL_GOALS.find(g => g.text === selectedMealGoal) : undefined;
+              const activityMatch = selectedActivityGoal ? ACTIVITY_GOALS.find(g => g.text === selectedActivityGoal) : undefined;
+              if (mealMatch) lifestyleGoals.push(mealMatch);
+              if (activityMatch) lifestyleGoals.push(activityMatch);
+              onComplete(glucoseOption.goal, lifestyleGoals);
+            }}
+            label="Confirm →"
+          />
+        </View>
       </View>
     );
   }
@@ -308,6 +321,7 @@ function MidEveningFlow({
   lifestyleProgress, setLifestyleProgress,
   today, onComplete,
   colors, spacing, typography, borderRadius, accentColor,
+  acornSourceRef,
 }: any) {
   const morningGoals: LifestyleGoal[] = today.morning?.lifestyleGoals ?? [];
   const midday = today.midday;
@@ -397,14 +411,16 @@ function MidEveningFlow({
           {pct}% adherence
         </Text>
         <Text style={{ color: colors.text.secondary, fontSize: typography.size.sm }}>{goalLabel}</Text>
-        <NextButton onPress={() => {
-          if (morningGoals.length === 0) {
-            onComplete([]);
-          } else {
-            setLifestyleProgress([]);
-            setStep(2);
-          }
-        }} />
+        <View ref={morningGoals.length === 0 ? acornSourceRef : undefined}>
+          <NextButton onPress={() => {
+            if (morningGoals.length === 0) {
+              onComplete([]);
+            } else {
+              setLifestyleProgress([]);
+              setStep(2);
+            }
+          }} />
+        </View>
       </View>
     );
   }
@@ -438,7 +454,10 @@ function MidEveningFlow({
         <Text style={{ color: colors.text.secondary, fontSize: typography.size.md }}>
           {slot === "midday" ? "How's this going so far?" : "Did you manage this today?"}
         </Text>
-        <View style={{ flexDirection: "row" as const, gap: spacing.md }}>
+        <View
+          ref={activeIdx === morningGoals.length - 1 ? acornSourceRef : undefined}
+          style={{ flexDirection: "row" as const, gap: spacing.md }}
+        >
           <TouchableOpacity
             onPress={() => answer(true)}
             style={{ flex: 1, backgroundColor: "#2d4a2d", borderRadius: borderRadius.md, padding: spacing.md, alignItems: "center" as const, borderWidth: 1, borderColor: "#4a9" }}
