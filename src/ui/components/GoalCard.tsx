@@ -1,6 +1,6 @@
 // ui/components/GoalCard.tsx
-import React, { useState } from "react";
-import { View, Text, Pressable } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { View, Text, Pressable, Animated } from "react-native";
 import { useTheme } from "../../data/hooks/useTheme";
 import { useHudVM } from "../../data/hooks/useHudVM";
 import { useSettingsStore } from "../../data/stores/settingsStore";
@@ -21,8 +21,9 @@ type Props = {
   goal: ActiveGoalWithDef;
 };
 
-/** One goal per row: icon, title, acorn reward chip, a checkmark button, and
- * a "⋯" button that swaps the checkmark+⋯ segment for inline Skip/Snooze. */
+/** One goal per row: icon, title, acorn reward chip, a "⋯" button, and a
+ * checkmark (rightmost -- the primary, most-reachable action). "⋯" swaps
+ * that segment for inline Skip/Snooze/Cancel. */
 export default function GoalCard({ goal }: Props) {
   const { colors, spacing, typography, borderRadius } = useTheme();
   const [revealed, setRevealed] = useState(false);
@@ -40,8 +41,16 @@ export default function GoalCard({ goal }: Props) {
 
   const { sourceRef, spawnFromRef } = useAcornSource();
 
+  // Fade in when a fresh goal instance mounts (e.g. as a refill replacement)
+  // so it doesn't just pop into the list.
+  const opacity = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+  }, [opacity]);
+
   const Icon = PhosphorIcons[goal.def.icon];
   const CheckIcon = PhosphorIcons.Check;
+  const isGlucoseResponse = goal.def.category === "glucose_response";
 
   const handleComplete = () => {
     const amount = completeGoal(goal.instanceId, ctx);
@@ -52,15 +61,17 @@ export default function GoalCard({ goal }: Props) {
   };
 
   return (
-    <View
-      ref={sourceRef}
+    <Animated.View
       style={{
+        opacity,
         flexDirection: "row",
         alignItems: "center",
-        backgroundColor: colors.background.secondary,
+        backgroundColor: revealed ? colors.accent.lavender + "14" : colors.background.secondary,
         borderRadius: borderRadius.lg,
         borderWidth: 1,
         borderColor: colors.gray[200],
+        borderLeftWidth: isGlucoseResponse ? 3 : 1,
+        borderLeftColor: isGlucoseResponse ? colors.accent.coral : colors.gray[200],
         paddingVertical: spacing.sm,
         paddingHorizontal: spacing.md,
         gap: spacing.sm,
@@ -85,12 +96,15 @@ export default function GoalCard({ goal }: Props) {
       </Text>
 
       {!revealed && (
-        <View style={{
-          backgroundColor: colors.accent.lavender + "22",
-          borderRadius: borderRadius.full,
-          paddingHorizontal: spacing.xs,
-          paddingVertical: 2,
-        }}>
+        <View
+          ref={sourceRef}
+          style={{
+            backgroundColor: colors.accent.lavender + "22",
+            borderRadius: borderRadius.full,
+            paddingHorizontal: spacing.xs,
+            paddingVertical: 2,
+          }}
+        >
           <Text style={{
             fontSize: typography.size.xs,
             fontWeight: typography.weight.bold as any,
@@ -136,39 +150,40 @@ export default function GoalCard({ goal }: Props) {
       ) : (
         <>
           <Pressable
-            onPress={handleComplete}
-            hitSlop={TAP_SLOP}
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: borderRadius.full,
-              backgroundColor: colors.primary[500],
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            {CheckIcon ? (
-              <CheckIcon size={16} weight="bold" color="#fff" />
-            ) : (
-              <Text style={{ fontSize: 14, fontWeight: "700", color: "#fff" }}>✓</Text>
-            )}
-          </Pressable>
-          <Pressable
             onPress={() => setRevealed(true)}
             hitSlop={TAP_SLOP}
             style={{
-              width: 28,
-              height: 28,
+              width: 36,
+              height: 36,
               borderRadius: borderRadius.md,
               backgroundColor: colors.background.tertiary,
               alignItems: "center",
               justifyContent: "center",
             }}
           >
-            <Text style={{ fontSize: typography.size.sm, color: colors.text.secondary }}>⋯</Text>
+            <Text style={{ fontSize: typography.size.base, color: colors.text.secondary }}>⋯</Text>
+          </Pressable>
+          <Pressable
+            onPress={handleComplete}
+            hitSlop={TAP_SLOP}
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: borderRadius.full,
+              backgroundColor: colors.primary[500],
+              alignItems: "center",
+              justifyContent: "center",
+              marginLeft: spacing.xs,
+            }}
+          >
+            {CheckIcon ? (
+              <CheckIcon size={20} weight="bold" color="#fff" />
+            ) : (
+              <Text style={{ fontSize: 16, fontWeight: "700", color: "#fff" }}>✓</Text>
+            )}
           </Pressable>
         </>
       )}
-    </View>
+    </Animated.View>
   );
 }

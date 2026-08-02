@@ -1,6 +1,6 @@
 // ui/components/GoalsList.tsx
 import React, { useEffect, useMemo } from "react";
-import { View } from "react-native";
+import { View, Text } from "react-native";
 import { useTheme } from "../../data/hooks/useTheme";
 import { useHudVM } from "../../data/hooks/useHudVM";
 import { useSettingsStore } from "../../data/stores/settingsStore";
@@ -9,7 +9,7 @@ import GoalCard from "./GoalCard";
 
 /** Vertical stack of GoalCard rows -- the "goals system" on Home. */
 export default function GoalsList() {
-  const { spacing } = useTheme();
+  const { colors, spacing, typography, borderRadius } = useTheme();
 
   const { mgdl } = useHudVM();
   const low = useSettingsStore((s) => s.low);
@@ -32,7 +32,26 @@ export default function GoalsList() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (visibleGoals.length === 0) return null;
+  // Batch not generated yet (e.g. the instant before the mount effect
+  // above runs) -- nothing to show, don't flash any messaging.
+  if (activeGoals.length === 0) return null;
+
+  if (visibleGoals.length === 0) {
+    const allResolved = activeGoals.every((g) => g.status !== "pending");
+    return (
+      <View style={{
+        backgroundColor: colors.background.secondary,
+        borderRadius: borderRadius.lg,
+        paddingVertical: spacing.md,
+        paddingHorizontal: spacing.md,
+        alignItems: "center",
+      }}>
+        <Text style={{ fontSize: typography.size.sm, fontWeight: typography.weight.semibold as any, color: colors.text.secondary }}>
+          {allResolved ? "All done for today! 🎉" : "Nothing to do right now -- check back soon"}
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View style={{ gap: spacing.sm }}>
