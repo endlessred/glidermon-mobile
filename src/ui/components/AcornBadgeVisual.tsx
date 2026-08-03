@@ -5,6 +5,7 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSequence,
+  withDelay,
   withTiming,
   Easing,
 } from "react-native-reanimated";
@@ -46,9 +47,11 @@ export default function AcornBadgeVisual({ width = 100, height = 36 }: Props) {
       mounted.current = true;
       return;
     }
+    // Grow, hold at the larger size while the count-up plays out (driven by
+    // the acorn-flight burst landing over ~a second), then shrink back down.
     scale.value = withSequence(
-      withTiming(1.18, { duration: 90, easing: Easing.out(Easing.quad) }),
-      withTiming(1, { duration: 220, easing: Easing.out(Easing.back(1.8)) })
+      withTiming(1.18, { duration: 150, easing: Easing.out(Easing.quad) }),
+      withDelay(1000, withTiming(1, { duration: 260, easing: Easing.out(Easing.back(1.8)) }))
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pulseNonce]);

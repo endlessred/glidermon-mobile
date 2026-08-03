@@ -25,8 +25,17 @@ import { lightImpact } from "../haptics/hapticsFx";
 const PARTICLE_SIZE = 22;
 const STAGGER_MIN_MS = 50;
 const STAGGER_MAX_MS = 80;
-const FLIGHT_DURATION_MS = 620;
+const FLIGHT_DURATION_MS = 520;
 const TEMP_BADGE_HOLD_MS = 550;
+// Opacity/scale start fading out well before the particle reaches the
+// badge, so it visibly dissolves into a small ghost on approach instead of
+// looking like a solid object still moving fast right up to (and past) it.
+const FADE_START_T = 0.55;
+// Position reaches the target at this fraction of the flight and then
+// freezes there for the remainder -- the fade/shrink keeps playing in
+// place, so the particle visibly stops at the badge instead of still
+// travelling while it dissolves.
+const ARRIVE_T = 0.65;
 
 const randRange = (min: number, max: number) => min + Math.random() * (max - min);
 
@@ -34,7 +43,6 @@ type ParticleSpec = {
   key: number;
   delay: number;
   curveOffset: Point;
-  overshoot: Point;
 };
 
 type TempBadgeStage = "hidden" | "visible" | "leaving";
@@ -77,6 +85,9 @@ export default function AcornFlightOverlay() {
     setTempBadgeStage(usingRealBadge ? "hidden" : "visible");
 
     beginCurrent();
+    // One pulse per burst (not per particle) -- the badge grows once, holds
+    // while the number ticks up as particles land, then shrinks back down.
+    triggerPulse();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current?.id]);
 
@@ -85,8 +96,9 @@ export default function AcornFlightOverlay() {
     return Array.from({ length: current.particleCount }, (_, i) => ({
       key: i,
       delay: i * randRange(STAGGER_MIN_MS, STAGGER_MAX_MS),
-      curveOffset: { x: randRange(-70, 70), y: randRange(-110, -30) },
-      overshoot: { x: randRange(-6, 6), y: randRange(-6, 6) },
+      // Tighter, more direct arc than before -- a smaller/gentler curve is
+      // less prone to a "swoop past" look on approach.
+      curveOffset: { x: randRange(-40, 40), y: randRange(-90, -20) },
     }));
   }, [current?.id]);
 
@@ -99,7 +111,6 @@ export default function AcornFlightOverlay() {
       playAcornCollectSound();
       lightImpact();
     }
-    triggerPulse();
 
     if (isLast) {
       const share = current.amount / current.particleCount;
@@ -117,11 +128,10 @@ export default function AcornFlightOverlay() {
   };
 
   if (!current && tempBadgeStage === "hidden") return null;
-  if (!target) return null;
 
   return (
     <View style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-      {current &&
+      {target && current &&
         particles.map((p) => (
           <AcornParticle
             key={`${current.id}-${p.key}`}
@@ -132,7 +142,7 @@ export default function AcornFlightOverlay() {
           />
         ))}
 
-      {tempBadgeStage !== "hidden" && (
+      {target && tempBadgeStage !== "hidden" && (
         <TemporaryBadge
           point={target}
           visible={tempBadgeStage === "visible"}
@@ -199,7 +209,10 @@ function AcornParticle({
   useEffect(() => {
     progress.value = withDelay(
       spec.delay,
-      withTiming(1, { duration: FLIGHT_DURATION_MS, easing: Easing.in(Easing.cubic) }, (finished) => {
+      // Ease-out (not ease-in) so the particle decelerates into the badge
+      // instead of covering most of its distance at top speed right at the
+      // end, which read as "shooting past" the badge before vanishing.
+      withTiming(1, { duration: FLIGHT_DURATION_MS, easing: Easing.out(Easing.cubic) }, (finished) => {
         if (finished) runOnJS(onLanded)();
       })
     );
@@ -208,15 +221,20 @@ function AcornParticle({
 
   const style = useAnimatedStyle(() => {
     const t = progress.value;
-    const oneMinusT = 1 - t;
+    // Position is driven by posT, which reaches 1 (and then stays there) at
+    // ARRIVE_T -- the particle physically stops at the target instead of
+    // continuing to move for the rest of the timeline.
+    const posT = Math.min(1, t / ARRIVE_T);
+    const oneMinusPosT = 1 - posT;
     const controlX = source.x + spec.curveOffset.x;
     const controlY = source.y + spec.curveOffset.y;
-    const endX = target.x + spec.overshoot.x;
-    const endY = target.y + spec.overshoot.y;
-    const x = oneMinusT * oneMinusT * source.x + 2 * oneMinusT * t * controlX + t * t * endX;
-    const y = oneMinusT * oneMinusT * source.y + 2 * oneMinusT * t * controlY + t * t * endY;
-    const scale = 1 - 0.35 * t;
-    const opacity = t < 0.85 ? 1 : 1 - (t - 0.85) / 0.15;
+    const x = oneMinusPosT * oneMinusPosT * source.x + 2 * oneMinusPosT * posT * controlX + posT * posT * target.x;
+    const y = oneMinusPosT * oneMinusPosT * source.y + 2 * oneMinusPosT * posT * controlY + posT * posT * target.y;
+    // Shrink and fade out well before arrival (see FADE_START_T) rather
+    // than staying full-size/opaque almost to the target; continues after
+    // the particle has stopped moving, at ARRIVE_T.
+    const scale = 1 - 0.6 * t;
+    const opacity = t < FADE_START_T ? 1 : Math.max(0, 1 - (t - FADE_START_T) / (1 - FADE_START_T));
     return {
       position: "absolute",
       left: x - PARTICLE_SIZE / 2,
