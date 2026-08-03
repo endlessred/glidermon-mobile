@@ -3,6 +3,13 @@
 **Date:** 2026-07-19  
 **Status:** Approved — ready for implementation planning
 
+> **2026-08 update:** two behaviors described below changed after initial
+> implementation — see the callouts inline. Morning/midday/evening are no
+> longer fixed roles (a missed slot no longer blocks later ones that day),
+> and the glucose goal now runs for a fixed 5-hour window instead of being
+> open-ended until the next check-in. The rest of this doc (cap formula,
+> reward amounts, goal types) still reflects what's implemented.
+
 ---
 
 ## Overview
@@ -33,39 +40,39 @@ Inspired by Finch — the emotional pull of a companion who reacts to your day i
 Zustand + persist store, resets daily. Lives alongside `progressionStore`.
 
 ```typescript
+// As implemented (updated 2026-08): a fixed 5-hour window, not open-ended,
+// and a tagged union since any slot can hold either kind of content now.
 type GlucoseGoal = {
   type: 'tir' | 'no_highs' | 'no_lows';
-  target: number;         // TIR % (50/70/80), ceiling mg/dL (180/200/250), or floor (70/80)
-  window: { start: string; end: string };  // ISO timestamps
+  target: number;   // TIR % (50/70/80), ceiling mg/dL (180/200), or floor (70/80)
+  startMs: number;  // when the window began
+  endMs: number;    // startMs + 5 hours -- fixed duration, not "until next check-in"
 };
 
 type LifestyleGoal = {
   category: 'meal' | 'activity';
-  text: string;           // e.g. "Bolus before every meal"
-  completed: boolean;     // self-reported
+  text: string;     // e.g. "Bolus before every meal"
 };
 
-type CheckIn = {
-  completedAt: string;           // ISO timestamp
-  glucoseGoal: GlucoseGoal;
-  lifestyleGoals: LifestyleGoal[];
-  glucoseAdherence: number;      // 0–1, computed from CGM data at next check-in
-  lifestyleAdherence: boolean[]; // one per lifestyleGoals entry
-};
+// Exactly one of today's three slots is ever goal_setting -- whichever
+// check-in happens first that day, regardless of which named slot it lands
+// in. The rest are grading, reporting on that one goal.
+type GoalSettingCheckIn = { kind: 'goal_setting'; completedAt: string; glucoseGoal: GlucoseGoal; lifestyleGoals: LifestyleGoal[] };
+type GradingCheckIn = { kind: 'grading'; completedAt: string; lifestyleProgress: number[]; glucoseAdherence: number }; // progress: 0, 0.5, or 1 per goal (partial credit)
+type SlotCheckIn = GoalSettingCheckIn | GradingCheckIn;
 
 type DailyCheckIns = {
   date: string;           // YYYY-MM-DD, reset daily
-  morning: CheckIn | null;
-  midday: CheckIn | null;
-  evening: CheckIn | null;
-  streak: number;         // consecutive days all 3 check-ins completed
+  morning: SlotCheckIn | null;
+  midday: SlotCheckIn | null;
+  evening: SlotCheckIn | null;
 };
 ```
 
 **Key actions:**
-- `completeCheckIn(slot, goals)` — saves check-in data, computes glucose adherence, writes cap multiplier to progressionStore
-- `computeGlucoseAdherence(goal, from, to)` — reads CGM trail from gameStore, returns 0–1 score. If fewer than 3 readings exist in the window, returns 0.5 (neutral partial credit — no data is not a failure)
-- `resetDailyIfNeeded()` — clears morning/midday/evening on date change, increments or resets streak
+- `completeCheckIn(slot, payload)` — single action for all three slots; branches on whether a goal exists yet today (goal-setting vs grading content), computes glucose adherence, writes cap multiplier to progressionStore
+- `computeGlucoseAdherence(goal, from, to)` — reads CGM trail from gameStore, returns 0–1 score over `[goal.startMs, min(now, goal.endMs)]` (capped at the 5-hour window). If fewer than 3 readings exist in the window, returns 0.5 (neutral partial credit — no data is not a failure)
+- `resetDailyIfNeeded()` — clears morning/midday/evening on date change
 
 **Check-in availability windows (local time):**
 
@@ -75,7 +82,11 @@ type DailyCheckIns = {
 | Midday | 11:00 AM | 4:00 PM |
 | Evening | 5:00 PM | midnight |
 
-A missed window means that slot stays null for the day — no retroactive completion. The cap multiplier for missed slots simply isn't awarded.
+**Updated 2026-08:** each slot's availability now only depends on its own
+window and its own null-ness — a missed slot no longer blocks the ones
+after it. Whichever check-in happens first that day (morning, midday, or
+evening) becomes the goal-setting one; the rest grade it. (The 4-5 PM gap
+between midday and evening windows is unchanged.)
 
 ### Changes to `progressionStore`
 
@@ -151,8 +162,8 @@ XP bursts are immediate and not subject to the daily cap.
 ### Evening (~45 seconds, 4 screens)
 
 1. **HUD card** — "🌙 Evening Check-In — Let's see how today went!"
-2. **Greeting** — `CheckIn/WindDown` plays. Dialogue: *"You made it through the day! Let's see how you did."*
-3. **Full day recap** — TIR % bar for full day + goal result; meal goal final self-report
+2. **Greeting** — `ReadBook/ReadBook` plays (updated 2026-08, see Animation Plan below). Dialogue: *"You made it through the day! Let's see how you did."*
+3. **Full day recap** — TIR % bar for the goal's 5-hour window + result; meal goal final self-report
 4. **Cap reveal + reward** — `CheckIn/Cheer` (or `CheckIn/GoalMissed` post-MVP). Final XP burst (+80 XP). Cap multiplier shown with animation.
 
 ---
@@ -161,11 +172,14 @@ XP bursts are immediate and not subject to the daily cap.
 
 ### Glucose Goals (auto-verified)
 
+Each goal runs for a fixed 5-hour window from whichever check-in sets it
+(updated 2026-08 — originally open-ended until the next check-in).
+
 | Goal type | User sets | Adherence computation |
 |---|---|---|
-| Stay in range X% | Target TIR: 50 / 70 / 80% | `actual TIR / target TIR`, capped at 1.0 |
-| No highs above X | Ceiling: 180 / 200 / 250 mg/dL | `1 − (% time above ceiling)` |
-| No lows below X | Floor: 70 / 80 mg/dL | `1 − (% time below floor)` |
+| Stay in range X% for 5 hours | Target TIR: 50 / 70 / 80% | `actual TIR / target TIR`, capped at 1.0 |
+| No highs above X for 5 hours | Ceiling: 180 / 200 mg/dL | `1 − (% time above ceiling)` |
+| No lows below X for 5 hours | Floor: 70 / 80 mg/dL | `1 − (% time below floor)` |
 
 Partial credit always — no binary pass/fail.
 
@@ -209,11 +223,11 @@ Self-reported same as meal goals. One activity goal per day maximum.
 
 | Priority | Animation | Description |
 |---|---|---|
-| **MVP** | `CheckIn/WindDown` | Evening greeting. Cozy, winding-down pose — yawning or stretching. Warm and tired, signals end of day. |
+| ~~MVP~~ Resolved | ~~`CheckIn/WindDown`~~ | **Updated 2026-08:** never delivered; evening grading now uses the existing `ReadBook/ReadBook` clip instead (reading before bed reads as a wind-down moment without needing new art). Revisit a dedicated `CheckIn/WindDown` later if desired. |
 | Post-MVP | `CheckIn/GoalMissed` | Gentle empathetic reaction when evening adherence was low. Soft, not punishing — GliderMon still supportive. |
 | Post-MVP | `CheckIn/Streak` | More excited variant of Cheer for multi-day streak milestones (3-day, 7-day). |
 
-### Artist brief: `CheckIn/WindDown`
+### Artist brief: `CheckIn/WindDown` (not built — see table above)
 
 - **Mood:** cozy, content, winding down — not sad or disappointed
 - **Duration:** 2–3 seconds, loops cleanly

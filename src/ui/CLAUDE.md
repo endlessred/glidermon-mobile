@@ -45,19 +45,19 @@ Navigation structure and routing logic.
 - **Reward flow**: on checkmark tap, calls `progressionStore.grantAcorns` then `useAcornSource().spawnFromRef` to fly acorns from the row to the balance badge (same reusable pattern as `CheckInFlowModal`)
 - **Integration**: `goalsStore.completeGoal` / `skipGoal` / `snoozeGoal`
 
-### Check-In Components (planned — see `docs/superpowers/specs/2026-07-19-checkin-system-design.md`)
+### Check-In Components (see `docs/superpowers/specs/2026-07-19-checkin-system-design.md`)
 
 #### `CheckInCard.tsx`
 - **Purpose**: Glowing card that appears on the HUD home screen when a check-in slot is available
-- **Behavior**: Shows for the active time window (Morning 6–11 AM, Midday 11 AM–4 PM, Evening 5 PM–midnight); dismisses after completion
-- **Props**: `slot: 'morning' | 'midday' | 'evening'`, `onPress: () => void`
-- **Integration**: Reads from checkInStore; drives navigation into CheckInFlowScreen
+- **Behavior**: Shows for the active time window (Morning 6–11 AM, Midday 11 AM–4 PM, Evening 5 PM–midnight). Each slot's availability only depends on its own window/null-ness now — a missed slot no longer blocks later ones that day.
+- **Props**: `{ onPress: () => void }` — reads which slot is available itself via `checkInStore.availableSlot()`, doesn't take one as a prop
+- **Integration**: Reads from `checkInStore`; `onPress` opens `CheckInFlowModal`
 
-#### `CheckInFlowScreen.tsx`
-- **Purpose**: Multi-step guided check-in flow driven by GliderMon dialogue and animations
-- **Features**: 4–5 step sequence per slot; Spine animation per step; goal pickers; self-report taps
-- **Props**: `slot`, `style: 'guided' | 'quick'` (quick = Approach 1 single-screen fallback for future setting)
-- **Integration**: Writes to checkInStore on completion; triggers XP burst via progressionStore
+#### `CheckInFlowModal.tsx`
+- **Purpose**: Multi-step guided check-in flow driven by GliderMon dialogue and animations, presented as a page-sheet modal
+- **Features**: Whichever check-in happens first that day runs `GoalSettingFlow` (set a glucose goal for the next 5 hours + optional meal/activity goals); later check-ins that day run `GradingFlow` (glucose recap + 3-way self-report: Yes/Partly/No). Both end on a shared `RewardStep` showing the real XP+acorns for that slot, dismissed explicitly (doesn't auto-close).
+- **Props**: `{ visible: boolean; slot: CheckInSlot | null; onClose: () => void }`
+- **Integration**: Calls `checkInStore.completeCheckIn(slot, payload)` on submit; triggers the acorn-flight animation via `useAcornSource`
 
 #### `GoalPicker.tsx`
 - **Purpose**: Reusable goal selection list for glucose goals, meal goals, and activity goals

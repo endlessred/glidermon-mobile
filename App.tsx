@@ -28,6 +28,7 @@ import StreakSplashOverlay from "./src/ui/components/StreakSplashOverlay";
 import StreakCommitmentModal from "./src/ui/components/StreakCommitmentModal";
 import StreakTestButton from "./src/ui/components/StreakTestButton";
 import { useStreakStore } from "./src/data/stores/streakStore";
+import { useCheckInStore } from "./src/data/stores/checkInStore";
 import {
   triggerStartedSplash,
   triggerContinuedSplash,
@@ -246,6 +247,7 @@ export default function App() {
     const check = () => {
       useProgressionStore.getState().resetDailyIfNeeded();
       useStreakStore.getState().evaluate();
+      useCheckInStore.getState().resetDailyIfNeeded();
     };
 
     // 1) on mount

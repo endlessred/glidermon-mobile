@@ -26,12 +26,13 @@ Configuration and integration points for external data sources.
 
 #### `checkInStore.ts`
 - **Purpose**: Daily check-in state, goal-setting, and adherence tracking
-- **State**: morning/midday/evening CheckIn objects (null until completed), check-in cap multiplier
-- **Actions**: `completeCheckIn(slot, goals)`, `computeGlucoseAdherence(goal, from, to)`, `resetDailyIfNeeded()`
+- **State**: `today.morning/midday/evening` — each `null` or a tagged-union `SlotCheckIn` (`{kind:"goal_setting", glucoseGoal, lifestyleGoals}` or `{kind:"grading", lifestyleProgress, glucoseAdherence}`). Exactly one slot per day is ever `goal_setting` — whichever check-in happens first, regardless of which named slot it lands in; the rest are `grading`.
+- **Actions**: `completeCheckIn(slot, payload)` — single action for all three slots, branches on `findTodayGoalSetting(today)` to decide goal-setting vs grading content; `computeGlucoseAdherence(goal, from, to)`; `resetDailyIfNeeded()`
+- **Glucose goal window**: fixed 5-hour duration from whichever check-in sets it (`glucoseGoal.startMs`/`.endMs`), not open-ended — adherence is capped at that window even if graded much later
 - **Integration**: Writes `checkInCapMultiplier` to progressionStore after each completed check-in; reads CGM trail from gameStore for glucose adherence scoring
-- **Availability windows**: Morning 6–11 AM, Midday 11 AM–4 PM, Evening 5 PM–midnight (local time)
-- **Persistence**: Resets daily
-- **Design spec**: `docs/superpowers/specs/2026-07-19-checkin-system-design.md`
+- **Availability windows**: Morning 6–11 AM, Midday 11 AM–4 PM, Evening 5 PM–midnight (local time). Each slot only depends on its own window and its own null-ness — a missed slot (e.g. morning) no longer blocks the ones after it (catch-up is allowed); the 4-5 PM gap between midday/evening windows is unchanged.
+- **Persistence**: Resets daily. `App.tsx`'s daily-reset guard (mount/AppState-active/60s interval) calls this store's `resetDailyIfNeeded()` alongside `progressionStore`/`streakStore` — it's not safe to rely on a screen's own mount effect alone, since that can race AsyncStorage rehydration on cold start.
+- **Design spec**: `docs/superpowers/specs/2026-07-19-checkin-system-design.md` (see its 2026-08 update callout for what changed post-implementation)
 - **Note**: previously tracked its own "all 3 slots completed" daily streak; that has been replaced by the lower-friction, user-facing streak in `streakStore.ts` below.
 
 #### `goalsStore.ts`
@@ -39,7 +40,7 @@ Configuration and integration points for external data sources.
 - **State**: `activeGoals: ActiveGoal[]` (`{ instanceId, defId, status: "pending"|"completed"|"skipped", snoozedUntil? }`), `lastResetDay`
 - **Actions**: `resetDailyIfNeeded(ctx)` generates a fixed daily batch from `src/data/goals/goalCatalog.ts`; `completeGoal(id, ctx)` / `skipGoal(id, ctx)` / `snoozeGoal(id, ctx)` resolve a goal and auto-refill its slot from the catalog (`ctx` is live glucose context — `{ mgdl, low, high, veryHigh }` — used to decide which condition-based goals like "Correct a low" are currently eligible)
 - **Selector**: `selectVisibleGoals(activeGoals)` — pure function of the `activeGoals` array (not the whole store, to keep it memoizable) returning pending, non-snoozed goals joined with their catalog def, for `GoalsList` to render
-- **Integration**: Independent of `checkInStore` (that store is tightly coupled to its fixed 3-slot morning/midday/evening model and isn't a fit for an arbitrary-count regenerating goal list). Reward flow reuses `progressionStore.grantAcorns` + the acorn-flight system (`acornFxStore`/`useAcornSource`), same as everywhere else acorns are granted.
+- **Integration**: Independent of `checkInStore` (that store is still capped at 3 named daily slots and isn't a fit for an arbitrary-count regenerating goal list). Reward flow reuses `progressionStore.grantAcorns` + the acorn-flight system (`acornFxStore`/`useAcornSource`), same as everywhere else acorns are granted.
 - **Lifecycle**: fixed daily batch, not continuously reactive to glucose changes — see `src/data/goals/goalCatalog.ts` for the eligibility rules applied at generation/refill time
 - **Persistence**: today's goal state persists across restarts; resets on a new day
 
