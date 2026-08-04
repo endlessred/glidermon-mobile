@@ -3,12 +3,12 @@ import type { Skeleton, PhysicsConstraint } from '@esotericsoftware/spine-core';
 
 // Set a constant wind for the whole skeleton (all constraints)
 export function setGlobalWind(skeleton: Skeleton, windValue: number) {
-  const pcs = (skeleton as any).physicsConstraints as PhysicsConstraint[] | undefined;
+  const pcs = skeleton.physics as PhysicsConstraint[] | undefined;
   if (!pcs) {
     console.warn('No physics constraints found on skeleton');
     return;
   }
-  for (const c of pcs) c.wind = windValue;
+  for (const c of pcs) c.pose.wind = windValue;
 }
 
 // Optional: make the wind gusty / time-varying

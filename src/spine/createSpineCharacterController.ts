@@ -32,6 +32,7 @@ export type SpineCharacterController = {
   characterBone?: Bone;
   update(deltaSeconds: number): void;
   setAnimation(name: string, loop?: boolean): void;
+  playReaction(name: string): void;
   applyOutfit(outfit?: OutfitSlot): void;
   getFeetLocalPosition(): { x: number; y: number };
 };
@@ -187,7 +188,7 @@ export async function createSpineCharacterController(
   const idleDriver = new LifelikeIdleNoMix(stateData);
   const state = idleDriver.animationState;
 
-  skeleton.setToSetupPose();
+  skeleton.setupPose();
   updateWorldXform(skeleton, 0);
 
   const availableAnimations = new Map<string, string>();
@@ -251,7 +252,7 @@ export async function createSpineCharacterController(
       if (!slot) continue;
       const shaderAttachment = getAttachmentFromAnySkin(skeletonData, slotName, shaderName);
       if (shaderAttachment) {
-        slot.setAttachment(shaderAttachment);
+        slot.pose.setAttachment(shaderAttachment);
       }
     }
 
@@ -263,7 +264,7 @@ export async function createSpineCharacterController(
     for (const slotName of HAIR_SLOTS) {
       const slot = skeleton.findSlot(slotName);
       if (slot) {
-        slot.setAttachment(null);
+        slot.pose.setAttachment(null);
       }
     }
 
@@ -284,7 +285,7 @@ export async function createSpineCharacterController(
       if (!slot) continue;
       const shaderAttachment = getAttachmentFromAnySkin(skeletonData, slotName, shaderName);
       if (shaderAttachment) {
-        slot.setAttachment(shaderAttachment);
+        slot.pose.setAttachment(shaderAttachment);
       }
     }
 
@@ -296,7 +297,7 @@ export async function createSpineCharacterController(
     for (const slotName of JACKET_SLOTS) {
       const slot = skeleton.findSlot(slotName);
       if (slot) {
-        slot.setAttachment(null);
+        slot.pose.setAttachment(null);
       }
     }
 
@@ -310,7 +311,7 @@ export async function createSpineCharacterController(
       if (!slot) continue;
       const shaderAttachment = getAttachmentFromAnySkin(skeletonData, slotName, shaderName);
       if (shaderAttachment) {
-        slot.setAttachment(shaderAttachment);
+        slot.pose.setAttachment(shaderAttachment);
       }
     }
 
@@ -325,7 +326,7 @@ export async function createSpineCharacterController(
 
     mesh.materialOverride = (slot: Slot, baseTex: THREE.Texture) => {
       const slotName = slot?.data?.name ?? "";
-      const attachment = slot.getAttachment?.();
+      const attachment = slot.appliedPose?.getAttachment?.();
       const attachmentName = attachment && (attachment as any).name ? String((attachment as any).name) : "";
 
       const isShaderAttachment = shaderSlotRegex.test(attachmentName);
@@ -401,7 +402,7 @@ export async function createSpineCharacterController(
       const skin = skeletonData.findSkin(hatCosmetic.spineSkin);
       if (skin) {
         skeleton.setSkin(skin);
-        skeleton.setToSetupPose();
+        skeleton.setupPose();
         updateWorldXform(skeleton, 0);
       }
     }
@@ -410,7 +411,7 @@ export async function createSpineCharacterController(
       const skin = skeletonData.findSkin(skinCosmetic.spineSkin);
       if (skin) {
         skeleton.setSkin(skin);
-        skeleton.setToSetupPose();
+        skeleton.setupPose();
         updateWorldXform(skeleton, 0);
       }
     }
@@ -451,6 +452,9 @@ export async function createSpineCharacterController(
     setAnimation(name: string, loop = true) {
       state.setAnimation(0, name, loop);
     },
+    playReaction(name: string) {
+      idleDriver.playReaction(name as Parameters<LifelikeIdleNoMix["playReaction"]>[0]);
+    },
     applyOutfit(outfitToApply?: OutfitSlot) {
       applyOutfitInternal(outfitToApply);
       mesh.refreshMeshes();
@@ -461,7 +465,7 @@ export async function createSpineCharacterController(
       }
       // Return the local position of the character bone relative to the skeleton origin
       // Use the bone's local setup position, not world coordinates
-      return { x: characterBone.x, y: characterBone.y };
+      return { x: characterBone.pose.x, y: characterBone.pose.y };
     },
   };
 }

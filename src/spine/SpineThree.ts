@@ -74,7 +74,7 @@ export function normalizeMaterialForSlot(slot: Slot, mat: THREE.Material) {
   const m: any = mat;
 
   // Check attachment name, not slot name for shader detection
-  const attachment = slot.getAttachment?.();
+  const attachment = slot.appliedPose?.getAttachment?.();
   const attName = (attachment && attachment.name) ? String(attachment.name) : "";
   const isShaderAttachment = SHADER_SLOT_REGEX.test(attName);
 
@@ -213,7 +213,7 @@ export class SkeletonMesh extends THREE.Object3D {
 }
 
   refreshMeshes() {
-    const drawOrder = this.skeleton.drawOrder;
+    const drawOrder = this.skeleton.drawOrder.appliedPose;
     const slots = this.skeleton.slots;
 
     this.clipper.clipEnd();
@@ -238,17 +238,17 @@ export class SkeletonMesh extends THREE.Object3D {
 
       renderable.mesh.renderOrder = ro;
 
-      const attachment = slot.getAttachment();
+      const attachment = slot.appliedPose.getAttachment();
 
       if (attachment instanceof ClippingAttachment) {
-        this.clipper.clipStart(slot, attachment);
+        this.clipper.clipStart(this.skeleton, slot, attachment);
         renderable.setVisible(false);
         continue;
       }
 
       if (!attachment) {
         renderable.setVisible(false);
-        this.clipper.clipEndWithSlot(slot);
+        this.clipper.clipEnd(slot);
         continue;
       }
 
@@ -260,7 +260,7 @@ export class SkeletonMesh extends THREE.Object3D {
         renderable.setVisible(false);
       }
 
-      this.clipper.clipEndWithSlot(slot);
+      this.clipper.clipEnd(slot);
     }
 
     this.clipper.clipEnd();
@@ -274,39 +274,43 @@ export class SkeletonMesh extends THREE.Object3D {
     slot: Slot
   ) {
     if (this.clipper.isClipping()) {
-      (this.clipper as any).clipTriangles(
+      this.clipper.clipTrianglesUnpacked(
         positionsXY,
-        positionsXY.length,
+        0,
         indices as any,
         (indices as any).length,
         uvs,
         2
       );
 
-      const v = (this.clipper as any).clippedVertices as number[] | undefined;
-      const t = (this.clipper as any).clippedTriangles as number[] | undefined;
-      const u = (this.clipper as any).clippedUVs as number[] | undefined;
+      const vLen = this.clipper.clippedVerticesLength;
+      const tLen = this.clipper.clippedTrianglesLength;
+      const uLen = this.clipper.clippedUVsLength;
 
-      if (!t || !v || !u || t.length === 0 || v.length === 0) {
+      if (tLen === 0 || vLen === 0) {
         r.setVisible(false);
         return;
       }
 
-      const vCount = (v.length / 2) | 0;
-      r.ensureSize(vCount, t.length);
+      const v = this.clipper.clippedVerticesTyped;
+      const t = this.clipper.clippedTrianglesTyped;
+      const u = this.clipper.clippedUVsTyped;
+
+      const vCount = (vLen / 2) | 0;
+      r.ensureSize(vCount, tLen);
 
       const p = r.pos.array as Float32Array;
-      for (let i = 0, j = 0; i < v.length; i += 2, j += 3) {
+      for (let i = 0, j = 0; i < vLen; i += 2, j += 3) {
         p[j]   = v[i];
         p[j+1] = v[i + 1];
         p[j+2] = 0;
       }
       r.pos.needsUpdate = true;
 
-      (r.uv.array as Float32Array).set(u, 0);
+      (r.uv.array as Float32Array).set(u.subarray(0, uLen), 0);
       r.uv.needsUpdate = true;
 
-      r.geom.setIndex(new THREE.BufferAttribute(Uint16Array.from(t), 1));
+      r.geom.setIndex(new THREE.BufferAttribute(Uint16Array.from(t.subarray(0, tLen)), 1));
     } else {
       const vCount = positionsXY.length / 2;
       r.ensureSize(vCount, (indices as any).length);
@@ -332,10 +336,10 @@ export class SkeletonMesh extends THREE.Object3D {
     }
 
     // ----- Tint / alpha handling (UNCHANGED pupil behavior) -----
-    let a = slot.color.a * this.skeleton.color.a;
+    let a = slot.appliedPose.color.a * this.skeleton.color.a;
 
     // Check if this is a shadow attachment and set opacity to 25%
-    const attachment = slot.getAttachment();
+    const attachment = slot.appliedPose.getAttachment();
     const attName = (attachment && attachment.name) ? String(attachment.name) : "";
     if (attName.toLowerCase() === 'shadow') {
       a = a * 0.25; // Set shadow opacity to 25%
@@ -343,7 +347,7 @@ export class SkeletonMesh extends THREE.Object3D {
         console.log('SpineThree: Setting shadow opacity', {
           slotName: slot.data?.name,
           attachmentName: attName,
-          originalAlpha: slot.color.a * this.skeleton.color.a,
+          originalAlpha: slot.appliedPose.color.a * this.skeleton.color.a,
           newAlpha: a
         });
       }
@@ -353,13 +357,13 @@ export class SkeletonMesh extends THREE.Object3D {
 
     if (material?.isMeshBasicMaterial) {
       // Original PMA tint path (pupil-safe) — unchanged
-      spineColorToPremultipliedRGB(slot.color, r.color, a);
+      spineColorToPremultipliedRGB(slot.appliedPose.color, r.color, a);
       material.color.copy(r.color);
       material.opacity = a;
       material.transparent = a < 0.999;
     } else if (material?.isShaderMaterial && material.uniforms) {
       const slotName = slot.data?.name || "";
-      const attachment = slot.getAttachment?.();
+      const attachment = slot.appliedPose?.getAttachment?.();
       const attName = (attachment && attachment.name) ? String(attachment.name) : "";
       const isShaderAttachment = SHADER_SLOT_REGEX.test(attName);
 
@@ -372,7 +376,7 @@ export class SkeletonMesh extends THREE.Object3D {
           material.uniforms.uGlobalAlpha.value = a;
         }
         if (material.uniforms && material.uniforms.uSlotColor && material.uniforms.uSlotColor.value) {
-          material.uniforms.uSlotColor.value.set(slot.color.r, slot.color.g, slot.color.b);
+          material.uniforms.uSlotColor.value.set(slot.appliedPose.color.r, slot.appliedPose.color.g, slot.appliedPose.color.b);
         }
       }
       // Do NOT touch depth flags here — hat opacity is handled above for Hat_Base only
@@ -383,8 +387,8 @@ export class SkeletonMesh extends THREE.Object3D {
     r.mesh.matrix.identity();
   }
 
-  private textureForRegionAttachment(att: RegionAttachment): THREE.Texture | undefined {
-    const region: any = att.region as any;
+  private textureForRegionAttachment(att: RegionAttachment, sequenceIndex: number): THREE.Texture | undefined {
+    const region: any = att.sequence.regions[sequenceIndex];
     const candidates: Array<string | undefined> = [
       region?.page?.name,
       region?.rendererObject?.page?.name,
@@ -410,7 +414,7 @@ export class SkeletonMesh extends THREE.Object3D {
     const isPupil = PUPIL_SLOT_REGEX.test(slot.data?.name || "");
 
     // Check if this is a shadow attachment - shadows need alphaTest=0 for transparency
-    const attachment = slot.getAttachment();
+    const attachment = slot.appliedPose.getAttachment();
     const attName = (attachment && attachment.name) ? String(attachment.name) : "";
     const isShadow = attName.toLowerCase() === 'shadow';
 
@@ -420,11 +424,13 @@ export class SkeletonMesh extends THREE.Object3D {
 
   private updateRegionAttachment(slot: Slot, attachment: RegionAttachment, r: SlotRenderable) {
     const world = new Float32Array(8);
-    attachment.computeWorldVertices(slot, world, 0, 2);
-    const uvs = attachment.uvs as Float32Array;
+    attachment.computeWorldVertices(slot, attachment.getOffsets(slot.appliedPose), world, 0, 2);
+
+    const sequenceIndex = attachment.sequence.resolveIndex(slot.appliedPose);
+    const uvs = attachment.sequence.getUVs(sequenceIndex);
     const tris = new Uint16Array([0, 1, 2, 2, 3, 0]);
 
-    const tex = this.textureForRegionAttachment(attachment);
+    const tex = this.textureForRegionAttachment(attachment, sequenceIndex);
     if (!tex) { r.setVisible(false); return; }
     r.setMaterial(this.chooseMaterial(tex, slot));
     normalizeMaterialForSlot(slot, r.mesh.material);
@@ -434,12 +440,13 @@ export class SkeletonMesh extends THREE.Object3D {
   private updateMeshAttachment(slot: Slot, attachment: MeshAttachment, r: SlotRenderable) {
     const numFloats = attachment.worldVerticesLength;
     const verts2D = new Float32Array(numFloats);
-    attachment.computeWorldVertices(slot, 0, numFloats, verts2D, 0, 2);
+    attachment.computeWorldVertices(this.skeleton, slot, 0, numFloats, verts2D, 0, 2);
 
-    const uvs = attachment.uvs as Float32Array;
+    const sequenceIndex = attachment.sequence.resolveIndex(slot.appliedPose);
+    const uvs = attachment.sequence.getUVs(sequenceIndex);
     const tris = attachment.triangles as Uint16Array | number[];
 
-    const region: any = (attachment as any).region;
+    const region: any = attachment.sequence.regions[sequenceIndex];
     const candidates: Array<string | undefined> = [
       region?.page?.name,
       region?.rendererObject?.page?.name,

@@ -45,9 +45,9 @@ export async function loadRoomSkeleton(): Promise<LoadedRoom> {
   const resolveTexture = result.resolveTexture;
 
   // Setup pose
-  skeleton.setToSetupPose();
+  skeleton.setupPose();
   for (let i = 0; i < skeleton.slots.length; i++) {
-    skeleton.slots[i].setToSetupPose();
+    skeleton.slots[i].setupPose();
   }
 
   // Set up layered wind animations on multiple tracks
@@ -133,7 +133,7 @@ export async function loadRoomSkeleton(): Promise<LoadedRoom> {
   for (const b of skeleton.bones ?? []) {
     const id = boneNameToTileId((b as any)?.data?.name || (b as any)?.name || '');
     if (!id) continue;
-    const ax = b.worldX, ay = b.worldY;
+    const ax = b.appliedPose.worldX, ay = b.appliedPose.worldY;
     if (!Number.isFinite(ax) || !Number.isFinite(ay)) continue;
     const sx = placeX(ax), sy = placeY(ay);
     if (!Number.isFinite(sx) || !Number.isFinite(sy)) continue;

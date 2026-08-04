@@ -206,9 +206,9 @@ export default function ShadedShopViewport({
       skeletonRef.current = skeleton;
 
       // Setup skeleton pose
-      skeleton.setToSetupPose();
+      skeleton.setupPose();
       for (let i = 0; i < skeleton.slots.length; i++) {
-        skeleton.slots[i].setToSetupPose();
+        skeleton.slots[i].setupPose();
       }
 
       // Create the skeleton mesh using the existing SkeletonMesh
@@ -222,9 +222,9 @@ export default function ShadedShopViewport({
       sableSkeletonRef.current = sableResult.skeleton;
 
       // Setup Sable pose
-      sableResult.skeleton.setToSetupPose();
+      sableResult.skeleton.setupPose();
       for (let i = 0; i < sableResult.skeleton.slots.length; i++) {
-        sableResult.skeleton.slots[i].setToSetupPose();
+        sableResult.skeleton.slots[i].setupPose();
       }
 
       // Create Sable mesh
@@ -274,8 +274,8 @@ export default function ShadedShopViewport({
         skeleton.updateWorldTransform(Physics.update);
 
         // Get the world position of the Sable bone in the shop skeleton
-        const sableBoneWorldX = sableBone.worldX;
-        const sableBoneWorldY = sableBone.worldY;
+        const sableBoneWorldX = sableBone.appliedPose.worldX;
+        const sableBoneWorldY = sableBone.appliedPose.worldY;
 
         // Transform to account for the scene mesh positioning and camera
         const sceneCenterX = sceneX + (sceneWidth / 2);
@@ -392,9 +392,9 @@ export default function ShadedShopViewport({
       lumaSkeletonRef.current = lumaResult.skeleton;
 
       // Setup Luma pose
-      lumaResult.skeleton.setToSetupPose();
+      lumaResult.skeleton.setupPose();
       for (let i = 0; i < lumaResult.skeleton.slots.length; i++) {
-        lumaResult.skeleton.slots[i].setToSetupPose();
+        lumaResult.skeleton.slots[i].setupPose();
       }
 
       // Create Luma mesh

@@ -575,8 +575,8 @@ export default function IsometricHousingThreeJS({
         // Check if any bones have moved meaningfully since last refresh
         const bonesChanged = roomSk.bones.some((bone: any) => {
           const threshold = 0.1; // Pixel threshold for meaningful movement
-          return Math.abs(bone.worldX - (bone.userData?.lastWorldX || bone.worldX)) > threshold ||
-                 Math.abs(bone.worldY - (bone.userData?.lastWorldY || bone.worldY)) > threshold;
+          return Math.abs(bone.appliedPose.worldX - (bone.userData?.lastWorldX ?? bone.appliedPose.worldX)) > threshold ||
+                 Math.abs(bone.appliedPose.worldY - (bone.userData?.lastWorldY ?? bone.appliedPose.worldY)) > threshold;
         });
 
         if (bonesChanged || needsRoomRefreshRef.current) {
@@ -591,8 +591,8 @@ export default function IsometricHousingThreeJS({
             // Store current bone positions for next comparison
             roomSk.bones.forEach((bone: any) => {
               bone.userData = bone.userData || {};
-              bone.userData.lastWorldX = bone.worldX;
-              bone.userData.lastWorldY = bone.worldY;
+              bone.userData.lastWorldX = bone.appliedPose.worldX;
+              bone.userData.lastWorldY = bone.appliedPose.worldY;
             });
           } else if (roomObj.children) {
             for (const child of roomObj.children) {
@@ -691,9 +691,9 @@ export default function IsometricHousingThreeJS({
 
         // Also check if any bones have moved from their setup pose
         const movedBones = roomSk.bones.filter((bone: any) =>
-          Math.abs(bone.x - bone.data.x) > 0.01 ||
-          Math.abs(bone.y - bone.data.y) > 0.01 ||
-          Math.abs(bone.rotation - bone.data.rotation) > 0.01
+          Math.abs(bone.pose.x - bone.data.x) > 0.01 ||
+          Math.abs(bone.pose.y - bone.data.y) > 0.01 ||
+          Math.abs(bone.pose.rotation - bone.data.rotation) > 0.01
         );
 
         if (movedBones.length > 0) {

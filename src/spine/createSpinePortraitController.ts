@@ -114,7 +114,7 @@ export async function createSpinePortraitController(
 
   const state = new AnimationState(stateData);
 
-  skeleton.setToSetupPose();
+  skeleton.setupPose();
   updateWorldXform(skeleton, 0);
 
   // Get available animations

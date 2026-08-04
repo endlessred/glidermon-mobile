@@ -171,7 +171,7 @@ export async function createFurnitureInstance(
     // Log attachment info
     const chairBaseSlot = skeleton.findSlot('ChairBase');
     if (chairBaseSlot) {
-      const attachment = chairBaseSlot.getAttachment();
+      const attachment = chairBaseSlot.appliedPose.getAttachment();
       console.log(`FurnitureLoader: ChairBase slot attachment:`, {
         hasAttachment: !!attachment,
         attachmentName: attachment?.name || 'none'
@@ -206,7 +206,7 @@ function setupFurnitureVariant(
         const slotAttachments = attachments[chairBaseSlot.data.index];
         const attachment = slotAttachments[variant.skin];
         if (attachment) {
-          chairBaseSlot.setAttachment(attachment);
+          chairBaseSlot.pose.setAttachment(attachment);
           if (__DEV__) {
             console.log(`FurnitureLoader: Set chair variant to ${variant.skin}`);
           }
@@ -276,7 +276,8 @@ function positionFurniture(
   // Apply any rotation (for future use)
   if (config.rotation && config.rotation !== 0) {
     // Spine rotations are already in degrees
-    skeleton.rootBone.rotation = config.rotation;
+    const rootBone = skeleton.getRootBone();
+    if (rootBone) rootBone.pose.rotation = config.rotation;
   }
 
   // Update world transform

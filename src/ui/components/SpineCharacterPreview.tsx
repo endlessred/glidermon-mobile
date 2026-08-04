@@ -193,7 +193,7 @@ export default function SpineCharacterPreview({
             if (slot) {
               const shaderAttachment = getAttachmentFromAnySkin(skeletonDataRef.current, baseSlotName, shaderAttachmentName);
               if (shaderAttachment) {
-                slot.setAttachment(shaderAttachment);
+                slot.pose.setAttachment(shaderAttachment);
                 console.log(`✅ Preview: Switched ${baseSlotName} slot to shader variant: ${shaderAttachmentName}`);
               } else {
                 console.warn(`⚠️ Preview: Could not find shader attachment: ${shaderAttachmentName} for slot: ${baseSlotName}`);
@@ -205,14 +205,14 @@ export default function SpineCharacterPreview({
         }
 
         // Keep our attachment switches; just recompute world transforms
-        skeleton.updateWorldTransform(Physics);
+        skeleton.updateWorldTransform(Physics.update);
 
         // Verify the switches stuck
         console.log('🔎 Preview: Verifying attachment switches:');
         for (const baseSlotName of skinSlots) {
           const slot = skeleton.findSlot(baseSlotName);
           if (slot) {
-            console.log(`🔎 Preview: ${baseSlotName} now has attachment:`, slot.getAttachment()?.name || 'none');
+            console.log(`🔎 Preview: ${baseSlotName} now has attachment:`, slot.appliedPose.getAttachment()?.name || 'none');
           }
         }
       }
@@ -231,7 +231,7 @@ export default function SpineCharacterPreview({
         for (const baseSlotName of hairSlots) {
           const slot = skeleton.findSlot(baseSlotName);
           if (slot) {
-            slot.setAttachment(null);
+            slot.pose.setAttachment(null);
           }
         }
 
@@ -251,7 +251,7 @@ export default function SpineCharacterPreview({
             if (slot) {
               const shaderAttachment = getAttachmentFromAnySkin(skeletonDataRef.current, baseSlotName, shaderAttachmentName);
               if (shaderAttachment) {
-                slot.setAttachment(shaderAttachment);
+                slot.pose.setAttachment(shaderAttachment);
                 console.log(`✅ Preview: Switched ${baseSlotName} slot to shader variant: ${shaderAttachmentName}`);
               } else {
                 console.warn(`⚠️ Preview: Could not find shader attachment: ${shaderAttachmentName} for slot: ${baseSlotName}`);
@@ -263,14 +263,14 @@ export default function SpineCharacterPreview({
         }
 
         // Keep our attachment switches; just recompute world transforms
-        skeleton.updateWorldTransform(Physics);
+        skeleton.updateWorldTransform(Physics.update);
 
         // Verify the hair switches stuck
         console.log(`🔎 Preview: Verifying hair attachment switches for style: ${hairStyle}`);
         for (const baseSlotName of hairSlots) {
           const slot = skeleton.findSlot(baseSlotName);
           if (slot) {
-            console.log(`🔎 Preview: ${baseSlotName} now has attachment:`, slot.getAttachment()?.name || 'none');
+            console.log(`🔎 Preview: ${baseSlotName} now has attachment:`, slot.appliedPose.getAttachment()?.name || 'none');
           }
         }
       }
@@ -290,7 +290,7 @@ export default function SpineCharacterPreview({
         for (const baseSlotName of jacketSlots) {
           const slot = skeleton.findSlot(baseSlotName);
           if (slot) {
-            slot.setAttachment(null);
+            slot.pose.setAttachment(null);
           }
         }
 
@@ -302,7 +302,7 @@ export default function SpineCharacterPreview({
             if (slot) {
               const shaderAttachment = getAttachmentFromAnySkin(skeletonDataRef.current, baseSlotName, shaderAttachmentName);
               if (shaderAttachment) {
-                slot.setAttachment(shaderAttachment);
+                slot.pose.setAttachment(shaderAttachment);
                 console.log(`✅ Preview: Switched ${baseSlotName} slot to shader variant: ${shaderAttachmentName}`);
               } else {
                 console.warn(`⚠️ Preview: Could not find shader attachment: ${shaderAttachmentName} for slot: ${baseSlotName}`);
@@ -314,14 +314,14 @@ export default function SpineCharacterPreview({
         }
 
         // Keep our attachment switches; just recompute world transforms
-        skeleton.updateWorldTransform(Physics);
+        skeleton.updateWorldTransform(Physics.update);
 
         // Verify the jacket switches stuck
         console.log('🔎 Preview: Verifying jacket attachment switches');
         for (const baseSlotName of jacketSlots) {
           const slot = skeleton.findSlot(baseSlotName);
           if (slot) {
-            console.log(`🔎 Preview: ${baseSlotName} now has attachment:`, slot.getAttachment()?.name || 'none');
+            console.log(`🔎 Preview: ${baseSlotName} now has attachment:`, slot.appliedPose.getAttachment()?.name || 'none');
           }
         }
       }
@@ -332,16 +332,16 @@ export default function SpineCharacterPreview({
         for (const baseSlotName of jacketSlots) {
           const slot = skeleton.findSlot(baseSlotName);
           if (slot) {
-            slot.setAttachment(null);
+            slot.pose.setAttachment(null);
           }
         }
-        skeleton.updateWorldTransform(Physics);
+        skeleton.updateWorldTransform(Physics.update);
       }
     }
 
     skeletonMesh.materialOverride = (slot: any, baseTex: THREE.Texture) => {
       const slotName: string = slot?.data?.name ?? "";
-      const attachment = slot.getAttachment?.();
+      const attachment = slot.appliedPose?.getAttachment?.();
       const attName = (attachment && attachment.name) ? String(attachment.name) : "";
       const isShaderAttachment = SHADER_SLOT_REGEX.test(attName); // Check attachment name, not slot name
 
@@ -431,13 +431,13 @@ export default function SpineCharacterPreview({
       const skin = skeletonData.findSkin(skinName);
       if (skin) {
         skeleton.setSkin(skin);
-        skeleton.setToSetupPose();
-        skeleton.updateWorldTransform(Physics);
+        skeleton.setupPose();
+        skeleton.updateWorldTransform(Physics.update);
         console.log(`✅ Applied character preview skin: ${skinName}`);
       }
     } else {
       skeleton.setSkin(skeletonData.defaultSkin);
-      skeleton.setToSetupPose();
+      skeleton.setupPose();
       skeleton.updateWorldTransform(Physics.update);
     }
 
@@ -541,10 +541,10 @@ export default function SpineCharacterPreview({
         const skin = skeletonData.findSkin(initialSkin);
         if (skin) {
           skeleton.setSkin(skin);
-          skeleton.setSlotsToSetupPose();
+          skeleton.setupPoseSlots();
         }
       } else {
-        skeleton.setToSetupPose();
+        skeleton.setupPose();
       }
 
       // The lifelike idle system will handle animation automatically

@@ -15,8 +15,8 @@
   "dependencies": {
     "@babel/runtime": "^7.28.3",
     "@esotericsoftware/spine-canvaskit": "4.2.92",
-    "@esotericsoftware/spine-core": "4.2.43",
-    "@esotericsoftware/spine-threejs": "^4.2.43",
+    "@esotericsoftware/spine-core": "4.3.13",
+    "@esotericsoftware/spine-threejs": "^4.3.13",
     "@esotericsoftware/spine-ts": "^4.2.13",
     "@expo/metro-runtime": "~6.1.2",
     "@lottiefiles/dotlottie-react-native": "^0.12.0",

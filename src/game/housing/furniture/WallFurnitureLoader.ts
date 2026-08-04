@@ -150,7 +150,7 @@ function setupWallFurnitureVariant(
   allSlotNames.forEach(slotName => {
     const slot = skeleton.findSlot(slotName);
     if (slot) {
-      slot.setAttachment(null); // Clear any default attachment
+      slot.pose.setAttachment(null); // Clear any default attachment
     }
   });
 
@@ -225,7 +225,7 @@ function setSlotAttachment(
   const attachment = slotAttachments[attachmentName];
 
   if (attachment) {
-    slot.setAttachment(attachment);
+    slot.pose.setAttachment(attachment);
   }
 }
 
@@ -302,7 +302,7 @@ function applyColorRecoloringToMesh(mesh: any, colors: import('../../../spine/Ma
     // Create material override function like the character system
     mesh.materialOverride = (slot: any, baseTex: THREE.Texture) => {
       const slotName = slot?.data?.name ?? "";
-      const attachment = slot.getAttachment?.();
+      const attachment = slot.appliedPose?.getAttachment?.();
       const attachmentName = attachment && (attachment as any).name ? String((attachment as any).name) : "";
 
 

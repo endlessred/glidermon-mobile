@@ -207,7 +207,7 @@ export class RoomBuilder {
     }
 
     if (targetAttachment) {
-      slot.setAttachment(targetAttachment as any);
+      slot.pose.setAttachment(targetAttachment as any);
       if (__DEV__) {
         // console.log(`RoomBuilder: Set ${slot.data.name} to ${attachmentPath}`);
       }
@@ -306,17 +306,17 @@ export class RoomBuilder {
         if (rowIndex >= dimensions.height || col > dimensions.width) {
           const slot = this.skeleton.findSlot(tileId);
           if (slot) {
-            const beforeAttachment = slot.getAttachment();
+            const beforeAttachment = slot.pose.getAttachment();
             // Multiple approaches to completely hide the slot
-            slot.setAttachment(null); // Remove any attachment
+            slot.pose.setAttachment(null); // Remove any attachment
 
             // Safely set transparency
             try {
-              if ((slot as any).color) {
-                (slot as any).color.a = 0; // Make it transparent
+              if (slot.pose.color) {
+                slot.pose.color.a = 0; // Make it transparent
               }
-              if ((slot as any).darkColor) {
-                (slot as any).darkColor.a = 0; // Also hide dark color
+              if (slot.pose.darkColor) {
+                slot.pose.darkColor.a = 0; // Also hide dark color
               }
             } catch (error) {
               if (__DEV__) {
@@ -324,7 +324,7 @@ export class RoomBuilder {
               }
             }
 
-            const afterAttachment = slot.getAttachment();
+            const afterAttachment = slot.pose.getAttachment();
             if (__DEV__ && false) {
               console.log(`RoomBuilder: Hiding slot ${tileId} (outside ${dimensions.width}x${dimensions.height})`, {
                 hadAttachment: !!beforeAttachment,
@@ -376,16 +376,16 @@ export class RoomBuilder {
       if (shouldHide) {
         const slot = this.skeleton.findSlot(wallId);
         if (slot) {
-          const beforeAttachment = slot.getAttachment();
-          slot.setAttachment(null);
+          const beforeAttachment = slot.pose.getAttachment();
+          slot.pose.setAttachment(null);
 
           // Safely set transparency
           try {
-            if ((slot as any).color) {
-              (slot as any).color.a = 0;
+            if (slot.pose.color) {
+              slot.pose.color.a = 0;
             }
-            if ((slot as any).darkColor) {
-              (slot as any).darkColor.a = 0;
+            if (slot.pose.darkColor) {
+              slot.pose.darkColor.a = 0;
             }
           } catch (error) {
             if (__DEV__) {

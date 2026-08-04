@@ -201,8 +201,8 @@ export function primeSpinePose(
   opts: { animation?: string; skin?: string } = {}
 ) {
   const { animation = "idle", skin } = opts;
-  if (skin) skeleton.setSkinByName(skin);
-  skeleton.setToSetupPose();
+  if (skin) skeleton.setSkin(skin);
+  skeleton.setupPose();
   state.setAnimation(0, animation, true);
 }
 
