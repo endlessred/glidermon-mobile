@@ -53,7 +53,13 @@ const CAMERA_OFFSET = new THREE.Vector3(10, 10, 10);
 // bounding box in overview mode -- big enough that walls don't touch the
 // frame edge, small enough that the room still fills nearly all of it.
 const OVERVIEW_MARGIN_RATIO = 0.06;
-const ZOOMED_IN_HALF_EXTENT = 2;
+// Zoomed-in framing is computed from the character's actual world height
+// (see characterHeightRef below) rather than a fixed guess, so it stays
+// correctly framed regardless of characterScale. This ratio is how much of
+// the vertical frustum the character's standing height should fill -- kept
+// well under 1.0 to leave headroom for animations that extend past the base
+// pose (wings raising, arms up, jumping).
+const ZOOM_FRAME_FILL_RATIO = 0.55;
 
 // How often the sky/lighting palette is re-sampled from the clock. Time of
 // day drifts slowly, so there's no need to recompute every frame.
@@ -85,6 +91,8 @@ export default function IsometricRoomView3D({
   const glSizeRef = useRef({ w: width, h: height });
   const roomBoundsRef = useRef({ halfWidth: 2, halfDepth: 2, wallHeight: WALL_HEIGHT });
   const characterTargetRef = useRef(new THREE.Vector3(0, 0, 0));
+  const characterHeightRef = useRef(TILE_SIZE * CHARACTER_DESIRED_TILE_HEIGHT * DEFAULT_CHARACTER_SCALE);
+  const isZoomedInRef = useRef(false);
   const skyTextureRef = useRef<THREE.DataTexture | null>(null);
   const skyDataRef = useRef<Uint8Array | null>(null);
   const ambientLightRef = useRef<THREE.AmbientLight | null>(null);
@@ -118,7 +126,7 @@ export default function IsometricRoomView3D({
     camera.lookAt(target);
 
     if (zoomedIn) {
-      const halfExtent = ZOOMED_IN_HALF_EXTENT;
+      const halfExtent = characterHeightRef.current / (2 * ZOOM_FRAME_FILL_RATIO);
       camera.left = -halfExtent * aspect;
       camera.right = halfExtent * aspect;
       camera.top = halfExtent;
@@ -178,6 +186,7 @@ export default function IsometricRoomView3D({
   }, []);
 
   useEffect(() => {
+    isZoomedInRef.current = isZoomedIn;
     const camera = cameraRef.current;
     if (camera) updateCameraForZoom(camera, isZoomedIn);
   }, [isZoomedIn, updateCameraForZoom]);
@@ -312,6 +321,7 @@ export default function IsometricRoomView3D({
       // Zoomed-in framing centers on the character's mid-height, not their
       // feet, so the camera doesn't look like it's aimed at the floor.
       characterTargetRef.current.set(charX, characterWorldHeight / 2, charZ);
+      characterHeightRef.current = characterWorldHeight;
 
       // Real world-space billboard (not screen-locked), so it naturally
       // pans/scales with the room when the camera zooms in on the character
@@ -336,6 +346,15 @@ export default function IsometricRoomView3D({
           // Only the character skeleton updates/refreshes per frame -- the
           // room shell and furniture were built once above.
           controller.update(deltaSeconds);
+
+          // Re-aim every frame while zoomed in (not just on toggle) so the
+          // camera tracks characterTargetRef.current live -- this is what
+          // makes the zoomed-in view follow Glidermon if/when their position
+          // in the room changes, rather than only framing where they were
+          // when zoom was switched on.
+          if (isZoomedInRef.current) {
+            updateCameraForZoom(camera, true);
+          }
 
           if (now - (lastSkyUpdateRef.current ?? 0) > SKY_UPDATE_INTERVAL_MS) {
             lastSkyUpdateRef.current = now;

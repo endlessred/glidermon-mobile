@@ -439,6 +439,23 @@ export async function createSpineCharacterController(
     update(deltaSeconds: number) {
       idleDriver.update(deltaSeconds);
       skeleton.update(deltaSeconds);
+
+      // state.apply() only writes bone pose values for bones actively keyed
+      // by a currently-running track. Clearing a track (e.g. when a reading
+      // sequence or a fidget finishes) stops it from influencing future
+      // frames, but any bone that track was the *only* thing keying -- like
+      // ReadBook's L Arm/R Hand, which Idle/Idle never touches -- simply
+      // keeps whatever value it last had, since nothing overwrites it. This
+      // is why the left arm stayed bent behind the body after PutAwayBook:
+      // the overlay track got cleared correctly, but the bone itself was
+      // never told to go anywhere. Resetting bones to setup pose every frame
+      // before applying the animation state means any bone not currently
+      // claimed by an active track lands at a clean neutral position instead
+      // of whatever stale pose it was left in. setupPoseBones() (not
+      // setupPose()/setupPoseSlots()) is deliberate -- it leaves slot
+      // attachments alone, so equipped cosmetics/outfit skins aren't reset
+      // every frame.
+      skeleton.setupPoseBones();
       state.apply(skeleton);
 
       // Apply wind gusts to make physics visible

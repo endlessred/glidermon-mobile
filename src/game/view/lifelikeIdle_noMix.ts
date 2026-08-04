@@ -4,23 +4,30 @@ import { AnimationState, AnimationStateData } from "@esotericsoftware/spine-core
 // ---------------------------------------------------------------------------
 // Track allocation
 //
-// 0: base body pose + one-shot full-body reactions (Idle/Idle, FootLook,
-//    ReadBook/*, Body/Sit, Body/LeanLeft, Body/LeanRight, Body/Jump, reactions)
+// 0: permanent Idle/Idle carrier -- always looping, never stopped or
+//    replaced. Idle/Idle keys a handful of subtle "breathing" bones that no
+//    other body animation touches (most notably the mouth -- L/R Mouth 2).
+//    Keeping it permanently on track 0 means those bones keep gently moving
+//    underneath everything else instead of freezing the instant some other
+//    behavior takes over; higher tracks still correctly override whichever
+//    specific bones they key (torso, limbs, etc).
 // 1: blink
 // 2: face / eye-look (Eyes/LookDirection/* and Face/Look* are mutually
 //    exclusive on this track -- both key the eyes)
 // 3: arms
+// 4: body overlay -- FootLook, ReadBook/*, Body/Sit, Body/LeanLeft,
+//    Body/LeanRight, Body/Jump, and reactions. Numbered above track 0 so it
+//    overrides whatever bones it keys, but anything it *doesn't* key (like
+//    the mouth) still shows track 0's idle motion through underneath.
 // 5: tail
 // 6: ears
 // 7: wings
-//
-// Track 4 is intentionally left free as a buffer in case a behavior ever
-// needs an independent left/right arm split.
 // ---------------------------------------------------------------------------
-const TRACK_BODY = 0;
+const TRACK_IDLE_CARRIER = 0;
 const TRACK_BLINK = 1;
 const TRACK_FACE = 2;
 const TRACK_ARMS = 3;
+const TRACK_OVERLAY = 4;
 const TRACK_TAIL = 5;
 const TRACK_EARS = 6;
 const TRACK_WINGS = 7;
@@ -194,7 +201,7 @@ class TrackSequencer {
 // Composite behaviors -- combinations of primitives across tracks
 // ---------------------------------------------------------------------------
 type Composite = {
-  body?: Triad; // occupies track 0 -- pauses the ambient idle loop
+  body?: Triad; // plays on the overlay track, above the permanent idle carrier
   face?: Triad;
   arms?: Triad;
   tail?: Triad;
@@ -228,7 +235,7 @@ const AMBIENT_FIDGETS: Record<string, Composite> = {
   reachAndWonderRight: { arms: ARM.reachRight, face: FACE.lookRight, holdRange: [1.0, 1.4] }, // ReachRight loop is ~1.0s
 };
 
-/** Ambient body composites: occupy track 0, join the same exclusive pool as
+/** Ambient body composites: occupy the overlay track, join the same exclusive pool as
  * FootLook/Reading in the idle behavior picker. */
 const AMBIENT_BODY_COMPOSITES: Record<string, Composite> = {
   bigStretchAndYawn: { body: BODY.leanLeft, arms: ARM.raise, face: FACE.smile, holdRange: [1.3, 1.6] },
@@ -318,22 +325,19 @@ export class LifelikeIdleNoMix {
       stateData.setMix(L, IDLE, 0);
     }
 
-    // Set up new behavior animation mixes
-    stateData.setMix(IDLE, FOOT_LOOK, 0);
-    stateData.setMix(FOOT_LOOK, IDLE, 0);
+    // FootLook plays on the overlay track, not against IDLE directly (IDLE is
+    // permanent on its own track now), but it still shares the blink track.
     stateData.setMix(FOOT_LOOK, BLINK, 0); // Can blink during FootLook
     stateData.setMix(BLINK, FOOT_LOOK, 0);
 
-    // Reading sequence mixes
-    stateData.setMix(IDLE, PULL_OUT_BOOK, 0);
+    // Reading sequence mixes -- all transitions happen on the overlay track
     stateData.setMix(PULL_OUT_BOOK, READ_BOOK, 0);
     stateData.setMix(READ_BOOK, TURN_PAGE, 0);
     stateData.setMix(TURN_PAGE, READ_BOOK, 0);
     stateData.setMix(READ_BOOK, PUT_AWAY_BOOK, 0);
-    stateData.setMix(PUT_AWAY_BOOK, IDLE, 0);
 
     this.state = new AnimationState(stateData);
-    this.state.setAnimation(TRACK_BODY, IDLE, true); // base idle always on track 0
+    this.state.setAnimation(TRACK_IDLE_CARRIER, IDLE, true); // permanent, never stopped
 
     this.faceSeq = new TrackSequencer(this.state, TRACK_FACE);
     this.armsSeq = new TrackSequencer(this.state, TRACK_ARMS);
@@ -475,14 +479,14 @@ export class LifelikeIdleNoMix {
   private startFootLookBehavior() {
     this.currentBehavior = BehaviorState.FOOT_LOOK;
     this.clearEyeLookTrack();
-    this.state.setAnimation(TRACK_BODY, FOOT_LOOK, false);
-    this.state.addAnimation(TRACK_BODY, IDLE, true, 0); // Return to idle after FootLook
+    this.state.setAnimation(TRACK_OVERLAY, FOOT_LOOK, false);
   }
 
   private updateFootLookBehavior() {
-    const current = this.state.getTrack(TRACK_BODY);
+    const current = this.state.getTrack(TRACK_OVERLAY);
     if (current && current.animation?.name === FOOT_LOOK && current.isComplete()) {
       this.currentBehavior = BehaviorState.IDLE;
+      this.state.clearTrack(TRACK_OVERLAY); // idle carrier already shows through underneath
       this.resetLookTimer();
     }
   }
@@ -493,18 +497,18 @@ export class LifelikeIdleNoMix {
     this.readingDuration = 30 + Math.random() * 10; // 30-40 seconds
     this.readingTimer = 0;
     this.clearEyeLookTrack();
-    this.state.setAnimation(TRACK_BODY, PULL_OUT_BOOK, false);
+    this.state.setAnimation(TRACK_OVERLAY, PULL_OUT_BOOK, false);
   }
 
   private updateReadingBehavior(dt: number) {
     this.readingTimer += dt;
-    const current = this.state.getTrack(TRACK_BODY);
+    const current = this.state.getTrack(TRACK_OVERLAY);
 
     switch (this.readingPhase) {
       case ReadingPhase.PULL_OUT:
         if (current && current.animation?.name === PULL_OUT_BOOK && current.isComplete()) {
           this.readingPhase = ReadingPhase.READING;
-          this.state.setAnimation(TRACK_BODY, READ_BOOK, true); // Loop reading animation
+          this.state.setAnimation(TRACK_OVERLAY, READ_BOOK, true); // Loop reading animation
           this.nextTurnPageAt = this.readingTimer + 3 + Math.random() * 4; // Turn page every 3-7 seconds
         }
         break;
@@ -512,10 +516,10 @@ export class LifelikeIdleNoMix {
       case ReadingPhase.READING:
         if (this.readingTimer >= this.readingDuration) {
           this.readingPhase = ReadingPhase.PUT_AWAY;
-          this.state.setAnimation(TRACK_BODY, PUT_AWAY_BOOK, false);
+          this.state.setAnimation(TRACK_OVERLAY, PUT_AWAY_BOOK, false);
         } else if (this.readingTimer >= this.nextTurnPageAt) {
-          this.state.setAnimation(TRACK_BODY, TURN_PAGE, false);
-          this.state.addAnimation(TRACK_BODY, READ_BOOK, true, 0); // Return to reading after page turn
+          this.state.setAnimation(TRACK_OVERLAY, TURN_PAGE, false);
+          this.state.addAnimation(TRACK_OVERLAY, READ_BOOK, true, 0); // Return to reading after page turn
           this.nextTurnPageAt = this.readingTimer + 3 + Math.random() * 4; // Next page turn
         }
         break;
@@ -523,14 +527,14 @@ export class LifelikeIdleNoMix {
       case ReadingPhase.PUT_AWAY:
         if (current && current.animation?.name === PUT_AWAY_BOOK && current.isComplete()) {
           this.currentBehavior = BehaviorState.IDLE;
-          this.state.setAnimation(TRACK_BODY, IDLE, true); // Return to idle
+          this.state.clearTrack(TRACK_OVERLAY); // idle carrier already shows through underneath
           this.resetLookTimer();
         }
         break;
     }
   }
 
-  /** Start an ambient body composite: an in->hold->out sequence on track 0,
+  /** Start an ambient body composite: an in->hold->out sequence on the overlay track,
    * with any secondary-track flourishes (arms/face/tail/etc) layered on top. */
   private startBodyComposite(c: Composite) {
     if (!c.body) return;
@@ -548,11 +552,11 @@ export class LifelikeIdleNoMix {
     if (c.wings) this.wingsSeq.play(c.wings, hold);
 
     if (c.body.in) {
-      this.state.setAnimation(TRACK_BODY, c.body.in, false);
+      this.state.setAnimation(TRACK_OVERLAY, c.body.in, false);
     } else if (c.body.loop) {
-      this.state.setAnimation(TRACK_BODY, c.body.loop, true);
+      this.state.setAnimation(TRACK_OVERLAY, c.body.loop, true);
     } else if (c.body.single) {
-      this.state.setAnimation(TRACK_BODY, c.body.single, false);
+      this.state.setAnimation(TRACK_OVERLAY, c.body.single, false);
     }
     this.bodyPhase = c.body.in ? "in" : c.body.loop ? "hold" : "out";
     this.bodyHoldTimer = 0;
@@ -569,16 +573,16 @@ export class LifelikeIdleNoMix {
       this.currentBehavior = BehaviorState.IDLE;
       return;
     }
-    const current = this.state.getTrack(TRACK_BODY);
+    const current = this.state.getTrack(TRACK_OVERLAY);
 
     if (this.bodyPhase === "in") {
       if (current && current.isComplete()) {
         if (c.body.loop) {
-          this.state.setAnimation(TRACK_BODY, c.body.loop, true);
+          this.state.setAnimation(TRACK_OVERLAY, c.body.loop, true);
           this.bodyPhase = "hold";
           this.bodyHoldTimer = 0;
         } else if (c.body.out) {
-          this.state.setAnimation(TRACK_BODY, c.body.out, false);
+          this.state.setAnimation(TRACK_OVERLAY, c.body.out, false);
           this.bodyPhase = "out";
         } else {
           this.finishBodyComposite();
@@ -588,7 +592,7 @@ export class LifelikeIdleNoMix {
       this.bodyHoldTimer += dt;
       if (this.bodyHoldTimer >= this.bodyHoldFor) {
         if (c.body.out) {
-          this.state.setAnimation(TRACK_BODY, c.body.out, false);
+          this.state.setAnimation(TRACK_OVERLAY, c.body.out, false);
           this.bodyPhase = "out";
         } else {
           this.finishBodyComposite();
@@ -604,7 +608,7 @@ export class LifelikeIdleNoMix {
   private finishBodyComposite() {
     this.bodyComposite = null;
     this.currentBehavior = BehaviorState.IDLE;
-    this.state.setAnimation(TRACK_BODY, IDLE, true);
+    this.state.clearTrack(TRACK_OVERLAY); // idle carrier already shows through underneath
     this.resetLookTimer();
   }
 
@@ -673,20 +677,20 @@ export class LifelikeIdleNoMix {
   forceIdle() {
     this.currentBehavior = BehaviorState.IDLE;
     this.bodyComposite = null;
+    this.state.clearTrack(TRACK_OVERLAY); // idle carrier (track 0) is never touched -- always running
     this.faceSeq.stop();
     this.armsSeq.stop();
     this.tailSeq.stop();
     this.earsSeq.stop();
     this.wingsSeq.stop();
-    this.state.setAnimation(TRACK_BODY, IDLE, true);
   }
 
   /**
-   * Play a named one-shot reaction (see REACTIONS), pausing the ambient idle
-   * loop for any track-0 component and layering secondary-track flourishes,
-   * then automatically returning to idle. If `name` isn't a known reaction
-   * and no track-0 component is involved, this is a no-op on track 0 -- pass
-   * a plain animation name via setAnimationDirect() for that instead.
+   * Play a named one-shot reaction (see REACTIONS), playing any `body`
+   * component on the overlay track (above the permanent idle carrier) and
+   * layering secondary-track flourishes, then automatically returning to
+   * idle. Reactions without a `body` component only touch secondary tracks
+   * and layer on top of whatever's currently happening.
    */
   playReaction(name: keyof typeof REACTIONS) {
     const reaction = REACTIONS[name];
@@ -720,7 +724,7 @@ function randIn([min, max]: Range) {
 }
 
 function timeToNextIdleBoundary(state: AnimationState) {
-  const cur = state.getTrack(0);
+  const cur = state.getTrack(TRACK_IDLE_CARRIER);
   if (!cur) return 0;
   // Track time modulo Idle duration
   const phase = cur.trackTime % IDLE_DUR_SEC;
