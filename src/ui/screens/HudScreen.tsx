@@ -25,6 +25,7 @@ import GoalsList from "../components/GoalsList";
 import { CheckInFlowModal } from "../components/CheckInFlowModal";
 import StreakDetailModal from "../components/StreakDetailModal";
 import { useCheckInStore } from "../../data/stores/checkInStore";
+import FurnitureDevPanel from "../components/FurnitureDevPanel";
 
 export default function HudScreen() {
   const { width, height } = useWindowDimensions();
@@ -109,6 +110,7 @@ export default function HudScreen() {
               </View>
 
               {/* Isometric room with character at B3 */}
+              {HOUSING_RENDERER === 'primitive3d' && <FurnitureDevPanel />}
               <View
                 style={{ flex: 1, overflow: 'hidden', borderRadius: 8 }}
                 onLayout={(e) => {

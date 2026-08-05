@@ -16,8 +16,11 @@ import {
   FloorPatternItem,
   WallPatternItem,
 } from "../../game/housing/types/proceduralPatternCatalog";
+import { FURNITURE_SHOP_CATALOG, FurnitureShopItem } from "../../game/housing/types/furnitureCatalog";
+import { getSlotsForTier } from "../../game/housing/types/roomSlots";
+import { getFurnitureImageSource } from "../../game/housing/assets/quadTextures";
 
-export type ShopCategory = "cosmetics" | "floors" | "walls";
+export type ShopCategory = "cosmetics" | "floors" | "walls" | "furniture";
 
 export default function ShopScreen({ initialCategory }: { initialCategory?: ShopCategory }) {
   const { width, height } = useWindowDimensions();
@@ -63,6 +66,39 @@ export default function ShopScreen({ initialCategory }: { initialCategory?: Shop
   const unlockWallPattern       = useHousingStore(s => s.unlockWallPattern);
   const setActiveFloorPattern   = useHousingStore(s => s.setActiveFloorPattern);
   const setActiveWallPattern    = useHousingStore(s => s.setActiveWallPattern);
+
+  // Furniture (slot-based, 3D room shell) -- separate catalog again, see
+  // furnitureCatalog.ts.
+  const roomSizeTier         = useHousingStore(s => s.roomSizeTier);
+  const activeFurnitureBySlot = useHousingStore(s => s.activeFurnitureBySlot);
+  const unlockedFurnitureIds  = useHousingStore(s => s.unlockedFurnitureIds);
+  const unlockFurniture       = useHousingStore(s => s.unlockFurniture);
+  const setActiveFurniture    = useHousingStore(s => s.setActiveFurniture);
+
+  const handleFurniturePurchase = (item: FurnitureShopItem) => {
+    if (acorns < item.cost) {
+      addToast("Not enough acorns!");
+      return;
+    }
+    unlockFurniture(item.id);
+    spend(item.cost);
+    addToast(`Purchased ${item.name}!`);
+  };
+
+  const handleApplyFurniture = (item: FurnitureShopItem) => {
+    const slots = getSlotsForTier(roomSizeTier).filter((s) => s.type === item.slotType);
+    if (slots.length === 0) return;
+    const targetSlot = slots.find((s) => !activeFurnitureBySlot[s.slotId]) ?? slots[0];
+    setActiveFurniture(targetSlot.slotId, item.furnitureId, item.variantId);
+  };
+
+  const isFurnitureActive = (item: FurnitureShopItem) =>
+    getSlotsForTier(roomSizeTier)
+      .filter((s) => s.type === item.slotType)
+      .some((s) => {
+        const occupant = activeFurnitureBySlot[s.slotId];
+        return occupant?.furnitureId === item.furnitureId && occupant?.variantId === item.variantId;
+      });
 
   const unlockedPatternIds = category === "floors" ? unlockedFloorPatternIds : unlockedWallPatternIds;
   const activePatternId    = category === "floors" ? activeFloorPatternId : activeWallPatternId;
@@ -222,9 +258,9 @@ export default function ShopScreen({ initialCategory }: { initialCategory?: Shop
 
             {/* Category selector */}
             <View style={{ flexDirection: 'row', marginBottom: spacing.md }}>
-              {(['cosmetics', 'floors', 'walls'] as ShopCategory[]).map((cat) => {
+              {(['cosmetics', 'floors', 'walls', 'furniture'] as ShopCategory[]).map((cat) => {
                 const isSelected = category === cat;
-                const label = cat === 'cosmetics' ? 'Cosmetics' : cat === 'floors' ? 'Floors' : 'Walls';
+                const label = cat === 'cosmetics' ? 'Cosmetics' : cat === 'floors' ? 'Floors' : cat === 'walls' ? 'Walls' : 'Furniture';
                 return (
                   <TouchableOpacity
                     key={cat}
@@ -232,7 +268,7 @@ export default function ShopScreen({ initialCategory }: { initialCategory?: Shop
                     style={{
                       flex: 1,
                       paddingVertical: spacing.sm,
-                      marginRight: cat !== 'walls' ? spacing.sm : 0,
+                      marginRight: cat !== 'furniture' ? spacing.sm : 0,
                       borderRadius: borderRadius.md,
                       alignItems: 'center',
                       backgroundColor: isSelected ? colors.primary[500] : colors.background.tertiary,
@@ -342,6 +378,112 @@ export default function ShopScreen({ initialCategory }: { initialCategory?: Shop
                             fontWeight: 'bold'
                           }
                         ]}>
+                          {canAfford ? 'Buy' : 'Too Expensive'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                );
+              }}
+            />
+            ) : category === 'furniture' ? (
+            <FlatList<FurnitureShopItem>
+              data={FURNITURE_SHOP_CATALOG}
+              keyExtractor={(item) => item.id}
+              numColumns={2}
+              renderItem={({ item }) => {
+                const isOwned = unlockedFurnitureIds.includes(item.id);
+                const isActive = isFurnitureActive(item);
+                const canAfford = acorns >= item.cost;
+                const imageSource = getFurnitureImageSource(item.previewAsset);
+
+                return (
+                  <View style={{
+                    flex: 1,
+                    margin: spacing.sm,
+                    backgroundColor: colors.background.primary,
+                    borderRadius: borderRadius.md,
+                    padding: spacing.md,
+                    alignItems: 'center',
+                    ...shadows.sm,
+                    borderWidth: isActive ? 2 : 1,
+                    borderColor: isActive ? colors.primary[500] : colors.gray[200],
+                  }}>
+                    <View style={{ width: 60, height: 60, alignItems: 'center', justifyContent: 'center' }}>
+                      {imageSource ? (
+                        <Image source={imageSource} style={{ width: 60, height: 60 }} resizeMode="contain" />
+                      ) : (
+                        <View style={{ width: 60, height: 60, backgroundColor: colors.background.tertiary, borderRadius: borderRadius.sm }} />
+                      )}
+                    </View>
+                    <Text style={{
+                      fontSize: typography.size.xs,
+                      color: colors.text.primary,
+                      textAlign: 'center',
+                      fontWeight: '600',
+                      marginTop: spacing.sm,
+                      marginBottom: spacing.xs,
+                    }}>
+                      {item.name}
+                    </Text>
+                    <View style={{
+                      backgroundColor: colors.background.tertiary,
+                      paddingHorizontal: spacing.sm,
+                      paddingVertical: spacing.xs,
+                      borderRadius: borderRadius.sm,
+                      marginBottom: spacing.sm,
+                    }}>
+                      <Text style={{ fontSize: typography.size.base, color: colors.text.primary, fontWeight: 'bold' }}>
+                        {item.cost} 🌰
+                      </Text>
+                    </View>
+
+                    {isActive ? (
+                      <View style={{
+                        backgroundColor: colors.accent.mint,
+                        paddingHorizontal: spacing.md,
+                        paddingVertical: spacing.sm,
+                        borderRadius: borderRadius.sm,
+                      }}>
+                        <Text style={{ fontSize: typography.size.xs, color: colors.text.primary, fontWeight: 'bold' }}>
+                          ✓ Active
+                        </Text>
+                      </View>
+                    ) : isOwned ? (
+                      <TouchableOpacity
+                        style={{
+                          backgroundColor: colors.primary[500],
+                          paddingHorizontal: spacing.md,
+                          paddingVertical: spacing.sm,
+                          borderRadius: borderRadius.sm,
+                          minWidth: 60,
+                          alignItems: 'center',
+                        }}
+                        onPress={() => handleApplyFurniture(item)}
+                      >
+                        <Text style={{ fontSize: typography.size.xs, color: colors.text.inverse, fontWeight: 'bold' }}>
+                          Apply
+                        </Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity
+                        style={{
+                          backgroundColor: canAfford ? colors.primary[500] : colors.background.tertiary,
+                          paddingHorizontal: spacing.md,
+                          paddingVertical: spacing.sm,
+                          borderRadius: borderRadius.sm,
+                          minWidth: 60,
+                          alignItems: 'center',
+                          opacity: canAfford ? 1 : 0.6,
+                        }}
+                        onPress={() => canAfford && handleFurniturePurchase(item)}
+                        disabled={!canAfford}
+                      >
+                        <Text style={{
+                          fontSize: typography.size.xs,
+                          color: canAfford ? colors.text.inverse : colors.text.secondary,
+                          fontWeight: 'bold',
+                        }}>
                           {canAfford ? 'Buy' : 'Too Expensive'}
                         </Text>
                       </TouchableOpacity>

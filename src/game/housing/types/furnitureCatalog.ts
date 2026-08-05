@@ -1,103 +1,230 @@
 import { FurnitureCatalog, FurnitureDef } from './RoomConfig';
+import { SlotType } from './roomSlots';
 
-// Furniture catalog defining all available furniture items
+// Furniture catalog defining all available furniture items, one entry per
+// slot type (see roomSlots.ts) with 1-2 starter variants each, sourced from
+// real assets in Processed/ (see the housing plan's "Starter catalog" table
+// for the exact source paths). Two variants use `layers` with a
+// frame-cycling animated layer (Chest, Campfire); everything else is a
+// static billboard, same as the original chair.
 export const FURNITURE_CATALOG: FurnitureCatalog = {
   chair: {
     id: "chair",
-    skeleton: "Chair", // References Chair.json
-    footprints: [
-      {
-        w: 1,
-        h: 1,
-        allowedRot: [0, 90, 180, 270]
-      }
-    ],
+    skeleton: "Chair",
+    footprints: [{ w: 1, h: 1, allowedRot: [0, 90, 180, 270] }],
     anchors: { dx: 0, dy: 0 },
     supportsLayers: ["under", "mid", "over"],
     occlusion: "none",
-    supportsFacing: true, // Chairs support FlipX animation
-    defaultFacing: "left", // Default orientation faces left
+    supportsFacing: true,
+    defaultFacing: "left",
     variants: [
-      { id: "beanbag_brown", skin: "Beanbag_Brown" },
-      { id: "beanbag_beige", skin: "Beanbag_Beige" },
-      { id: "office_chair_green", skin: "OfficeChair_Green" },
-      { id: "office_chair_beige", skin: "OfficeChair_Beige" },
-      { id: "wood_chair_beige", skin: "WoodChair_Beige" },
-      { id: "wood_chair_black", skin: "WoodChair_Black" },
-      { id: "wood_chair_blue", skin: "WoodChair_Blue" },
-      { id: "wood_chair_brown", skin: "WoodChair_Brown" },
-      { id: "wood_chair_green", skin: "WoodChair_Green", restPoseAsset: "1x1_WoodChair_Front_Green" }
+      { id: "wood_chair_green", cost: 150, skin: "WoodChair_Green", restPoseAsset: "1x1_WoodChair_Front_Green" },
+      { id: "wood_chair_brown", cost: 150, skin: "WoodChair_Brown", restPoseAsset: "1x1_WoodChair_Front_Brown" },
     ]
   },
 
-  // Example of a larger furniture piece (bed)
-  bed_classic: {
-    id: "bed_classic",
-    skeleton: "BedClassic", // Would reference BedClassic.json when available
-    footprints: [
+  bed: {
+    id: "bed",
+    skeleton: "Bed",
+    footprints: [{ w: 2, h: 1, allowedRot: [0, 90, 180, 270] }],
+    anchors: { dx: 0, dy: 0 },
+    supportsLayers: ["mid", "over"],
+    occlusion: "footboard",
+    desiredTileHeight: 1.5,
+    variants: [
       {
-        w: 2,
-        h: 1,
-        allowedRot: [0, 90, 180, 270]
+        id: "bed_single_wood",
+        cost: 260,
+        skin: "BedSingle_Wood",
+        restPoseAsset: "SingleBed1",
       },
       {
-        w: 1,
-        h: 2,
-        allowedRot: [0, 90, 180, 270]
-      }
-    ],
-    anchors: { dx: 0, dy: 0 },
-    supportsLayers: ["mid", "over"], // Bed body in mid, pillows/covers in over
-    occlusion: "footboard", // Has footboard that can cover other objects
-    variants: [
-      { id: "oak_a", skin: "oak_variant_a" },
-      { id: "oak_b", skin: "oak_variant_b" },
-      { id: "pine", skin: "pine_variant" }
+        id: "bed_single_pink",
+        cost: 260,
+        skin: "BedSingle_Pink",
+        restPoseAsset: "SingleBed3",
+      },
     ]
   },
 
-  // Example of decorative furniture
-  plant_tall: {
-    id: "plant_tall",
-    skeleton: "PlantTall", // Would reference PlantTall.json when available
-    footprints: [
-      {
-        w: 1,
-        h: 1,
-        allowedRot: [0] // Plants typically don't rotate
-      }
-    ],
+  storage: {
+    id: "storage",
+    skeleton: "Storage",
+    footprints: [{ w: 1, h: 1, allowedRot: [0, 90, 180, 270] }],
     anchors: { dx: 0, dy: 0 },
-    supportsLayers: ["mid", "over"], // Plant base in mid, leaves in over
-    occlusion: "tall", // Tall object that can occlude things behind it
+    supportsLayers: ["mid"],
+    occlusion: "none",
     variants: [
-      { id: "green_a", skin: "pothos_green" },
-      { id: "green_b", skin: "ficus_green" },
-      { id: "variegated", skin: "pothos_variegated" }
+      {
+        id: "storage_cabinet",
+        cost: 180,
+        skin: "Cabinet_Wood",
+        restPoseAsset: "1x1_CabinetteBottomOverDoors",
+        layers: [{ assetName: "1x1_CabinetteBottomOverDoors" }],
+      },
+      {
+        id: "storage_chest",
+        cost: 380,
+        skin: "Chest_Animated",
+        restPoseAsset: "Animation_Chest_Layer1",
+        layers: [
+          { assetName: "Animation_Chest_Layer1" },
+          { assetName: "Animation_Chest_Layer2" },
+          { assetName: "Animation_Chest_Layer3", frameCount: 7, fps: 6 },
+        ],
+      },
     ]
   },
 
-  // Example of under-layer furniture (rug)
-  rug_small: {
-    id: "rug_small",
-    skeleton: "RugSmall", // Would reference RugSmall.json when available
-    footprints: [
-      {
-        w: 2,
-        h: 2,
-        allowedRot: [0, 90]
-      }
-    ],
+  rug: {
+    id: "rug",
+    skeleton: "Rug",
+    footprints: [{ w: 1, h: 1, allowedRot: [0, 90] }],
     anchors: { dx: 0, dy: 0 },
-    supportsLayers: ["under"], // Rugs go under other furniture
-    occlusion: "none", // Rugs don't occlude anything
+    supportsLayers: ["under"],
+    occlusion: "none",
     variants: [
-      { id: "persian_red", skin: "persian_red_pattern" },
-      { id: "persian_blue", skin: "persian_blue_pattern" },
-      { id: "modern_geometric", skin: "modern_geo_pattern" }
+      { id: "rug_brown", cost: 130, skin: "SquareCarpet_Brown", restPoseAsset: "1x1_SquareCarpet_Brown" },
+      { id: "rug_blue", cost: 130, skin: "SquareCarpet_Blue", restPoseAsset: "1x1_SquareCarpet_Blue" },
     ]
-  }
+  },
+
+  wallDecor: {
+    id: "wallDecor",
+    skeleton: "WallDecor",
+    footprints: [{ w: 1, h: 1, allowedRot: [0] }],
+    anchors: { dx: 0, dy: 0 },
+    supportsLayers: ["mid"],
+    occlusion: "none",
+    variants: [
+      { id: "wall_painting", cost: 140, skin: "Painting1Frame1_Wood", restPoseAsset: "WallDecor_Painting1Frame1_Wood" },
+      { id: "wall_clock", cost: 140, skin: "RoundClock_Brown", restPoseAsset: "WallDecor_RoundClock_Brown" },
+    ]
+  },
+
+  tableDesk: {
+    id: "tableDesk",
+    skeleton: "Table",
+    footprints: [{ w: 1, h: 1, allowedRot: [0, 90, 180, 270] }],
+    anchors: { dx: 0, dy: 0 },
+    supportsLayers: ["mid"],
+    occlusion: "none",
+    variants: [
+      { id: "table_square", cost: 160, skin: "TableSquareWood_Wood", restPoseAsset: "1x1_TableSquareWood_Wood" },
+      { id: "table_round", cost: 160, skin: "TableRound_Wood", restPoseAsset: "1x1_TableRound_Wood" },
+    ]
+  },
+
+  lighting: {
+    id: "lighting",
+    skeleton: "Lamp",
+    footprints: [{ w: 1, h: 1, allowedRot: [0] }],
+    anchors: { dx: 0, dy: 0 },
+    supportsLayers: ["mid"],
+    occlusion: "none",
+    variants: [
+      { id: "lamp_table", cost: 140, skin: "TableLamp_On", restPoseAsset: "1x1_TableLamp_On" },
+      { id: "lamp_classic", cost: 140, skin: "ClassicLamp_On", restPoseAsset: "1x1_ClassicLamp_On" },
+    ]
+  },
+
+  hobby: {
+    id: "hobby",
+    skeleton: "Hobby",
+    footprints: [{ w: 1, h: 1, allowedRot: [0] }],
+    anchors: { dx: 0, dy: 0 },
+    supportsLayers: ["mid"],
+    occlusion: "tall",
+    variants: [
+      { id: "hobby_piano", cost: 200, skin: "Piano_Brown", restPoseAsset: "1x1_Piano_Brown" },
+      { id: "hobby_record_player", cost: 200, skin: "RecordPlayerOff_Brown", restPoseAsset: "1x1_RecordPlayerOff_Brown" },
+    ]
+  },
+
+  feature: {
+    id: "feature",
+    skeleton: "Feature",
+    footprints: [{ w: 1, h: 1, allowedRot: [0] }],
+    anchors: { dx: 0, dy: 0 },
+    supportsLayers: ["mid"],
+    occlusion: "tall",
+    variants: [
+      {
+        id: "feature_fireplace",
+        cost: 220,
+        skin: "Fireplace_Brown",
+        restPoseAsset: "1x1_FireplaceUnder_Brown",
+        layers: [
+          { assetName: "1x1_FireplaceUnder_Brown" },
+          { assetName: "1x1_FireplaceOver_Brown" },
+        ],
+      },
+      {
+        id: "feature_campfire",
+        cost: 380,
+        skin: "Campfire_Animated",
+        restPoseAsset: "Animation_Campfire_Layer1",
+        layers: [
+          { assetName: "Animation_Campfire_Layer1" },
+          { assetName: "Animation_Campfire_Layer2", frameCount: 5, fps: 8 },
+        ],
+      },
+    ]
+  },
 };
+
+// Maps each catalog furnitureId to the room-slot type it fills (the "chair"
+// catalog entry predates the slot system and keeps its historical id rather
+// than being renamed to "seating"). Used by the shop to resolve which
+// physical slot(s) a purchased item is eligible for -- most slot types have
+// exactly one physical slot, but wallDecor has two (wallDecor1/2); the shop
+// applies to the first empty match, or the first slot of that type if both
+// are already filled.
+export const SLOT_TYPE_FOR_FURNITURE_ID: Record<string, SlotType> = {
+  chair: 'seating',
+  bed: 'bed',
+  storage: 'storage',
+  rug: 'rug',
+  wallDecor: 'wallDecor',
+  tableDesk: 'tableDesk',
+  lighting: 'lighting',
+  hobby: 'hobby',
+  feature: 'feature',
+};
+
+export interface FurnitureShopItem {
+  id: string;
+  furnitureId: string;
+  variantId: string;
+  slotType: SlotType;
+  name: string;
+  cost: number;
+  previewAsset: string;
+}
+
+const SLOT_TYPE_LABELS: Record<SlotType, string> = {
+  bed: 'Bed',
+  seating: 'Seating',
+  storage: 'Storage',
+  rug: 'Rug',
+  wallDecor: 'Wall Décor',
+  tableDesk: 'Table/Desk',
+  lighting: 'Lighting',
+  hobby: 'Hobby',
+  feature: 'Feature',
+};
+
+export const FURNITURE_SHOP_CATALOG: FurnitureShopItem[] = Object.values(FURNITURE_CATALOG).flatMap((def) =>
+  def.variants.map((variant) => ({
+    id: `${def.id}_${variant.id}`,
+    furnitureId: def.id,
+    variantId: variant.id,
+    slotType: SLOT_TYPE_FOR_FURNITURE_ID[def.id],
+    name: `${SLOT_TYPE_LABELS[SLOT_TYPE_FOR_FURNITURE_ID[def.id]]} – ${variant.skin ?? variant.id}`,
+    cost: variant.cost,
+    previewAsset: variant.restPoseAsset ?? variant.layers?.[0]?.assetName ?? '',
+  }))
+);
 
 // Helper function to get furniture definition by ID
 export function getFurnitureDef(furnitureId: string): FurnitureDef | undefined {

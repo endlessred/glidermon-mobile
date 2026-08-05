@@ -1,0 +1,27 @@
+{
+  "id": "starterFurniture",
+  "description": "Slot-based furniture starter catalog (Bed, Seating, Storage, Rug, Wall Decor, Table/Desk, Lighting, Hobby, Feature)",
+  "assets": [
+    "Beds/SingleBed1.png",
+    "Beds/SingleBed3.png",
+    "Chairs/Brown/1x1_WoodChair_Front_Brown.png",
+    "Storage/Wood/1x1_CabinetteBottomOverDoors.png",
+    "AnimatedItems/Animation_Chest_Layer1.png",
+    "AnimatedItems/Animation_Chest_Layer2.png",
+    "AnimatedItems/Animation_Chest_Layer3.png",
+    "Carpets/Brown/1x1_SquareCarpet_Brown.png",
+    "Carpets/Blue/1x1_SquareCarpet_Blue.png",
+    "WallDecor/Paintings/WallDecor_Painting1Frame1_Wood.png",
+    "WallDecor/Clocks/WallDecor_RoundClock_Brown.png",
+    "Tables/Wood/1x1_TableSquareWood_Wood.png",
+    "Tables/Wood/1x1_TableRound_Wood.png",
+    "Lights/White/1x1_TableLamp_On.png",
+    "Lights/Yellow/1x1_ClassicLamp_On.png",
+    "Music/1x1_Piano_Brown.png",
+    "Music/1x1_RecordPlayerOff_Brown.png",
+    "Fireplaces/1x1_FireplaceUnder_Brown.png",
+    "Fireplaces/1x1_FireplaceOver_Brown.png",
+    "AnimatedItems/Animation_Campfire_Layer1.png",
+    "AnimatedItems/Animation_Campfire_Layer2.png"
+  ]
+}

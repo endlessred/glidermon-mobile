@@ -14,12 +14,13 @@ import { useCosmeticsStore } from '../../../data/stores/cosmeticsStore';
 import { OutfitSlot } from '../../../data/types/outfitTypes';
 import { createSpineCharacterController, SpineCharacterController } from '../../../spine/createSpineCharacterController';
 import { buildRoomScene3D, WALL_HEIGHT } from '../render/sceneBuilder3D';
-import { buildFurnitureBillboard3D } from '../render/furnitureBillboard3D';
+import { buildFurnitureSlotBillboard } from '../render/furnitureBillboard3D';
 import { computeBillboardQuaternion } from '../render/billboard3D';
 import { computeNativeCharacterHeight } from '../render/characterScale';
 import { gridToWorld, TILE_SIZE } from '../render/grid3D';
 import { createSkyTexture, getSkyPalette, paintSky, rgbToHex } from '../render/sky3D';
 import { createTreetopBackdrop3D } from '../render/treetopBackdrop3D';
+import { getSlotsForTier } from '../types/roomSlots';
 
 interface IsometricRoomView3DProps {
   width?: number;
@@ -65,6 +66,50 @@ const ZOOM_FRAME_FILL_RATIO = 0.55;
 // day drifts slowly, so there's no need to recompute every frame.
 const SKY_UPDATE_INTERVAL_MS = 30000;
 
+// Disposes every mesh's geometry + material(s) under `group` and removes
+// them, without touching `group` itself -- used to clear out the previous
+// furniture set before rebuilding it in response to a store change.
+function clearGroup(group: THREE.Group) {
+  for (const child of [...group.children]) {
+    group.remove(child);
+    child.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (mesh.geometry) mesh.geometry.dispose();
+      const material = mesh.material as THREE.Material | THREE.Material[] | undefined;
+      if (Array.isArray(material)) material.forEach((m) => m.dispose());
+      else material?.dispose();
+    });
+  }
+}
+
+// (Re)builds every occupied slot's billboard into `group` and returns the
+// per-frame update callbacks for any animated layers -- shared between the
+// initial scene build and the reactive rebuild-on-store-change effect below,
+// so buying/applying furniture in the shop is reflected without requiring a
+// full app reload (the GL context itself is only ever created once; see
+// `handleContextCreate`'s `initializedRef` guard).
+async function populateFurnitureGroup(
+  group: THREE.Group,
+  roomSizeTier: number,
+  activeFurnitureBySlot: Record<string, { furnitureId: string; variantId: string }>,
+  dims: { width: number; height: number },
+  billboardQuaternion: THREE.Quaternion,
+  characterWorldPos: { x: number; z: number }
+): Promise<Array<(dt: number) => void>> {
+  clearGroup(group);
+  const updaters: Array<(dt: number) => void> = [];
+  for (const slot of getSlotsForTier(roomSizeTier)) {
+    const occupant = activeFurnitureBySlot[slot.slotId];
+    if (!occupant) continue;
+    const built3 = await buildFurnitureSlotBillboard(slot, occupant.furnitureId, occupant.variantId, dims, billboardQuaternion, characterWorldPos);
+    if (built3) {
+      group.add(built3.group);
+      if (built3.update) updaters.push(built3.update);
+    }
+  }
+  return updaters;
+}
+
 export default function IsometricRoomView3D({
   width = 300,
   height = 250,
@@ -78,7 +123,7 @@ export default function IsometricRoomView3D({
   const roomSizeTier = useHousingStore((s) => s.roomSizeTier);
   const activeFloorPatternId = useHousingStore((s) => s.activeFloorPatternId);
   const activeWallPatternId = useHousingStore((s) => s.activeWallPatternId);
-  const furniturePlacements = useHousingStore((s) => s.furniturePlacements);
+  const activeFurnitureBySlot = useHousingStore((s) => s.activeFurnitureBySlot);
 
   const [isLoaded, setIsLoaded] = useState(false);
   const [isZoomedIn, setIsZoomedIn] = useState(false);
@@ -99,11 +144,50 @@ export default function IsometricRoomView3D({
   const sunLightRef = useRef<THREE.DirectionalLight | null>(null);
   const lastSkyUpdateRef = useRef<number | null>(null);
   const treetopGroupRef = useRef<THREE.Group | null>(null);
+  const furnitureUpdatersRef = useRef<Array<(dt: number) => void>>([]);
+  // Dedicated sub-group for furniture billboards, added to the room group
+  // once at initial build -- lets furniture be torn down/rebuilt in
+  // response to store changes (buy/apply in the shop) without needing to
+  // recreate the whole GL scene, which `handleContextCreate`'s
+  // `initializedRef` guard only ever runs once per mount.
+  const furnitureGroupRef = useRef<THREE.Group | null>(null);
+  const roomGroupRef = useRef<THREE.Group | null>(null);
+  const billboardQuaternionRef = useRef<THREE.Quaternion | null>(null);
+  const roomDimsRef = useRef<{ width: number; height: number } | null>(null);
+  // Character position is static per room-view mount (not animated within
+  // the room), so it's computed once and reused by every furniture rebuild
+  // for front/behind renderOrder classification -- see buildFurnitureSlotBillboard.
+  const characterWorldPosRef = useRef<{ x: number; z: number } | null>(null);
 
   const scaleRef = useRef(characterScale);
   useEffect(() => {
     scaleRef.current = characterScale;
   }, [characterScale]);
+
+  // Rebuilds just the furniture layer when the store changes (buy/apply in
+  // the shop) -- skips the very first render, since the initial scene build
+  // in handleContextCreate already populates it from the same state.
+  const skipInitialFurnitureEffect = useRef(true);
+  useEffect(() => {
+    if (__DEV__) console.log(`[housing3D DEBUG] furniture effect fired, skip=${skipInitialFurnitureEffect.current}, hasGroup=${!!furnitureGroupRef.current}`);
+    if (skipInitialFurnitureEffect.current) {
+      skipInitialFurnitureEffect.current = false;
+      return;
+    }
+    const group = furnitureGroupRef.current;
+    const dims = roomDimsRef.current;
+    const billboardQuaternion = billboardQuaternionRef.current;
+    const characterWorldPos = characterWorldPosRef.current;
+    if (!group || !dims || !billboardQuaternion || !characterWorldPos) return;
+    let cancelled = false;
+    populateFurnitureGroup(group, roomSizeTier, activeFurnitureBySlot, dims, billboardQuaternion, characterWorldPos).then((updaters) => {
+      if (__DEV__) console.log(`[housing3D DEBUG] rebuilt furniture layer, ${updaters.length} updater(s)`);
+      if (!cancelled) furnitureUpdatersRef.current = updaters;
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeFurnitureBySlot, roomSizeTier]);
 
   const animationRef = useRef(animation);
   useEffect(() => {
@@ -274,10 +358,27 @@ export default function IsometricRoomView3D({
       const billboardQuaternion = computeBillboardQuaternion(CAMERA_OFFSET);
       const treetopPromise = createTreetopBackdrop3D(built.halfWidth, built.halfDepth, billboardQuaternion);
 
-      for (const placement of furniturePlacements) {
-        const billboard = await buildFurnitureBillboard3D(placement, dims, billboardQuaternion);
-        if (billboard) built.group.add(billboard);
-      }
+      roomGroupRef.current = built.group;
+      billboardQuaternionRef.current = billboardQuaternion;
+      roomDimsRef.current = dims;
+
+      // Computed here (before furniture/character are built) so both can
+      // share it -- furniture uses it to classify itself as in front of or
+      // behind the character for renderOrder (see buildFurnitureSlotBillboard).
+      const characterWorldPos = gridToWorld(gridRow, gridColumn, dims);
+      characterWorldPosRef.current = characterWorldPos;
+
+      const furnitureGroup = new THREE.Group();
+      built.group.add(furnitureGroup);
+      furnitureGroupRef.current = furnitureGroup;
+      furnitureUpdatersRef.current = await populateFurnitureGroup(
+        furnitureGroup,
+        roomSizeTier,
+        activeFurnitureBySlot,
+        dims,
+        billboardQuaternion,
+        characterWorldPos
+      );
 
       const controller = await createSpineCharacterController({
         animation: animationRef.current,
@@ -314,7 +415,7 @@ export default function IsometricRoomView3D({
       }
 
       characterGroup.add(controller.mesh);
-      const { x: charX, z: charZ } = gridToWorld(gridRow, gridColumn, dims);
+      const { x: charX, z: charZ } = characterWorldPos;
       characterGroup.position.set(charX, 0, charZ);
       built.group.add(characterGroup);
 
@@ -343,9 +444,11 @@ export default function IsometricRoomView3D({
           const deltaSeconds = Math.min((now - last) / 1000, 1 / 15);
           lastTimeRef.current = now;
 
-          // Only the character skeleton updates/refreshes per frame -- the
-          // room shell and furniture were built once above.
+          // Only the character skeleton and any animated furniture (e.g. a
+          // campfire flicker, a chest opening) update per frame -- everything
+          // else in the room shell was built once above.
           controller.update(deltaSeconds);
+          for (const update of furnitureUpdatersRef.current) update(deltaSeconds);
 
           // Re-aim every frame while zoomed in (not just on toggle) so the
           // camera tracks characterTargetRef.current live -- this is what
@@ -388,7 +491,7 @@ export default function IsometricRoomView3D({
       setIsLoaded(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomSizeTier, activeFloorPatternId, activeWallPatternId, furniturePlacements, catalog, gridColumn, gridRow]);
+  }, [roomSizeTier, activeFloorPatternId, activeWallPatternId, activeFurnitureBySlot, catalog, gridColumn, gridRow]);
 
   return (
     <View style={{ width, height, backgroundColor: 'transparent' }}>

@@ -130,9 +130,21 @@ export interface FurnitureFootprint {
   allowedRot: number[];
 }
 
+export interface FurnitureVariantLayer {
+  /** Source filename stem, same convention as `restPoseAsset` below. */
+  assetName: string;
+  /** If >1, this layer is a horizontal flipbook sprite-sheet with this many
+   * equal-width frames, cycled at `fps` -- e.g. a campfire flicker or a
+   * chest opening. Omitted/1 means a plain static image. */
+  frameCount?: number;
+  fps?: number;
+}
+
 export interface FurnitureVariant {
   /** Variant identifier */
   id: string;
+  /** Acorn cost to unlock this variant in the shop. */
+  cost: number;
   /** Optional skin override for this variant */
   skin?: string;
   /** Optional tint color for this variant */
@@ -144,6 +156,14 @@ export interface FurnitureVariant {
    * when it isn't being actively animated as a Spine skeleton.
    */
   restPoseAsset?: string;
+  /**
+   * Ordered stack of billboard layers for the 3D-primitive room shell --
+   * lets a variant composite multiple images (e.g. bed frame + bedding)
+   * and/or include a frame-cycling animated layer, instead of exactly one
+   * static image. Falls back to a single layer built from `restPoseAsset`
+   * when omitted.
+   */
+  layers?: FurnitureVariantLayer[];
 }
 
 // --- Plain-data grid/slot model for the quad-based room renderer ---
@@ -189,6 +209,13 @@ export interface FurnitureDef {
   supportsFacing?: boolean;
   /** Default facing direction */
   defaultFacing?: "left" | "right";
+  /**
+   * Overrides the 3D-primitive renderer's global billboard scale
+   * (`FURNITURE_DESIRED_TILE_HEIGHT` in furnitureBillboard3D.ts) for this
+   * furniture type. Most furniture reads fine at the shared default; a few
+   * (e.g. the bed) need to read larger relative to their footprint.
+   */
+  desiredTileHeight?: number;
 }
 
 export interface FurnitureCatalog {

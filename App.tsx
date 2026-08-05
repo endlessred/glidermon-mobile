@@ -58,7 +58,7 @@ const DEEP_LINK_TABS: Record<string, Tab> = {
   gallery: "🎨 GALLERY",
   settings: "SETTINGS",
 };
-const SHOP_CATEGORIES: ShopCategory[] = ["cosmetics", "floors", "walls"];
+const SHOP_CATEGORIES: ShopCategory[] = ["cosmetics", "floors", "walls", "furniture"];
 
 // Dev/test deep links for jumping straight to a specific streak popup, e.g.:
 //   adb shell am start -a android.intent.action.VIEW -d "glidermon://streak/lost"

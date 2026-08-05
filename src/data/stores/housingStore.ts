@@ -44,6 +44,12 @@ type HousingState = {
   activeWallPatternId: string;
   unlockedFloorPatternIds: string[];
   unlockedWallPatternIds: string[];
+  // Slot-based furniture for the 3D-primitive room shell (roomSlots.ts) --
+  // kept separate from `furniturePlacements` above, which the `quad`/`legacy`
+  // renderers still use with their freeform row/col placement. Keyed by
+  // slotId; a slot with no entry renders empty until purchased.
+  activeFurnitureBySlot: Record<string, { furnitureId: string; variantId: string }>;
+  unlockedFurnitureIds: string[]; // `${furnitureId}_${variantId}`
   _hasHydrated: boolean;
 
   unlockRoomTier: (tier: number) => void;
@@ -57,6 +63,9 @@ type HousingState = {
   setActiveWallPattern: (id: string) => void;
   placeFurniture: (placement: FurniturePlacement) => void;
   removeFurniture: (id: string) => void;
+  unlockFurniture: (id: string) => void;
+  setActiveFurniture: (slotId: string, furnitureId: string, variantId: string) => void;
+  clearFurnitureSlot: (slotId: string) => void;
 };
 
 const DEFAULT_FLOOR_SETS: FloorSetName[] = ["YellowCarpet", "RedCarpet"];
@@ -65,6 +74,15 @@ const DEFAULT_WALL_SETS: WallSetName[] = ["Brown1WoodPaneling"];
 const DEFAULT_FURNITURE: FurniturePlacement[] = [
   { id: "starter-chair", furnitureId: "chair", variantId: "wood_chair_green", row: 2, col: 2, facing: "right" },
 ];
+
+// Slot-based furniture defaults: only Seating ships filled (reusing the same
+// free starter chair as DEFAULT_FURNITURE above), the other 8 slots start
+// empty until purchased -- same "one free default, rest purchasable"
+// precedent as the floor/wall pattern catalog.
+const DEFAULT_FURNITURE_BY_SLOT: Record<string, { furnitureId: string; variantId: string }> = {
+  seating: { furnitureId: "chair", variantId: "wood_chair_green" },
+};
+const DEFAULT_UNLOCKED_FURNITURE_IDS: string[] = ["chair_wood_chair_green"];
 
 export const useHousingStore = create<HousingState>()(
   persist(
@@ -79,6 +97,8 @@ export const useHousingStore = create<HousingState>()(
       activeWallPatternId: DEFAULT_WALL_PATTERN_ID,
       unlockedFloorPatternIds: [DEFAULT_FLOOR_PATTERN_ID],
       unlockedWallPatternIds: [DEFAULT_WALL_PATTERN_ID],
+      activeFurnitureBySlot: DEFAULT_FURNITURE_BY_SLOT,
+      unlockedFurnitureIds: DEFAULT_UNLOCKED_FURNITURE_IDS,
       _hasHydrated: false,
 
       unlockRoomTier: (tier) => {
@@ -131,11 +151,31 @@ export const useHousingStore = create<HousingState>()(
       removeFurniture: (id) => {
         set((s) => ({ furniturePlacements: s.furniturePlacements.filter((p) => p.id !== id) }));
       },
+
+      unlockFurniture: (id) => {
+        set((s) => (s.unlockedFurnitureIds.includes(id) ? s : { unlockedFurnitureIds: [...s.unlockedFurnitureIds, id] }));
+      },
+
+      setActiveFurniture: (slotId, furnitureId, variantId) => {
+        const id = `${furnitureId}_${variantId}`;
+        if (!get().unlockedFurnitureIds.includes(id)) return;
+        set((s) => ({
+          activeFurnitureBySlot: { ...s.activeFurnitureBySlot, [slotId]: { furnitureId, variantId } },
+        }));
+      },
+
+      clearFurnitureSlot: (slotId) => {
+        set((s) => {
+          const next = { ...s.activeFurnitureBySlot };
+          delete next[slotId];
+          return { activeFurnitureBySlot: next };
+        });
+      },
     }),
     {
       name: "housing_store_v1",
       storage: createJSONStorage(() => AsyncStorage),
-      version: 2,
+      version: 3,
       migrate: (persisted: any, fromVersion: number) => {
         const s = persisted ?? {};
         s.roomSizeTier = typeof s.roomSizeTier === "number" ? s.roomSizeTier : 1;
@@ -159,6 +199,15 @@ export const useHousingStore = create<HousingState>()(
         s.activeWallPatternId = s.unlockedWallPatternIds.includes(s.activeWallPatternId)
           ? s.activeWallPatternId
           : s.unlockedWallPatternIds[0];
+
+        // v3: slot-based furniture for the 3D room shell, added alongside
+        // (not replacing) the freeform `furniturePlacements` above.
+        s.activeFurnitureBySlot = s.activeFurnitureBySlot && typeof s.activeFurnitureBySlot === "object"
+          ? s.activeFurnitureBySlot
+          : DEFAULT_FURNITURE_BY_SLOT;
+        s.unlockedFurnitureIds = Array.isArray(s.unlockedFurnitureIds) && s.unlockedFurnitureIds.length > 0
+          ? s.unlockedFurnitureIds
+          : DEFAULT_UNLOCKED_FURNITURE_IDS;
         return s;
       },
       onRehydrateStorage: () => (state) => {

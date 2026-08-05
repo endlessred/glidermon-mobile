@@ -18,10 +18,21 @@ export function roomHalfExtents(dims: RoomDims3D) {
   };
 }
 
-export function gridToWorld(row: number, col: number, dims: RoomDims3D): { x: number; z: number } {
+export function gridToWorld(
+  row: number,
+  col: number,
+  dims: RoomDims3D,
+  footprint?: { w: number; h: number }
+): { x: number; z: number } {
   const { halfWidth, halfDepth } = roomHalfExtents(dims);
+  // A footprint wider/deeper than 1x1 (e.g. a 2-wide bed) is anchored at its
+  // (row, col) corner tile, not its center -- shift by half the extra span
+  // so multi-tile items are centered over their whole footprint instead of
+  // overhanging asymmetrically off the anchor tile.
+  const colOffset = footprint ? ((footprint.w - 1) * TILE_SIZE) / 2 : 0;
+  const rowOffset = footprint ? ((footprint.h - 1) * TILE_SIZE) / 2 : 0;
   return {
-    x: -halfWidth + TILE_SIZE / 2 + col * TILE_SIZE,
-    z: -halfDepth + TILE_SIZE / 2 + row * TILE_SIZE,
+    x: -halfWidth + TILE_SIZE / 2 + col * TILE_SIZE + colOffset,
+    z: -halfDepth + TILE_SIZE / 2 + row * TILE_SIZE + rowOffset,
   };
 }
