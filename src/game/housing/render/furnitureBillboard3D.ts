@@ -127,9 +127,15 @@ export async function buildFurnitureSlotBillboard(
 
   const desiredTileHeight = def.desiredTileHeight ?? FURNITURE_DESIRED_TILE_HEIGHT;
   // A wide/low-aspect texture (e.g. a rug) scaled by height alone can render
-  // several tiles wide even though it occupies a 1x1 (or, for the bed, 2x1)
+  // several tiles wide even though it occupies a 1x1 (or, for the bed, 1x2)
   // slot -- clamp to whichever scale (height- or width-based) keeps it
-  // within its footprint so it can't visually overflow into a wall.
+  // within its footprint so it can't visually overflow into a wall. Must be
+  // strictly footprint.w (not the longer footprint.h for a row-elongated
+  // item like the bed): the bed's slot sits flush against the corner wall,
+  // and its billboard plane's local-X extent maps into a diagonal blend of
+  // world X and Z once rotated to face the camera, so allowing it to render
+  // wider than its actual 1-tile column made the headboard corner poke
+  // through the wall.
   const footprintWidthWorld = (slot.footprint?.w ?? 1) * TILE_SIZE;
   // Wall décor is mounted at WALL_DECOR_HEIGHT with its bottom-center pivot,
   // so it only has (WALL_HEIGHT - WALL_DECOR_HEIGHT) of headroom before
@@ -166,7 +172,10 @@ export async function buildFurnitureSlotBillboard(
     // width off its pivot instead of mirroring it in place.
     const scaleX = mirrorX ? -scaleFactor : scaleFactor;
 
-    const mesh = makeSpritePlane(texture, frameWidth, tex.height, { depthTest: true });
+    const mesh = makeSpritePlane(texture, frameWidth, tex.height, {
+      depthTest: true,
+      opaqueCutout: layerRenderOrder === RENDER_ORDER_BEHIND_CHARACTER,
+    });
     mesh.renderOrder = layerRenderOrder;
     mesh.scale.set(scaleX, scaleFactor, scaleFactor);
     // Same bottom-center pivot correction as furnitureSprite.ts/tileSprite.ts:

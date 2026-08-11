@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { Physics } from '@esotericsoftware/spine-core';
 import { GLView } from 'expo-gl';
 import { Renderer } from 'expo-three';
-import { useHousingStore, ROOM_SIZE_TIERS } from '../../../data/stores/housingStore';
+import { useHousingStore, ROOM_SIZE_TIERS, GridTile } from '../../../data/stores/housingStore';
 import { useCosmeticsStore } from '../../../data/stores/cosmeticsStore';
 import { OutfitSlot } from '../../../data/types/outfitTypes';
 import { createSpineCharacterController, SpineCharacterController } from '../../../spine/createSpineCharacterController';
@@ -21,15 +21,26 @@ import { gridToWorld, TILE_SIZE } from '../render/grid3D';
 import { createSkyTexture, getSkyPalette, paintSky, rgbToHex } from '../render/sky3D';
 import { createTreetopBackdrop3D } from '../render/treetopBackdrop3D';
 import { getSlotsForTier } from '../types/roomSlots';
+import { getWalkableTiles } from '../render/walkableTiles';
 
 interface IsometricRoomView3DProps {
   width?: number;
   height?: number;
-  gridColumn?: number;
-  gridRow?: number;
   characterScale?: number;
   animation?: string;
   outfit?: OutfitSlot | null;
+}
+
+// Glidermon teleports (Tamagotchi-style, no walk cycle) to a random empty
+// floor tile at a random interval in this range.
+const WANDER_INTERVAL_RANGE_MS: [number, number] = [30_000, 180_000];
+// If a "big" idle behavior (reading, a body-composite fidget, a reaction) is
+// mid-playback when the wander timer fires, teleporting would cut it off
+// jarringly -- wait this long and check again instead of skipping the cycle.
+const WANDER_RETRY_DELAY_MS = 5_000;
+
+function randInMs([min, max]: [number, number]): number {
+  return min + Math.random() * (max - min);
 }
 
 const DEFAULT_CHARACTER_SCALE = 1;
@@ -113,8 +124,6 @@ async function populateFurnitureGroup(
 export default function IsometricRoomView3D({
   width = 300,
   height = 250,
-  gridColumn = 1,
-  gridRow = 0,
   characterScale = DEFAULT_CHARACTER_SCALE,
   animation = 'idle',
   outfit,
@@ -124,6 +133,7 @@ export default function IsometricRoomView3D({
   const activeFloorPatternId = useHousingStore((s) => s.activeFloorPatternId);
   const activeWallPatternId = useHousingStore((s) => s.activeWallPatternId);
   const activeFurnitureBySlot = useHousingStore((s) => s.activeFurnitureBySlot);
+  const characterTile = useHousingStore((s) => s.characterTile);
 
   const [isLoaded, setIsLoaded] = useState(false);
   const [isZoomedIn, setIsZoomedIn] = useState(false);
@@ -155,10 +165,14 @@ export default function IsometricRoomView3D({
   const roomGroupRef = useRef<THREE.Group | null>(null);
   const billboardQuaternionRef = useRef<THREE.Quaternion | null>(null);
   const roomDimsRef = useRef<{ width: number; height: number } | null>(null);
-  // Character position is static per room-view mount (not animated within
-  // the room), so it's computed once and reused by every furniture rebuild
-  // for front/behind renderOrder classification -- see buildFurnitureSlotBillboard.
+  // Reused by every furniture rebuild for front/behind renderOrder
+  // classification -- see buildFurnitureSlotBillboard. Updated whenever
+  // Glidermon wanders to a new tile (see the characterTile effect below).
   const characterWorldPosRef = useRef<{ x: number; z: number } | null>(null);
+  // The wrapping group whose position places Glidermon in the room -- held
+  // in a ref (not just a local var in handleContextCreate) so the
+  // characterTile effect can move it after the initial scene build.
+  const characterGroupRef = useRef<THREE.Group | null>(null);
 
   const scaleRef = useRef(characterScale);
   useEffect(() => {
@@ -189,6 +203,70 @@ export default function IsometricRoomView3D({
       cancelled = true;
     };
   }, [activeFurnitureBySlot, roomSizeTier]);
+
+  // Moves Glidermon to his current tile whenever it changes after the
+  // initial mount (the wander scheduler below writes to housingStore's
+  // characterTile) -- teleports instantly (Tamagotchi-style, no walk cycle),
+  // then re-baked furniture renderOrder against the new position so he
+  // still layers correctly in front of/behind furniture on his new tile.
+  const skipInitialTileEffect = useRef(true);
+  useEffect(() => {
+    if (skipInitialTileEffect.current) {
+      skipInitialTileEffect.current = false;
+      return;
+    }
+    const characterGroup = characterGroupRef.current;
+    const furnitureGroup = furnitureGroupRef.current;
+    const dims = roomDimsRef.current;
+    const billboardQuaternion = billboardQuaternionRef.current;
+    if (!characterGroup || !furnitureGroup || !dims || !billboardQuaternion) return;
+
+    const { x: charX, z: charZ } = gridToWorld(characterTile.row, characterTile.col, dims);
+    characterGroup.position.set(charX, 0, charZ);
+    characterWorldPosRef.current = { x: charX, z: charZ };
+    characterTargetRef.current.set(charX, characterHeightRef.current / 2, charZ);
+
+    let cancelled = false;
+    populateFurnitureGroup(furnitureGroup, roomSizeTier, activeFurnitureBySlot, dims, billboardQuaternion, { x: charX, z: charZ }).then((updaters) => {
+      if (!cancelled) furnitureUpdatersRef.current = updaters;
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [characterTile, roomSizeTier, activeFurnitureBySlot]);
+
+  // Wander scheduler: every 30s-180s, if Glidermon isn't mid-way through a
+  // "big" idle behavior, teleport him to a random empty floor tile. Runs on
+  // a plain setTimeout chain (not the rAF render loop) since this cadence
+  // doesn't need per-frame precision.
+  useEffect(() => {
+    if (!isLoaded) return;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let cancelled = false;
+
+    const attemptWander = () => {
+      if (cancelled) return;
+      const idleDriver = spineRef.current?.idleDriver;
+      if (idleDriver && idleDriver.getCurrentBehavior() !== 'idle') {
+        timeoutId = setTimeout(attemptWander, WANDER_RETRY_DELAY_MS);
+        return;
+      }
+      const { roomSizeTier: tier, activeFurnitureBySlot: occupied, characterTile: current, setCharacterTile } =
+        useHousingStore.getState();
+      const candidates = getWalkableTiles(tier, occupied).filter((t) => t.row !== current.row || t.col !== current.col);
+      if (candidates.length > 0) {
+        const next: GridTile = candidates[(Math.random() * candidates.length) | 0];
+        setCharacterTile(next);
+      }
+      timeoutId = setTimeout(attemptWander, randInMs(WANDER_INTERVAL_RANGE_MS));
+    };
+
+    timeoutId = setTimeout(attemptWander, randInMs(WANDER_INTERVAL_RANGE_MS));
+    return () => {
+      cancelled = true;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [isLoaded]);
 
   const animationRef = useRef(animation);
   useEffect(() => {
@@ -406,7 +484,7 @@ export default function IsometricRoomView3D({
       // Computed here (before furniture/character are built) so both can
       // share it -- furniture uses it to classify itself as in front of or
       // behind the character for renderOrder (see buildFurnitureSlotBillboard).
-      const characterWorldPos = gridToWorld(gridRow, gridColumn, dims);
+      const characterWorldPos = gridToWorld(characterTile.row, characterTile.col, dims);
       characterWorldPosRef.current = characterWorldPos;
 
       const furnitureGroup = new THREE.Group();
@@ -459,6 +537,7 @@ export default function IsometricRoomView3D({
       const { x: charX, z: charZ } = characterWorldPos;
       characterGroup.position.set(charX, 0, charZ);
       scene.add(characterGroup);
+      characterGroupRef.current = characterGroup;
 
       // Zoomed-in framing centers on the character's mid-height, not their
       // feet, so the camera doesn't look like it's aimed at the floor.
@@ -532,7 +611,7 @@ export default function IsometricRoomView3D({
       setIsLoaded(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomSizeTier, activeFloorPatternId, activeWallPatternId, activeFurnitureBySlot, catalog, gridColumn, gridRow]);
+  }, [roomSizeTier, activeFloorPatternId, activeWallPatternId, activeFurnitureBySlot, catalog]);
 
   return (
     <View style={{ width, height, backgroundColor: 'transparent' }}>

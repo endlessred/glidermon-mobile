@@ -18,6 +18,11 @@ export const ROOM_SIZE_TIERS: RoomSizeTier[] = [
   { width: 5, height: 5 },
 ];
 
+export interface GridTile {
+  row: number;
+  col: number;
+}
+
 export interface FurniturePlacement {
   id: string;
   furnitureId: string;
@@ -50,6 +55,10 @@ type HousingState = {
   // slotId; a slot with no entry renders empty until purchased.
   activeFurnitureBySlot: Record<string, { furnitureId: string; variantId: string }>;
   unlockedFurnitureIds: string[]; // `${furnitureId}_${variantId}`
+  // Glidermon's current floor tile in the 3D-primitive room shell (see
+  // IsometricRoomView3D.tsx's wander scheduler). Persisted so he's found
+  // wherever he last wandered to rather than resetting every app launch.
+  characterTile: GridTile;
   _hasHydrated: boolean;
 
   unlockRoomTier: (tier: number) => void;
@@ -66,6 +75,7 @@ type HousingState = {
   unlockFurniture: (id: string) => void;
   setActiveFurniture: (slotId: string, furnitureId: string, variantId: string) => void;
   clearFurnitureSlot: (slotId: string) => void;
+  setCharacterTile: (tile: GridTile) => void;
 };
 
 const DEFAULT_FLOOR_SETS: FloorSetName[] = ["YellowCarpet", "RedCarpet"];
@@ -83,6 +93,8 @@ const DEFAULT_FURNITURE_BY_SLOT: Record<string, { furnitureId: string; variantId
   seating: { furnitureId: "chair", variantId: "wood_chair_green" },
 };
 const DEFAULT_UNLOCKED_FURNITURE_IDS: string[] = ["chair_wood_chair_green"];
+// Matches the room's previous hardcoded spawn position (gridColumn=1, gridRow=0).
+const DEFAULT_CHARACTER_TILE: GridTile = { row: 0, col: 1 };
 
 export const useHousingStore = create<HousingState>()(
   persist(
@@ -99,6 +111,7 @@ export const useHousingStore = create<HousingState>()(
       unlockedWallPatternIds: [DEFAULT_WALL_PATTERN_ID],
       activeFurnitureBySlot: DEFAULT_FURNITURE_BY_SLOT,
       unlockedFurnitureIds: DEFAULT_UNLOCKED_FURNITURE_IDS,
+      characterTile: DEFAULT_CHARACTER_TILE,
       _hasHydrated: false,
 
       unlockRoomTier: (tier) => {
@@ -171,11 +184,15 @@ export const useHousingStore = create<HousingState>()(
           return { activeFurnitureBySlot: next };
         });
       },
+
+      setCharacterTile: (tile) => {
+        set({ characterTile: tile });
+      },
     }),
     {
       name: "housing_store_v1",
       storage: createJSONStorage(() => AsyncStorage),
-      version: 3,
+      version: 4,
       migrate: (persisted: any, fromVersion: number) => {
         const s = persisted ?? {};
         s.roomSizeTier = typeof s.roomSizeTier === "number" ? s.roomSizeTier : 1;
@@ -208,6 +225,11 @@ export const useHousingStore = create<HousingState>()(
         s.unlockedFurnitureIds = Array.isArray(s.unlockedFurnitureIds) && s.unlockedFurnitureIds.length > 0
           ? s.unlockedFurnitureIds
           : DEFAULT_UNLOCKED_FURNITURE_IDS;
+
+        // v4: Glidermon's wandering position in the 3D room shell.
+        s.characterTile = s.characterTile && typeof s.characterTile.row === "number" && typeof s.characterTile.col === "number"
+          ? s.characterTile
+          : DEFAULT_CHARACTER_TILE;
         return s;
       },
       onRehydrateStorage: () => (state) => {

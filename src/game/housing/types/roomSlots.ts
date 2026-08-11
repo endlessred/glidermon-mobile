@@ -40,7 +40,11 @@ export interface RoomSlotDef {
 // crowding. Storage temporarily takes the back corner since Feature isn't
 // unlocked at this size; it moves out once Feature appears at 4x4.
 const TIER_0_SLOTS: RoomSlotDef[] = [
-  { slotId: 'bed', type: 'bed', kind: 'floor', row: 2, col: 0, footprint: { w: 2, h: 1 } },
+  // Footprint runs along the row axis (headboard one tile further back from
+  // the open side of the room), not the column axis -- the bed art is drawn
+  // elongated front-to-back, not side-to-side (confirmed by its processed
+  // sprite being ~2x taller than other 1x1 props but only modestly wider).
+  { slotId: 'bed', type: 'bed', kind: 'floor', row: 1, col: 0, footprint: { w: 1, h: 2 } },
   { slotId: 'seating', type: 'seating', kind: 'floor', row: 1, col: 1 },
   { slotId: 'storage', type: 'storage', kind: 'floor', row: 2, col: 2 },
   { slotId: 'rug', type: 'rug', kind: 'floor', row: 0, col: 0 },
@@ -49,7 +53,8 @@ const TIER_0_SLOTS: RoomSlotDef[] = [
 
 // Tier 1: 4x4 (backRow = backCol = 3) -- the default starting room, all 9 slots.
 const TIER_1_SLOTS: RoomSlotDef[] = [
-  { slotId: 'bed', type: 'bed', kind: 'floor', row: 3, col: 0, footprint: { w: 2, h: 1 } },
+  // See TIER_0_SLOTS' bed comment -- footprint runs along the row axis.
+  { slotId: 'bed', type: 'bed', kind: 'floor', row: 2, col: 0, footprint: { w: 1, h: 2 } },
   { slotId: 'feature', type: 'feature', kind: 'floor', row: 3, col: 3 },
   { slotId: 'storage', type: 'storage', kind: 'floor', row: 2, col: 3 },
   { slotId: 'lighting', type: 'lighting', kind: 'floor', row: 1, col: 3 },
@@ -64,7 +69,8 @@ const TIER_1_SLOTS: RoomSlotDef[] = [
 // Tier 2: 5x5 (backRow = backCol = 4) -- same layout, shifted outward with
 // extra breathing room around the furniture.
 const TIER_2_SLOTS: RoomSlotDef[] = [
-  { slotId: 'bed', type: 'bed', kind: 'floor', row: 4, col: 0, footprint: { w: 2, h: 1 } },
+  // See TIER_0_SLOTS' bed comment -- footprint runs along the row axis.
+  { slotId: 'bed', type: 'bed', kind: 'floor', row: 3, col: 0, footprint: { w: 1, h: 2 } },
   { slotId: 'feature', type: 'feature', kind: 'floor', row: 4, col: 4 },
   { slotId: 'storage', type: 'storage', kind: 'floor', row: 3, col: 4 },
   { slotId: 'lighting', type: 'lighting', kind: 'floor', row: 2, col: 4 },

@@ -133,8 +133,6 @@ export default function HudScreen() {
                     <IsometricRoomView3D
                       width={roomBoxSize.width}
                       height={roomBoxSize.height}
-                      gridColumn={1}
-                      gridRow={0}
                       characterScale={0.3}
                       outfit={localOutfit ?? undefined}
                     />
