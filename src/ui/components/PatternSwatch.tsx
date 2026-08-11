@@ -7,18 +7,43 @@
 // FAMILY_COLORS table (proceduralPatternCatalog.ts) so the shop preview and
 // the real in-scene look never drift apart.
 import React, { useMemo } from "react";
-import { Canvas, Rect, Circle, Line, Path, Group, vec } from "@shopify/react-native-skia";
+import { Platform } from "react-native";
+import { Canvas, Rect, Circle, Line, Path, Group, vec, Image as SkImage, useImage } from "@shopify/react-native-skia";
 import {
   FAMILY_COLORS,
-  PatternFamily,
   FloorPatternStyle,
   WallPatternStyle,
+  FloorPatternItem,
+  WallPatternItem,
 } from "../../game/housing/types/proceduralPatternCatalog";
+import { materialCatalogManifest } from "../../game/housing/assets/generated/materialCatalogManifest";
+
+const materialThumbnailById = new Map(materialCatalogManifest.map((entry) => [entry.id, entry.thumbnailRequirePath]));
+
+function resolveForSkia(mod: any): any {
+  if (Platform.OS === "web") {
+    const { Asset } = require("expo-asset");
+    return Asset.fromModule(mod).uri;
+  }
+  return mod;
+}
 
 interface PatternSwatchProps {
-  family: PatternFamily;
-  style: FloorPatternStyle | WallPatternStyle;
+  item: FloorPatternItem | WallPatternItem;
   size?: number;
+}
+
+// 'material'-kind items (real photographic textures, see
+// materialCatalogManifest.ts) render their actual thumbnail bitmap instead
+// of the vector-drawn procedural styles below.
+function MaterialPatternSwatch({ materialId, size }: { materialId: string; size: number }) {
+  const source = materialThumbnailById.get(materialId);
+  const image = useImage(source ? resolveForSkia(source) : null);
+  return (
+    <Canvas style={{ width: size, height: size, borderRadius: 8 }}>
+      {image && <SkImage image={image} x={0} y={0} width={size} height={size} fit="cover" />}
+    </Canvas>
+  );
 }
 
 // Deterministic pseudo-random in [0,1), matching the hash style used by the
@@ -40,13 +65,24 @@ function hexPath(cx: number, cy: number, r: number): string {
   return d + "Z";
 }
 
-export default function PatternSwatch({ family, style, size = 56 }: PatternSwatchProps) {
+export default function PatternSwatch({ item, size = 56 }: PatternSwatchProps) {
+  // Hooks must run unconditionally regardless of item.kind, so compute the
+  // procedural overlay with safe fallback values even when this instance is
+  // actually a 'material' item (whose swatch is rendered separately below
+  // and never looks at `overlay`).
+  const isMaterial = item.kind === "material";
+  const family = item.kind === "procedural" ? item.family : "Grey";
+  const style = item.kind === "procedural" ? item.style : "Blank";
   const { base, light, dark } = FAMILY_COLORS[family];
 
   const overlay = useMemo(
     () => renderPattern(style, size, base, light, dark),
     [style, size, base, light, dark]
   );
+
+  if (isMaterial) {
+    return <MaterialPatternSwatch materialId={item.materialId} size={size} />;
+  }
 
   return (
     <Canvas style={{ width: size, height: size, borderRadius: 8 }}>

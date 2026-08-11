@@ -22,11 +22,15 @@ import { RoomSlotDef } from '../types/roomSlots';
 const FURNITURE_DESIRED_TILE_HEIGHT = 0.9;
 // Mount height for wall-mounted décor (bottom of the billboard, which pivots
 // bottom-center), and how far in front of the wall plane it sits so it
-// doesn't z-fight with the wall box itself. Kept low enough to leave real
-// headroom below WALL_HEIGHT (1.6) -- décor is clamped to fit that gap (see
-// wallHeightBudget below), so mounting too high leaves too little room and
-// forces oversized items to render tiny.
-const WALL_DECOR_HEIGHT = 0.75;
+// doesn't z-fight with the wall box itself. Expressed as a fraction of
+// WALL_HEIGHT (rather than a fixed world-unit height) so décor stays
+// properly "up on the wall" instead of looking low if WALL_HEIGHT
+// (sceneBuilder3D.ts) changes again -- décor is clamped to fit the
+// remaining headroom above this height (see wallHeightBudget below), so
+// mounting too high leaves too little room and forces oversized items to
+// render tiny.
+const WALL_DECOR_HEIGHT_RATIO = 0.55;
+const WALL_DECOR_HEIGHT = WALL_HEIGHT * WALL_DECOR_HEIGHT_RATIO;
 // Wall décor reuses the same camera-facing billboardQuaternion as every
 // other billboard in the scene (character, floor furniture, treetop
 // backdrop) so it stays upright and visually consistent -- mounting it

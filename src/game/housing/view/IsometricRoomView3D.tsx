@@ -129,6 +129,7 @@ export default function IsometricRoomView3D({
   const [isZoomedIn, setIsZoomedIn] = useState(false);
   const initializedRef = useRef(false);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const sceneRef = useRef<THREE.Scene | null>(null);
   const spineRef = useRef<SpineCharacterController | null>(null);
   const lastTimeRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -269,6 +270,45 @@ export default function IsometricRoomView3D({
     camera.updateProjectionMatrix();
   }, []);
 
+  // Rebuilds just the floor/wall shell when the store changes (buy/apply a
+  // material or procedural pattern in the shop) -- skips the very first
+  // render for the same reason as the furniture effect above. The shell
+  // group holds only the floor tiles + 2 walls (furniture/character/treetop
+  // are separate scene children, not nested under it -- see
+  // handleContextCreate), so it can be torn down and replaced wholesale
+  // without touching anything else in the scene.
+  const skipInitialShellEffect = useRef(true);
+  useEffect(() => {
+    if (skipInitialShellEffect.current) {
+      skipInitialShellEffect.current = false;
+      return;
+    }
+    const scene = sceneRef.current;
+    const oldGroup = roomGroupRef.current;
+    const dims = roomDimsRef.current;
+    const camera = cameraRef.current;
+    if (!scene || !oldGroup || !dims || !camera) return;
+    let cancelled = false;
+    const grid = {
+      width: dims.width,
+      height: dims.height,
+      floorPatternId: activeFloorPatternId,
+      wallPatternId: activeWallPatternId,
+    };
+    buildRoomScene3D(grid).then((built) => {
+      if (cancelled) return;
+      scene.remove(oldGroup);
+      clearGroup(oldGroup);
+      scene.add(built.group);
+      roomGroupRef.current = built.group;
+      roomBoundsRef.current = { halfWidth: built.halfWidth, halfDepth: built.halfDepth, wallHeight: built.wallHeight };
+      updateCameraForZoom(camera, isZoomedInRef.current);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeFloorPatternId, activeWallPatternId, updateCameraForZoom]);
+
   useEffect(() => {
     isZoomedInRef.current = isZoomedIn;
     const camera = cameraRef.current;
@@ -310,6 +350,7 @@ export default function IsometricRoomView3D({
       renderer.setClearColor(0x1a1c2c, 1);
 
       const scene = new THREE.Scene();
+      sceneRef.current = scene;
       const initialSkyPalette = getSkyPalette();
       const { texture: skyTexture, data: skyData } = createSkyTexture();
       scene.background = skyTexture;
@@ -324,7 +365,7 @@ export default function IsometricRoomView3D({
         floorPatternId: activeFloorPatternId,
         wallPatternId: activeWallPatternId,
       };
-      const built = buildRoomScene3D(grid);
+      const built = await buildRoomScene3D(grid);
       scene.add(built.group);
       roomBoundsRef.current = { halfWidth: built.halfWidth, halfDepth: built.halfDepth, wallHeight: built.wallHeight };
 
@@ -369,7 +410,7 @@ export default function IsometricRoomView3D({
       characterWorldPosRef.current = characterWorldPos;
 
       const furnitureGroup = new THREE.Group();
-      built.group.add(furnitureGroup);
+      scene.add(furnitureGroup);
       furnitureGroupRef.current = furnitureGroup;
       furnitureUpdatersRef.current = await populateFurnitureGroup(
         furnitureGroup,
@@ -417,7 +458,7 @@ export default function IsometricRoomView3D({
       characterGroup.add(controller.mesh);
       const { x: charX, z: charZ } = characterWorldPos;
       characterGroup.position.set(charX, 0, charZ);
-      built.group.add(characterGroup);
+      scene.add(characterGroup);
 
       // Zoomed-in framing centers on the character's mid-height, not their
       // feet, so the camera doesn't look like it's aimed at the floor.
@@ -428,7 +469,7 @@ export default function IsometricRoomView3D({
       // pans/scales with the room when the camera zooms in on the character
       // -- same depth-tested approach as furniture (treetopBackdrop3D.ts).
       const treetopGroup = await treetopPromise;
-      built.group.add(treetopGroup);
+      scene.add(treetopGroup);
       treetopGroupRef.current = treetopGroup;
 
       updateCameraForZoom(camera, isZoomedIn);

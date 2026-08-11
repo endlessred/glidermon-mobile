@@ -7,6 +7,14 @@
 // in-scene THREE.DataTexture generator (render/proceduralTextures.ts) and the
 // shop preview (ui/components/PatternSwatch.tsx) import FAMILY_COLORS from
 // here so the two never drift apart.
+//
+// Also folds in a second, 'material' kind of floor/wall product backed by
+// real photographic PBR textures (see materialCatalogManifest.ts, generated
+// by process_materials.py from the curated src/assets/Materials pack) rather
+// than a generated DataTexture -- both kinds share this same catalog/id
+// space since they're both consumed only by the primitive3d room shell.
+import { materialCatalogManifest } from '../assets/generated/materialCatalogManifest';
+
 export type PatternFamily = 'BlackWhite' | 'Blue' | 'Brown1' | 'Dark' | 'Grey' | 'Red' | 'Yellow';
 
 export const PATTERN_FAMILIES: PatternFamily[] = ['BlackWhite', 'Blue', 'Brown1', 'Dark', 'Grey', 'Red', 'Yellow'];
@@ -91,25 +99,54 @@ export const WALL_STYLES: { style: WallPatternStyle; name: string; cost: number 
   { style: 'SubwayTile', name: 'Subway Tile', cost: 180 },
 ];
 
-export interface FloorPatternItem {
+// Two kinds of floor/wall product: 'procedural' (the DataTexture-painted
+// styles above, tinted per family) and 'material' (real photographic PBR
+// textures from the curated src/assets/Materials pack -- see
+// materialCatalogManifest.ts / materialTextures.ts). Both render in the same
+// shop grid and flow through the same unlock/equip id strings in
+// housingStore.ts, so no store changes were needed to add the second kind.
+interface ProceduralFloorPatternItem {
   id: string;
+  kind: 'procedural';
   family: PatternFamily;
   style: FloorPatternStyle;
   name: string;
   cost: number;
 }
 
-export interface WallPatternItem {
+export interface MaterialFloorPatternItem {
   id: string;
+  kind: 'material';
+  materialId: string;
+  name: string;
+  cost: number;
+}
+
+export type FloorPatternItem = ProceduralFloorPatternItem | MaterialFloorPatternItem;
+
+interface ProceduralWallPatternItem {
+  id: string;
+  kind: 'procedural';
   family: PatternFamily;
   style: WallPatternStyle;
   name: string;
   cost: number;
 }
 
-export const FLOOR_PATTERN_CATALOG: FloorPatternItem[] = PATTERN_FAMILIES.flatMap((family) =>
+export interface MaterialWallPatternItem {
+  id: string;
+  kind: 'material';
+  materialId: string;
+  name: string;
+  cost: number;
+}
+
+export type WallPatternItem = ProceduralWallPatternItem | MaterialWallPatternItem;
+
+const PROCEDURAL_FLOOR_PATTERN_CATALOG: FloorPatternItem[] = PATTERN_FAMILIES.flatMap((family) =>
   FLOOR_STYLES.map(({ style, name, cost }) => ({
     id: `${family}_${style}`,
+    kind: 'procedural' as const,
     family,
     style,
     name: `${FAMILY_DISPLAY_NAMES[family]} ${name}`,
@@ -117,15 +154,46 @@ export const FLOOR_PATTERN_CATALOG: FloorPatternItem[] = PATTERN_FAMILIES.flatMa
   }))
 );
 
-export const WALL_PATTERN_CATALOG: WallPatternItem[] = PATTERN_FAMILIES.flatMap((family) =>
+const PROCEDURAL_WALL_PATTERN_CATALOG: WallPatternItem[] = PATTERN_FAMILIES.flatMap((family) =>
   WALL_STYLES.map(({ style, name, cost }) => ({
     id: `${family}_${style}`,
+    kind: 'procedural' as const,
     family,
     style,
     name: `${FAMILY_DISPLAY_NAMES[family]} ${name}`,
     cost,
   }))
 );
+
+const MATERIAL_FLOOR_PATTERN_CATALOG: FloorPatternItem[] = materialCatalogManifest
+  .filter((entry) => entry.kind === 'floor')
+  .map((entry) => ({
+    id: entry.id,
+    kind: 'material' as const,
+    materialId: entry.id,
+    name: entry.name,
+    cost: entry.cost,
+  }));
+
+const MATERIAL_WALL_PATTERN_CATALOG: WallPatternItem[] = materialCatalogManifest
+  .filter((entry) => entry.kind === 'wall')
+  .map((entry) => ({
+    id: entry.id,
+    kind: 'material' as const,
+    materialId: entry.id,
+    name: entry.name,
+    cost: entry.cost,
+  }));
+
+export const FLOOR_PATTERN_CATALOG: FloorPatternItem[] = [
+  ...PROCEDURAL_FLOOR_PATTERN_CATALOG,
+  ...MATERIAL_FLOOR_PATTERN_CATALOG,
+];
+
+export const WALL_PATTERN_CATALOG: WallPatternItem[] = [
+  ...PROCEDURAL_WALL_PATTERN_CATALOG,
+  ...MATERIAL_WALL_PATTERN_CATALOG,
+];
 
 const floorPatternById = new Map(FLOOR_PATTERN_CATALOG.map((item) => [item.id, item]));
 const wallPatternById = new Map(WALL_PATTERN_CATALOG.map((item) => [item.id, item]));

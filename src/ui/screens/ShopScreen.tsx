@@ -515,8 +515,7 @@ export default function ShopScreen({ initialCategory }: { initialCategory?: Shop
                     borderColor: isActive ? colors.primary[500] : colors.gray[200],
                   }}>
                     <PatternSwatch
-                      family={item.family}
-                      style={item.style}
+                      item={item}
                       size={60}
                     />
                     <Text style={{

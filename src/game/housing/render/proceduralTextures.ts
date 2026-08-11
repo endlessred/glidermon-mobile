@@ -252,10 +252,16 @@ function buildTexture(patternId: string, style: FloorPatternStyle | WallPatternS
   return texture;
 }
 
+// 'material'-kind catalog entries (real photographic textures) are resolved
+// by materialTextures.ts instead -- callers branch on the catalog item's
+// `kind` before reaching here (see sceneBuilder3D.ts's resolveFloorMaterial/
+// resolveWallMaterial), so a material id landing in this DataTexture
+// generator would be a caller bug. Falls back to blank rather than throwing
+// since a stale/corrupt save could otherwise crash the room view.
 export function getFloorTexture(patternId: string): THREE.DataTexture {
   const item = getFloorPatternById(patternId);
-  if (!item) {
-    if (__DEV__) console.warn(`[housing3D] unknown floor pattern id "${patternId}", falling back to blank`);
+  if (!item || item.kind !== 'procedural') {
+    if (__DEV__) console.warn(`[housing3D] unknown/non-procedural floor pattern id "${patternId}", falling back to blank`);
     return buildTexture('__fallback_floor__', 'Blank', FAMILY_COLORS.Grey);
   }
   return buildTexture(item.id, item.style, FAMILY_COLORS[item.family]);
@@ -263,8 +269,8 @@ export function getFloorTexture(patternId: string): THREE.DataTexture {
 
 export function getWallTexture(patternId: string): THREE.DataTexture {
   const item = getWallPatternById(patternId);
-  if (!item) {
-    if (__DEV__) console.warn(`[housing3D] unknown wall pattern id "${patternId}", falling back to blank`);
+  if (!item || item.kind !== 'procedural') {
+    if (__DEV__) console.warn(`[housing3D] unknown/non-procedural wall pattern id "${patternId}", falling back to blank`);
     return buildTexture('__fallback_wall__', 'Blank', FAMILY_COLORS.Grey);
   }
   return buildTexture(item.id, item.style, FAMILY_COLORS[item.family]);
