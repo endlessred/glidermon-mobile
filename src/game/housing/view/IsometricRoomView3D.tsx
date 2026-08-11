@@ -72,6 +72,11 @@ const OVERVIEW_MARGIN_RATIO = 0.06;
 // well under 1.0 to leave headroom for animations that extend past the base
 // pose (wings raising, arms up, jumping).
 const ZOOM_FRAME_FILL_RATIO = 0.55;
+// How long the zoomed-in camera takes to pan from Glidermon's old spot to his
+// new one after he wanders, instead of snapping instantly. Only applies while
+// already zoomed in -- toggling into zoomed mode still frames on him
+// immediately, since that's a deliberate user action, not a background move.
+const CAMERA_PAN_DURATION_SECONDS = 2.5;
 
 // How often the sky/lighting palette is re-sampled from the clock. Time of
 // day drifts slowly, so there's no need to recompute every frame.
@@ -146,7 +151,15 @@ export default function IsometricRoomView3D({
   const cameraRef = useRef<THREE.OrthographicCamera | null>(null);
   const glSizeRef = useRef({ w: width, h: height });
   const roomBoundsRef = useRef({ halfWidth: 2, halfDepth: 2, wallHeight: WALL_HEIGHT });
+  // Where the zoomed-in camera should end up -- updated immediately whenever
+  // Glidermon's tile changes.
   const characterTargetRef = useRef(new THREE.Vector3(0, 0, 0));
+  // Where the zoomed-in camera actually looks right now -- eases toward
+  // characterTargetRef over CAMERA_PAN_DURATION_SECONDS rather than jumping
+  // straight to it (see the characterTile effect and render loop below).
+  const cameraLookAtRef = useRef(new THREE.Vector3(0, 0, 0));
+  const cameraPanFromRef = useRef(new THREE.Vector3(0, 0, 0));
+  const cameraPanElapsedRef = useRef(0);
   const characterHeightRef = useRef(TILE_SIZE * CHARACTER_DESIRED_TILE_HEIGHT * DEFAULT_CHARACTER_SCALE);
   const isZoomedInRef = useRef(false);
   const skyTextureRef = useRef<THREE.DataTexture | null>(null);
@@ -226,6 +239,17 @@ export default function IsometricRoomView3D({
     characterWorldPosRef.current = { x: charX, z: charZ };
     characterTargetRef.current.set(charX, characterHeightRef.current / 2, charZ);
 
+    // Kick off a camera pan toward the new target if zoomed in and visible;
+    // otherwise there's nothing to animate, so just snap the (unseen)
+    // look-at point to match -- avoids a jarring jump if the user zooms in
+    // later mid-"pan".
+    if (isZoomedInRef.current) {
+      cameraPanFromRef.current.copy(cameraLookAtRef.current);
+      cameraPanElapsedRef.current = 0;
+    } else {
+      cameraLookAtRef.current.copy(characterTargetRef.current);
+    }
+
     let cancelled = false;
     populateFurnitureGroup(furnitureGroup, roomSizeTier, activeFurnitureBySlot, dims, billboardQuaternion, { x: charX, z: charZ }).then((updaters) => {
       if (!cancelled) furnitureUpdatersRef.current = updaters;
@@ -284,7 +308,7 @@ export default function IsometricRoomView3D({
     const { w: glW, h: glH } = glSizeRef.current;
     const aspect = glW / glH;
 
-    const target = zoomedIn ? characterTargetRef.current : new THREE.Vector3(0, 0, 0);
+    const target = zoomedIn ? cameraLookAtRef.current : new THREE.Vector3(0, 0, 0);
     camera.position.copy(target).add(CAMERA_OFFSET);
     camera.lookAt(target);
 
@@ -389,6 +413,13 @@ export default function IsometricRoomView3D({
 
   useEffect(() => {
     isZoomedInRef.current = isZoomedIn;
+    // Toggling into zoomed mode is a deliberate user action, not a
+    // background wander -- frame on Glidermon immediately rather than
+    // starting a multi-second pan from wherever the (unseen) look-at point
+    // last was.
+    if (isZoomedIn) {
+      cameraLookAtRef.current.copy(characterTargetRef.current);
+    }
     const camera = cameraRef.current;
     if (camera) updateCameraForZoom(camera, isZoomedIn);
   }, [isZoomedIn, updateCameraForZoom]);
@@ -542,6 +573,8 @@ export default function IsometricRoomView3D({
       // Zoomed-in framing centers on the character's mid-height, not their
       // feet, so the camera doesn't look like it's aimed at the floor.
       characterTargetRef.current.set(charX, characterWorldHeight / 2, charZ);
+      cameraLookAtRef.current.copy(characterTargetRef.current);
+      cameraPanFromRef.current.copy(characterTargetRef.current);
       characterHeightRef.current = characterWorldHeight;
 
       // Real world-space billboard (not screen-locked), so it naturally
@@ -571,11 +604,17 @@ export default function IsometricRoomView3D({
           for (const update of furnitureUpdatersRef.current) update(deltaSeconds);
 
           // Re-aim every frame while zoomed in (not just on toggle) so the
-          // camera tracks characterTargetRef.current live -- this is what
-          // makes the zoomed-in view follow Glidermon if/when their position
-          // in the room changes, rather than only framing where they were
-          // when zoom was switched on.
+          // camera tracks Glidermon live -- this is what makes the zoomed-in
+          // view follow him if/when his position in the room changes, rather
+          // than only framing where he was when zoom was switched on. The
+          // look-at point eases toward characterTargetRef.current (see the
+          // characterTile effect above) instead of jumping straight there,
+          // so a wander pans the view smoothly rather than snapping.
           if (isZoomedInRef.current) {
+            cameraPanElapsedRef.current += deltaSeconds;
+            const t = Math.min(cameraPanElapsedRef.current / CAMERA_PAN_DURATION_SECONDS, 1);
+            const eased = t * t * (3 - 2 * t); // smoothstep ease-in-out
+            cameraLookAtRef.current.lerpVectors(cameraPanFromRef.current, characterTargetRef.current, eased);
             updateCameraForZoom(camera, true);
           }
 
