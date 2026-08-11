@@ -31,18 +31,24 @@ const FURNITURE_DESIRED_TILE_HEIGHT = 0.9;
 // render tiny.
 const WALL_DECOR_HEIGHT_RATIO = 0.55;
 const WALL_DECOR_HEIGHT = WALL_HEIGHT * WALL_DECOR_HEIGHT_RATIO;
-// Wall décor reuses the same camera-facing billboardQuaternion as every
-// other billboard in the scene (character, floor furniture, treetop
-// backdrop) so it stays upright and visually consistent -- mounting it
-// flush against the wall's own (screen-slanted) plane was tried and looked
-// "crooked" against everything else staying upright. Because the billboard
-// is tilted relative to the wall's flat face, its depth varies across its
-// own surface; the wall box is only WALL_THICKNESS (0.1) deep, so a small
-// inset lets most of that tilted surface dip behind the wall's front face
-// and lose the depth test (only the bulging edge/corner stays visible).
-// This inset is deliberately much larger than WALL_THICKNESS to keep the
-// *most recessed* point of the tilted plane still in front of the wall.
-const WALL_PLANE_INSET = 0.4;
+// Wall décor mounts flush against the actual wall plane, angled with it,
+// instead of standing upright like a camera-facing billboard -- these two
+// fixed quaternions orient a decor plane to lie flat against each wall run.
+// PlaneGeometry's default normal is +Z, which already matches the leftBack
+// wall's inner face (backWallX in sceneBuilder3D) exactly, so it needs no
+// rotation; the rightBack wall's inner face points +X instead, a 90° turn
+// around Y away. NOTE: the current décor art (picture, clock) was drawn as
+// upright isometric billboards, not perspective-correct for lying flat
+// against a wall, so it'll look off until that art is replaced -- tracked
+// as a follow-up, not fixed here.
+const LEFT_BACK_WALL_QUATERNION = new THREE.Quaternion();
+const RIGHT_BACK_WALL_QUATERNION = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
+// Nudges the décor plane just off the wall's exact inner-face depth so it
+// doesn't z-fight with the wall box itself -- flush-mounted and coplanar
+// with the wall now (not tilted relative to it), so this only needs to be
+// large enough to avoid z-fighting, not to clear a tilted surface's depth
+// range the way the old camera-facing approach did.
+const WALL_FLUSH_INSET = 0.015;
 
 export interface BuiltFurnitureBillboard {
   group: THREE.Group;
@@ -92,10 +98,10 @@ export async function buildFurnitureSlotBillboard(
   if (slot.kind === 'wall') {
     if (slot.wall === 'leftBack') {
       const { x } = gridToWorld(slot.row, slot.col, dims);
-      slotWorldPos = { x, y: WALL_DECOR_HEIGHT, z: -halfDepth + WALL_PLANE_INSET };
+      slotWorldPos = { x, y: WALL_DECOR_HEIGHT, z: -halfDepth + WALL_FLUSH_INSET };
     } else {
       const { z } = gridToWorld(slot.row, slot.col, dims);
-      slotWorldPos = { x: -halfWidth + WALL_PLANE_INSET, y: WALL_DECOR_HEIGHT, z };
+      slotWorldPos = { x: -halfWidth + WALL_FLUSH_INSET, y: WALL_DECOR_HEIGHT, z };
     }
   } else {
     const { x, z } = gridToWorld(slot.row, slot.col, dims, slot.footprint);
@@ -224,7 +230,11 @@ export async function buildFurnitureSlotBillboard(
   }
 
   group.position.set(slotWorldPos.x, slotWorldPos.y, slotWorldPos.z);
-  group.quaternion.copy(billboardQuaternion);
+  if (slot.kind === 'wall') {
+    group.quaternion.copy(slot.wall === 'leftBack' ? LEFT_BACK_WALL_QUATERNION : RIGHT_BACK_WALL_QUATERNION);
+  } else {
+    group.quaternion.copy(billboardQuaternion);
+  }
 
   const update = updaters.length > 0 ? (dt: number) => updaters.forEach((u) => u(dt)) : undefined;
   return { group, update };
