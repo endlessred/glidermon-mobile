@@ -1,19 +1,19 @@
 {
 "skeleton": {
-	"hash": "eK6kwBogPwQ",
-	"spine": "4.2.43",
-	"x": -3495.1,
+	"hash": "x1oXTr7yF4k",
+	"spine": "4.3.23",
+	"x": -3495.098,
 	"y": -1119.49,
 	"width": 7680,
-	"height": 5196.77,
-	"images": "",
+	"height": 5196.768,
+	"images": null,
 	"audio": "./audio"
 },
 "bones": [
 	{ "name": "root" },
-	{ "name": "Luma", "parent": "root", "x": -914.61, "y": 1035.18 },
-	{ "name": "Sable", "parent": "root", "x": 505.62, "y": 939.17 },
-	{ "name": "Character", "parent": "root", "x": -695.28, "y": 688.83 }
+	{ "name": "Luma", "parent": "root", "x": -914.6106, "y": 1035.1805 },
+	{ "name": "Sable", "parent": "root", "x": 505.62225, "y": 939.1698 },
+	{ "name": "Character", "parent": "root", "x": -695.2806, "y": 688.8318 }
 ],
 "slots": [
 	{ "name": "Sky", "bone": "root", "attachment": "Sky" },
@@ -34,31 +34,31 @@
 		"name": "default",
 		"attachments": {
 			"Branch": {
-				"Branch": { "x": 344.9, "y": 1517.28, "scaleX": 5, "scaleY": 5, "width": 1536, "height": 1024 }
+				"Branch": { "x": 344.9023, "y": 1517.2784, "scaleX": 5, "scaleY": 5, "width": 1536, "height": 1024 }
 			},
 			"ShadedShop": {
-				"ShadedShop": { "x": -26.62, "y": 1526.63, "scaleX": 3, "scaleY": 3, "width": 1024, "height": 1024 }
+				"ShadedShop": { "x": -26.625, "y": 1526.625, "scaleX": 3, "scaleY": 3, "width": 1024, "height": 1024 }
 			},
 			"Sky": {
-				"Sky": { "x": -73.96, "y": 1440.51, "scaleX": 5, "scaleY": 5, "width": 1024, "height": 1024 }
+				"Sky": { "x": -73.96216, "y": 1440.51, "scaleX": 5, "scaleY": 5, "width": 1024, "height": 1024 }
 			},
 			"WallDecor_FoxMask_Yellow": {
-				"WallDecor_FoxMask_Yellow": { "color": "888888ff", "x": 433.5, "y": 1778.22, "scaleX": -1, "width": 500, "height": 1000 }
+				"WallDecor_FoxMask_Yellow": { "color": "888888ff", "x": 433.5023, "y": 1778.2203, "scaleX": -1, "width": 500, "height": 1000 }
 			},
 			"WallDecor_HatAndScarf_Purple": {
-				"WallDecor_HatAndScarf_Purple": { "x": -189.34, "y": 2170.33, "width": 500, "height": 1000 }
+				"WallDecor_HatAndScarf_Purple": { "x": -189.34303, "y": 2170.3264, "width": 500, "height": 1000 }
 			},
 			"WallDecor_LeafGarland_Green1": {
-				"WallDecor_LeafGarland_Green1": { "x": -1325.7, "y": 1632.73, "width": 500, "height": 1000 }
+				"WallDecor_LeafGarland_Green1": { "x": -1325.6973, "y": 1632.7313, "width": 500, "height": 1000 }
 			},
 			"WallDecor_LeafGarland_Green2": {
-				"WallDecor_LeafGarland_Green1": { "x": -1134.45, "y": 1742.23, "width": 500, "height": 1000 }
+				"WallDecor_LeafGarland_Green1": { "x": -1134.4473, "y": 1742.2313, "width": 500, "height": 1000 }
 			},
 			"WallDecor_LeafGarland_Green3": {
-				"WallDecor_LeafGarland_Green1": { "x": -934.2, "y": 1849.11, "width": 500, "height": 1000 }
+				"WallDecor_LeafGarland_Green1": { "x": -934.1972, "y": 1849.1063, "width": 500, "height": 1000 }
 			},
 			"WallDecor_Mask_Olive": {
-				"WallDecor_Mask_Olive": { "color": "767676ff", "x": 236.6, "y": 1860.97, "scaleX": -1, "width": 500, "height": 1000 }
+				"WallDecor_Mask_Olive": { "color": "767676ff", "x": 236.6043, "y": 1860.9735, "scaleX": -1, "width": 500, "height": 1000 }
 			},
 			"WallDecor_NeonSign_On_WarmLight": {
 				"WallDecor_NeonSign_On_WarmLight": {
@@ -68,16 +68,16 @@
 					"vertices": [ 914.41, 902.32, 1414.41, 902.32, 1414.41, 1902.32, 914.41, 1902.32 ],
 					"hull": 4,
 					"edges": [ 0, 2, 2, 4, 4, 6, 0, 6 ],
-					"width": 500,
-					"height": 1000
+					"width": 500.0,
+					"height": 1000.0
 				},
-				"WallDecor_NeonSign_On_WarmLight2": { "type": "linkedmesh", "path": "WallDecor_NeonSign_Off_WarmLight", "parent": "WallDecor_NeonSign_On_WarmLight", "width": 500, "height": 1000 }
+				"WallDecor_NeonSign_On_WarmLight2": { "type": "linkedmesh", "path": "WallDecor_NeonSign_Off_WarmLight", "source": "WallDecor_NeonSign_On_WarmLight", "width": 500.0, "height": 1000.0 }
 			},
 			"WallDecor_Painting2Frame3_FantasyWood": {
-				"WallDecor_Painting2Frame3_FantasyWood": { "x": -349.31, "y": 2406.4, "width": 500, "height": 1000 }
+				"WallDecor_Painting2Frame3_FantasyWood": { "x": -349.3107, "y": 2406.401, "width": 500, "height": 1000 }
 			},
 			"WallDecor_PosterBand": {
-				"WallDecor_PosterBand": { "color": "5f5f5fff", "x": 898.76, "y": 2040.26, "scaleX": -1, "width": 500, "height": 1000 }
+				"WallDecor_PosterBand": { "color": "5f5f5fff", "x": 898.7613, "y": 2040.2563, "scaleX": -1, "width": 500, "height": 1000 }
 			}
 		}
 	}

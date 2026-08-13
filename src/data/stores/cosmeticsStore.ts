@@ -9,7 +9,7 @@ const leafPng = require("../../assets/GliderMonLeafHat.png");
 const greaterPng = require("../../assets/GliderMonGreaterHat.png");
 const hatPackPng = require("../../assets/hats/hat_pack_1.png");
 
-type Socket = "headTop" | "theme" | "skin" | "hair" | "jacket";
+type Socket = "headTop" | "theme" | "skin" | "hair" | "jacket" | "shoes";
 
 export type CosmeticItem = {
   id: string;
@@ -19,6 +19,9 @@ export type CosmeticItem = {
   tex?: any;              // module id or URI (screens already handle both) - optional for themes
   themeId?: string;       // for theme cosmetics, the ThemeVariation id
   spineSkin?: string;     // Spine skin name for new Spine-based cosmetics
+  shoeAttachment?: string; // for socket:"shoes" items: bare design name (e.g. "Cowboy Boots"),
+                           // prefixed with L_/R_ to find the L_Shoe/R_Shoe attachments. Omitted
+                           // means "use the shared L_ShoeShader/R_ShoeShader mesh" (the default look).
   maskRecolor?: {         // Mask recoloring configuration
     r?: string;           // Color for red channel
     g?: string;           // Color for green channel
@@ -121,6 +124,344 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     cost: 600,
     socket: "headTop",
     spineSkin: "Hats/Wizard Hat",
+    tex: hatPackPng
+  },
+
+  // Spine-based Hat Cosmetics - Shader hats (hue-indexed recolor: r=primary, g=secondary, b=detail)
+  {
+    id: "hat_band_and_bow",
+    name: "Band and Bow",
+    cost: 300,
+    socket: "headTop",
+    spineSkin: "Hats/Shader/Band and Bow",
+    maskRecolor: { r: "#b6607c", g: "#dec575", b: "#2a202a" },
+    tex: hatPackPng
+  },
+  {
+    id: "hat_beret",
+    name: "Beret",
+    cost: 250,
+    socket: "headTop",
+    spineSkin: "Hats/Shader/Beret",
+    maskRecolor: { r: "#a83f48", g: "#2a202a", b: "#d9d3d9" },
+    tex: hatPackPng
+  },
+  {
+    id: "hat_bonnett",
+    name: "Bonnett",
+    cost: 250,
+    socket: "headTop",
+    spineSkin: "Hats/Shader/Bonnett",
+    maskRecolor: { r: "#dec575", g: "#d9d3d9", b: "#b6607c" },
+    tex: hatPackPng
+  },
+  {
+    id: "hat_brunch",
+    name: "Brunch",
+    cost: 300,
+    socket: "headTop",
+    spineSkin: "Hats/Shader/Brunch",
+    maskRecolor: { r: "#dc995d", g: "#865d56", b: "#d9d3d9" },
+    tex: hatPackPng
+  },
+  {
+    id: "hat_cowboy_hat",
+    name: "Cowboy Hat",
+    cost: 350,
+    socket: "headTop",
+    spineSkin: "Hats/Shader/Cowboy Hat",
+    maskRecolor: { r: "#865d56", g: "#2a202a", b: "#dec575" },
+    tex: hatPackPng
+  },
+  {
+    id: "hat_crown",
+    name: "Crown",
+    cost: 600,
+    socket: "headTop",
+    spineSkin: "Hats/Shader/Crown",
+    maskRecolor: { r: "#dec575", g: "#613661", b: "#a83f48" },
+    tex: hatPackPng
+  },
+  {
+    id: "hat_durag",
+    name: "Durag",
+    cost: 300,
+    socket: "headTop",
+    spineSkin: "Hats/Shader/Durag",
+    maskRecolor: { r: "#2a202a", g: "#a83f48", b: "#d9d3d9" },
+    tex: hatPackPng
+  },
+  {
+    id: "hat_ear_beanie",
+    name: "Ear Beanie",
+    cost: 250,
+    socket: "headTop",
+    spineSkin: "Hats/Shader/Ear Beanie",
+    maskRecolor: { r: "#6f975e", g: "#865d56", b: "#d9d3d9" },
+    tex: hatPackPng
+  },
+  {
+    id: "hat_fedora",
+    name: "Fedora",
+    cost: 400,
+    socket: "headTop",
+    spineSkin: "Hats/Shader/Fedora",
+    maskRecolor: { r: "#2a202a", g: "#9a919b", b: "#dec575" },
+    tex: hatPackPng
+  },
+  {
+    id: "hat_headwrap",
+    name: "Headwrap",
+    cost: 300,
+    socket: "headTop",
+    spineSkin: "Hats/Shader/Headwrap",
+    maskRecolor: { r: "#dc995d", g: "#613661", b: "#dec575" },
+    tex: hatPackPng
+  },
+  {
+    id: "hat_jester",
+    name: "Jester",
+    cost: 350,
+    socket: "headTop",
+    spineSkin: "Hats/Shader/Jester",
+    maskRecolor: { r: "#613661", g: "#dec575", b: "#a83f48" },
+    tex: hatPackPng
+  },
+  {
+    id: "hat_moon_and_stars",
+    name: "Moon and Stars",
+    cost: 400,
+    socket: "headTop",
+    spineSkin: "Hats/Shader/Moon and Stars",
+    maskRecolor: { r: "#2a202a", g: "#5f80a6", b: "#dec575" },
+    tex: hatPackPng
+  },
+  {
+    id: "hat_newsboy",
+    name: "Newsboy",
+    cost: 300,
+    socket: "headTop",
+    spineSkin: "Hats/Shader/Newsboy",
+    maskRecolor: { r: "#865d56", g: "#2a202a", b: "#9a919b" },
+    tex: hatPackPng
+  },
+  {
+    id: "hat_nurse",
+    name: "Nurse",
+    cost: 300,
+    socket: "headTop",
+    spineSkin: "Hats/Shader/Nurse",
+    maskRecolor: { r: "#d9d3d9", g: "#a83f48", b: "#5f80a6" },
+    tex: hatPackPng
+  },
+  {
+    id: "hat_officer",
+    name: "Officer",
+    cost: 350,
+    socket: "headTop",
+    spineSkin: "Hats/Shader/Officer",
+    maskRecolor: { r: "#5f80a6", g: "#2a202a", b: "#dec575" },
+    tex: hatPackPng
+  },
+  {
+    id: "hat_paper_hat",
+    name: "Paper Hat",
+    cost: 150,
+    socket: "headTop",
+    spineSkin: "Hats/Shader/Paper Hat",
+    maskRecolor: { r: "#d9d3d9", g: "#9a919b", b: "#2a202a" },
+    tex: hatPackPng
+  },
+  {
+    id: "hat_party_hat",
+    name: "Party Hat",
+    cost: 200,
+    socket: "headTop",
+    spineSkin: "Hats/Shader/Party Hat",
+    maskRecolor: { r: "#a83f48", g: "#dec575", b: "#5f80a6" },
+    tex: hatPackPng
+  },
+  {
+    id: "hat_pilgrim",
+    name: "Pilgrim",
+    cost: 300,
+    socket: "headTop",
+    spineSkin: "Hats/Shader/Pilgrim",
+    maskRecolor: { r: "#2a202a", g: "#d9d3d9", b: "#dec575" },
+    tex: hatPackPng
+  },
+  {
+    id: "hat_pom_beanie",
+    name: "Pom Beanie",
+    cost: 250,
+    socket: "headTop",
+    spineSkin: "Hats/Shader/Pom Beanie",
+    maskRecolor: { r: "#6f975e", g: "#d9d3d9", b: "#865d56" },
+    tex: hatPackPng
+  },
+  {
+    id: "hat_propeller",
+    name: "Propeller",
+    cost: 350,
+    socket: "headTop",
+    spineSkin: "Hats/Shader/Propeller",
+    maskRecolor: { r: "#a83f48", g: "#6f975e", b: "#5f80a6" },
+    tex: hatPackPng
+  },
+  {
+    id: "hat_sailor",
+    name: "Sailor",
+    cost: 300,
+    socket: "headTop",
+    spineSkin: "Hats/Shader/Sailor",
+    maskRecolor: { r: "#5f80a6", g: "#d9d3d9", b: "#2a202a" },
+    tex: hatPackPng
+  },
+  {
+    id: "hat_santa_hat",
+    name: "Santa Hat",
+    cost: 400,
+    socket: "headTop",
+    spineSkin: "Hats/Shader/Santa Hat",
+    maskRecolor: { r: "#a83f48", g: "#d9d3d9", b: "#dec575" },
+    tex: hatPackPng
+  },
+  {
+    id: "hat_striped_pom_beanie",
+    name: "Striped Pom Beanie",
+    cost: 300,
+    socket: "headTop",
+    spineSkin: "Hats/Shader/Striped Pom Beanie",
+    maskRecolor: { r: "#a83f48", g: "#d9d3d9", b: "#5f80a6" },
+    tex: hatPackPng
+  },
+  {
+    id: "hat_sunhat",
+    name: "Sunhat",
+    cost: 250,
+    socket: "headTop",
+    spineSkin: "Hats/Shader/Sunhat",
+    maskRecolor: { r: "#dec575", g: "#dc995d", b: "#d9d3d9" },
+    tex: hatPackPng
+  },
+  {
+    id: "hat_wicked",
+    name: "Wicked",
+    cost: 400,
+    socket: "headTop",
+    spineSkin: "Hats/Shader/Wicked",
+    maskRecolor: { r: "#2a202a", g: "#6f975e", b: "#613661" },
+    tex: hatPackPng
+  },
+  {
+    id: "hat_witch",
+    name: "Witch",
+    cost: 400,
+    socket: "headTop",
+    spineSkin: "Hats/Shader/Witch",
+    maskRecolor: { r: "#613661", g: "#2a202a", b: "#dec575" },
+    tex: hatPackPng
+  },
+
+  // Shoe cosmetics - default look + purchasable designs (both feet always change together)
+  {
+    id: "shoe_classic",
+    name: "Classic Shoes",
+    cost: 0,
+    socket: "shoes",
+    // No maskRecolor: renders via the plain L_Shoe/R_Shoe attachment (no
+    // shader material), same as it did before this feature existed, so the
+    // default look doesn't pay for an always-on hue-indexed recolor draw.
+    tex: hatPackPng
+  },
+  {
+    id: "shoe_cowboy_boots",
+    name: "Cowboy Boots",
+    cost: 350,
+    socket: "shoes",
+    shoeAttachment: "Cowboy Boots",
+    maskRecolor: { r: "#865d56", g: "#2a202a", b: "#dec575" },
+    tex: hatPackPng
+  },
+  {
+    id: "shoe_curvies",
+    name: "Curvies",
+    cost: 250,
+    socket: "shoes",
+    shoeAttachment: "Curvies",
+    maskRecolor: { r: "#b6607c", g: "#d9d3d9", b: "#2a202a" },
+    tex: hatPackPng
+  },
+  {
+    id: "shoe_deep_soles",
+    name: "Deep Soles",
+    cost: 300,
+    socket: "shoes",
+    shoeAttachment: "Deep Soles",
+    maskRecolor: { r: "#2a202a", g: "#a83f48", b: "#d9d3d9" },
+    tex: hatPackPng
+  },
+  {
+    id: "shoe_dress_up",
+    name: "Dress Up",
+    cost: 350,
+    socket: "shoes",
+    shoeAttachment: "Dress Up",
+    maskRecolor: { r: "#2a202a", g: "#dec575", b: "#d9d3d9" },
+    tex: hatPackPng
+  },
+  {
+    id: "shoe_ice_skates",
+    name: "Ice Skates",
+    cost: 400,
+    socket: "shoes",
+    shoeAttachment: "Ice Skates",
+    maskRecolor: { r: "#5f80a6", g: "#d9d3d9", b: "#9a919b" },
+    tex: hatPackPng
+  },
+  {
+    id: "shoe_lace_up",
+    name: "Lace Up",
+    cost: 300,
+    socket: "shoes",
+    shoeAttachment: "Lace Up",
+    maskRecolor: { r: "#865d56", g: "#d9d3d9", b: "#2a202a" },
+    tex: hatPackPng
+  },
+  {
+    id: "shoe_oxfords",
+    name: "Oxfords",
+    cost: 350,
+    socket: "shoes",
+    shoeAttachment: "Oxfords",
+    maskRecolor: { r: "#2a202a", g: "#865d56", b: "#dec575" },
+    tex: hatPackPng
+  },
+  {
+    id: "shoe_roller_skates",
+    name: "Roller Skates",
+    cost: 400,
+    socket: "shoes",
+    shoeAttachment: "Roller Skates",
+    maskRecolor: { r: "#a83f48", g: "#5f80a6", b: "#d9d3d9" },
+    tex: hatPackPng
+  },
+  {
+    id: "shoe_runners",
+    name: "Runners",
+    cost: 250,
+    socket: "shoes",
+    shoeAttachment: "Runners",
+    maskRecolor: { r: "#6f975e", g: "#d9d3d9", b: "#2a202a" },
+    tex: hatPackPng
+  },
+  {
+    id: "shoe_sneakers",
+    name: "Sneakers",
+    cost: 200,
+    socket: "shoes",
+    shoeAttachment: "Sneakers",
+    maskRecolor: { r: "#d9d3d9", g: "#5f80a6", b: "#a83f48" },
     tex: hatPackPng
   },
 
@@ -313,7 +654,8 @@ export const useCosmeticsStore = create<CosmeticsState>()(
         windswept_long: true,          // for testing long hair style
         motorcycle_jacket_red_green: true,    // for testing jacket cosmetics
         motorcycle_jacket_blue_orange: true,  // for testing jacket cosmetics
-        motorcycle_jacket_black_gold: true    // for testing jacket cosmetics
+        motorcycle_jacket_black_gold: true,   // for testing jacket cosmetics
+        shoe_classic: true                    // starter shoes owned
       },
       points: 0,                            // display only (Shop UI shows "Acorns: {points}")
 
@@ -384,7 +726,8 @@ export const useCosmeticsStore = create<CosmeticsState>()(
             windswept_long: true,
             motorcycle_jacket_red_green: true,
             motorcycle_jacket_blue_orange: true,
-            motorcycle_jacket_black_gold: true
+            motorcycle_jacket_black_gold: true,
+            shoe_classic: true
           },
           points: 0,
           equipped: { headTop: "white_baseball_cap", hat: "white_baseball_cap" },
@@ -425,7 +768,8 @@ export const useCosmeticsStore = create<CosmeticsState>()(
           windswept_long: true,
           motorcycle_jacket_red_green: true,
           motorcycle_jacket_blue_orange: true,
-          motorcycle_jacket_black_gold: true
+          motorcycle_jacket_black_gold: true,
+          shoe_classic: true
         };
 
         s.points = typeof s.points === "number" ? s.points : 0;

@@ -219,12 +219,14 @@ export function SpineBattleScene({
       console.log(`🦎 Loading Spine character: ${characterName}`);
 
       // Map character names to asset paths
-      const assetMap: Record<string, { atlas: any; json: any; texture: any; texture2?: any }> = {
+      const assetMap: Record<string, { atlas: any; json: any; texture: any; texture2?: any; texture3?: any; texture4?: any }> = {
         'Glider': {
           atlas: require('../../../assets/GliderMonSpine/skeleton.atlas'),
           json: require('../../../assets/GliderMonSpine/skeleton.json'),
           texture: require('../../../assets/GliderMonSpine/skeleton.png'),
-          texture2: require('../../../assets/GliderMonSpine/skeleton_2.png')
+          texture2: require('../../../assets/GliderMonSpine/skeleton_2.png'),
+          texture3: require('../../../assets/GliderMonSpine/skeleton_3.png'),
+          texture4: require('../../../assets/GliderMonSpine/skeleton_4.png')
         },
         'Luma': {
           atlas: require('../../../assets/Luma/Luma.atlas'),
@@ -244,10 +246,16 @@ export function SpineBattleScene({
         return null;
       }
 
-      // Build texture modules array (include texture2 if it exists for multi-page atlases)
+      // Build texture modules array (include texture2/3/4 if they exist for multi-page atlases)
       const textureModules = [assets.texture];
       if (assets.texture2) {
         textureModules.push(assets.texture2);
+      }
+      if (assets.texture3) {
+        textureModules.push(assets.texture3);
+      }
+      if (assets.texture4) {
+        textureModules.push(assets.texture4);
       }
 
       const result = await loadSpineFromExpoAssets({

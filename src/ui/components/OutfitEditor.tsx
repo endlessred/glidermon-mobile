@@ -33,6 +33,7 @@ const COSMETIC_SLOTS: CosmeticSlot[] = [
   { id: "face", name: "Face", icon: "😊" },
   { id: "shirt", name: "Shirt", icon: "👕" },
   { id: "jacket", name: "Jacket", icon: "🧥" },
+  { id: "shoes", name: "Shoes", icon: "👟" },
 ];
 
 export default function OutfitEditor({ outfitId, onClose }: OutfitEditorProps) {
@@ -128,6 +129,11 @@ export default function OutfitEditor({ outfitId, onClose }: OutfitEditorProps) {
         console.log("Debug OutfitEditor - All jacket items:", allJacket.map(i => i.id));
         console.log("Debug OutfitEditor - Owned jacket items:", ownedJacket.map(i => i.id));
         return ownedJacket;
+      case "shoes":
+        // Filter for shoes cosmetics from the cosmetics store that are owned
+        const allShoes = cosmeticItems.filter(item => item.socket === "shoes");
+        const ownedShoes = allShoes.filter(item => owned[item.id]);
+        return ownedShoes;
       case "face":
       case "shirt":
         // For now, return empty array for unimplemented slots

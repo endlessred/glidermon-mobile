@@ -39,6 +39,7 @@ export type CosmeticSocket =
   | "background" | "foreground" | "fullBody"
   | "hair" // Hair with front and back slots
   | "jacket" // Jacket cosmetics
+  | "shoes" // Shoe cosmetics (item-based; equips both L_Shoe and R_Shoe)
   | "pose" // Special socket for poses
   | "skin" // 4-channel recoloring for body parts
   | "skinVariation" | "eyeColor" | "shoeVariation"; // Palette-based cosmetics

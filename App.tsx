@@ -18,6 +18,7 @@ import AcornHuntScreen from "./src/ui/screens/AcornHuntScreen";
 import ArcadeScreen from "./src/ui/screens/ArcadeScreen";
 import UpsAndDownsScreen from "./src/ui/screens/UpsAndDownsScreen";
 import OnboardingScreen from "./src/ui/screens/OnboardingScreen";
+import CosmeticThumbnailCapture from "./src/dev/CosmeticThumbnailCapture";
 import { useGameStore } from "./src/data/stores/gameStore";
 import { useSettingsStore } from "./src/data/stores/settingsStore";
 import { startEgvsSimulator, stopEgvsSimulator } from "./src/engine/simCgms";
@@ -75,7 +76,7 @@ const STREAK_SCENARIOS: Record<string, () => void> = {
   milestone365: () => triggerMilestone(365),
 };
 
-function parseGlidermonUrl(url: string): { tab: Tab; shopCategory?: ShopCategory } | { streakScenario: string } | null {
+function parseGlidermonUrl(url: string): { tab: Tab; shopCategory?: ShopCategory } | { streakScenario: string } | { devRoute: string } | null {
   const match = url.match(/^glidermon:\/\/([^/?]+)\/?([^/?]*)/i);
   if (!match) return null;
   const segment = match[1].toLowerCase();
@@ -83,6 +84,12 @@ function parseGlidermonUrl(url: string): { tab: Tab; shopCategory?: ShopCategory
 
   if (segment === "streak" && STREAK_SCENARIOS[sub]) {
     return { streakScenario: sub };
+  }
+
+  // Dev-only tooling, e.g. glidermon://dev/thumbnails -- see
+  // src/dev/CosmeticThumbnailCapture.tsx and its generator script.
+  if (segment === "dev" && sub) {
+    return { devRoute: sub };
   }
 
   const tab = DEEP_LINK_TABS[segment];
@@ -138,6 +145,7 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("HOME");
   const [shopCategory, setShopCategory] = useState<ShopCategory | undefined>(undefined);
   const [shopLinkNonce, setShopLinkNonce] = useState(0);
+  const [devRoute, setDevRoute] = useState<string | null>(null);
 
   // ---- dev/test deep links (glidermon://<tab>[/<shop-category>]) ----
   useEffect(() => {
@@ -148,6 +156,11 @@ export default function App() {
       if ("streakScenario" in parsed) {
         STREAK_SCENARIOS[parsed.streakScenario]();
         setTab("HOME");
+        return;
+      }
+
+      if ("devRoute" in parsed) {
+        if (__DEV__) setDevRoute(parsed.devRoute);
         return;
       }
 
@@ -277,6 +290,11 @@ export default function App() {
       }
     };
   }, []);
+
+  // Dev-only tooling routes (glidermon://dev/<route>), e.g. thumbnail capture.
+  if (__DEV__ && devRoute === "thumbnails") {
+    return <CosmeticThumbnailCapture />;
+  }
 
   // Show onboarding screen if user hasn't completed it
   if (showOnboarding) {

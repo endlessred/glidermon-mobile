@@ -87,6 +87,13 @@ const JACKET_SLOTS: string[] = [
   "JacketRArm",
 ];
 
+// Shoe slots - a purchased design uses hue-indexed shader recoloring; the
+// plain default (no design equipped) does not.
+const SHOE_SLOTS: string[] = [
+  "L_Shoe",
+  "R_Shoe",
+];
+
 const SLOT_TO_SHADER: Record<string, string> = {
   Tail: "NewTailShader",
   R_Wing: "R_WingShader",
@@ -169,12 +176,14 @@ export async function createSpineCharacterController(
   const jsonModule = require("../assets/GliderMonSpine/skeleton.json");
   const textureModule = require("../assets/GliderMonSpine/skeleton.png");
   const textureModule2 = require("../assets/GliderMonSpine/skeleton_2.png");
+  const textureModule3 = require("../assets/GliderMonSpine/skeleton_3.png");
+  const textureModule4 = require("../assets/GliderMonSpine/skeleton_4.png");
 
   if (__DEV__) console.log("Spine controller: loading assets");
   const { skeleton, resolveTexture } = await loadSpineFromExpoAssets({
     atlasModule,
     jsonModule,
-    textureModules: [textureModule, textureModule2],
+    textureModules: [textureModule, textureModule2, textureModule3, textureModule4],
   });
 
   skeleton.x = 0;
@@ -318,8 +327,31 @@ export async function createSpineCharacterController(
     updateWorldXform(skeleton, 0);
   }
 
-  function configureMaterialOverride(hatRecolor?: RecolorData, skinRecolor?: RecolorData, hairRecolor?: RecolorData, jacketRecolor?: RecolorData) {
-    if (!hatRecolor && !skinRecolor && !hairRecolor && !jacketRecolor) {
+  // Shoes always render *something* - unlike jackets/hair there's no "off"
+  // state. With no purchased design equipped, this falls back to the plain
+  // L_Shoe/R_Shoe attachment (no shader, no recolor) rather than the shared
+  // L_ShoeShader/R_ShoeShader mesh, so the default look doesn't pay for an
+  // always-on hue-indexed recolor draw.
+  function configureShoeSwitches(shoeAttachmentBaseName?: string) {
+    const pairs: Array<[string, string]> = [
+      ["L_Shoe", shoeAttachmentBaseName ? `L_${shoeAttachmentBaseName}` : "L_Shoe"],
+      ["R_Shoe", shoeAttachmentBaseName ? `R_${shoeAttachmentBaseName}` : "R_Shoe"],
+    ];
+
+    for (const [slotName, attachmentName] of pairs) {
+      const slot = skeleton.findSlot(slotName);
+      if (!slot) continue;
+      const attachment = getAttachmentFromAnySkin(skeletonData, slotName, attachmentName);
+      if (attachment) {
+        slot.pose.setAttachment(attachment);
+      }
+    }
+
+    updateWorldXform(skeleton, 0);
+  }
+
+  function configureMaterialOverride(hatRecolor?: RecolorData, skinRecolor?: RecolorData, hairRecolor?: RecolorData, jacketRecolor?: RecolorData, shoeRecolor?: RecolorData) {
+    if (!hatRecolor && !skinRecolor && !hairRecolor && !jacketRecolor && !shoeRecolor) {
       mesh.materialOverride = undefined;
       return;
     }
@@ -332,8 +364,18 @@ export async function createSpineCharacterController(
       const isShaderAttachment = shaderSlotRegex.test(attachmentName);
 
       let recolor: RecolorData | undefined;
+      // Hats and shoes are disambiguated by which skin/attachment is active
+      // (setSkin() for hats, configureShoeSwitches() for shoes), not by the
+      // attachment's own name ending in "Shader" like jacket/hair/skin - each
+      // hat/shoe design is its own uniquely-named mesh (e.g. "Cowboy Hat",
+      // "Sneakers"), so the usual isShaderAttachment name check is bypassed here.
+      let bypassShaderNameCheck = false;
       if (slotName === "Hat_Base" && hatRecolor) {
         recolor = hatRecolor;
+        bypassShaderNameCheck = true;
+      } else if (SHOE_SLOTS.includes(slotName) && shoeRecolor) {
+        recolor = shoeRecolor;
+        bypassShaderNameCheck = true;
       } else if (isShaderAttachment && hairRecolor && HAIR_SLOTS.includes(slotName)) {
         recolor = hairRecolor;
       } else if (isShaderAttachment && jacketRecolor && JACKET_SLOTS.includes(slotName)) {
@@ -348,7 +390,7 @@ export async function createSpineCharacterController(
 
       const isPupil = /Pupil/i.test(slotName);
       const alphaTest = isPupil ? 0.0 : 0.0015;
-      if (!isShaderAttachment) return null;
+      if (!isShaderAttachment && !bypassShaderNameCheck) return null;
 
       const key = `hue|${(baseTex as any).uuid}|${recolor.r}|${recolor.g}|${recolor.b}|${recolor.a}|${slotName}|${attachmentName}|${alphaTest}`;
       let material = recolorCache.get(key);
@@ -378,8 +420,9 @@ export async function createSpineCharacterController(
 
   function applyOutfitInternal(outfitToApply?: OutfitSlot) {
     if (!outfitToApply) {
-      configureMaterialOverride(undefined, undefined, undefined, undefined);
+      configureMaterialOverride(undefined, undefined, undefined, undefined, undefined);
       configureJacketSwitches(undefined);
+      configureShoeSwitches(undefined);
       return;
     }
 
@@ -387,10 +430,12 @@ export async function createSpineCharacterController(
     const skinCosmetic = findCosmetic(outfitToApply.cosmetics?.skin?.itemId);
     const hairCosmetic = findCosmetic(outfitToApply.cosmetics?.hair?.itemId);
     const jacketCosmetic = findCosmetic(outfitToApply.cosmetics?.jacket?.itemId);
+    const shoeCosmetic = findCosmetic(outfitToApply.cosmetics?.shoes?.itemId);
 
     const hatRecolor = hatCosmetic?.maskRecolor;
     const skinRecolor = skinCosmetic?.maskRecolor;
     const jacketRecolor = jacketCosmetic?.maskRecolor;
+    const shoeRecolor = shoeCosmetic?.maskRecolor;
 
     // For hair, check if the outfit has spine data with custom recoloring
     let hairRecolor = hairCosmetic?.maskRecolor;
@@ -419,7 +464,8 @@ export async function createSpineCharacterController(
     configureSkinSwitches(skinRecolor);
     configureHairSwitches(hairRecolor, outfitToApply.cosmetics?.hair?.itemId);
     configureJacketSwitches(jacketRecolor);
-    configureMaterialOverride(hatRecolor, skinRecolor, hairRecolor, jacketRecolor);
+    configureShoeSwitches(shoeCosmetic?.shoeAttachment);
+    configureMaterialOverride(hatRecolor, skinRecolor, hairRecolor, jacketRecolor, shoeRecolor);
   }
 
   applyOutfitInternal(outfit);

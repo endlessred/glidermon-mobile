@@ -96,7 +96,17 @@ export function normalizeMaterialForSlot(slot: Slot, mat: THREE.Material) {
     // already wrote there, while renderOrder (assigned per slot in SpineThree's
     // refreshMeshes, always > the room's default 0) still keeps it drawing after the
     // room within the opaque queue.
-    if (isShaderAttachment) {
+    //
+    // Hue-indexed recolor materials (HueIndexedRecolor.ts) are identified here by
+    // a uniform unique to that shader, not by isShaderAttachment alone -- hats and
+    // the new shoe designs apply hue-indexed recolor keyed off which skin/attachment
+    // is active rather than an attachment name ending in "Shader" (see
+    // createSpineCharacterController's bypassShaderNameCheck), so isShaderAttachment
+    // alone would misroute them into the legacy MaskRecolor.ts branch below, whose
+    // uForceOpaque uniform they don't have (crashes with "Cannot set property
+    // 'value' of undefined").
+    const isHueIndexed = !!(m.uniforms && m.uniforms.uHueCosMin);
+    if (isShaderAttachment || isHueIndexed) {
       m.transparent = false;
       m.depthTest = false;
       m.depthWrite = false;

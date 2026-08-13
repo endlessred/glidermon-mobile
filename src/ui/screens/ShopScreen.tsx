@@ -6,7 +6,7 @@ import { useToastStore } from "../../data/stores/toastStore";
 import { useHousingStore } from "../../data/stores/housingStore";
 import { useTheme } from "../../data/hooks/useTheme";
 import { useAmbientConversations } from "../../data/hooks/useAmbientConversations";
-import HatPreview from "../components/HatPreview";
+import CosmeticThumbnail from "../components/CosmeticThumbnail";
 import PatternSwatch from "../components/PatternSwatch";
 import ShadedShopViewport from "../components/ShadedShopViewport";
 import AmbientConversationDisplay from "../components/AmbientConversation";
@@ -312,8 +312,9 @@ export default function ShopScreen({ initialCategory }: { initialCategory?: Shop
                     borderWidth: 1,
                     borderColor: colors.border?.secondary || 'transparent',
                   }}>
-                    <HatPreview
-                      hatId={item.id}
+                    <CosmeticThumbnail
+                      itemId={item.id}
+                      socket={item.socket}
                       size={60}
                       style={{ marginBottom: spacing.small }}
                     />

@@ -6,7 +6,7 @@ import { useToastStore } from "../../data/stores/toastStore";
 import { useActiveLocalOutfit, useOutfitStore } from "../../data/stores/outfitStore";
 import { useTheme } from "../../data/hooks/useTheme";
 import { usePaletteUnlocks } from "../../data/hooks/usePaletteUnlocks";
-import HatPreview from "../components/HatPreview";
+import CosmeticThumbnail from "../components/CosmeticThumbnail";
 import CharacterPreview from "../components/CharacterPreview";
 import { SKIN_VARIATIONS, EYE_COLOR_VARIATIONS, SHOE_VARIATIONS } from "../../game/cosmetics/paletteSystem";
 import type { SkinVariation, EyeColor, ShoeVariation } from "../../data/types/outfitTypes";
@@ -52,6 +52,11 @@ export default function EquipScreen() {
 
   const jackets = useMemo(
     () => catalog.filter(c => c.socket === "jacket" && owned[c.id]),
+    [catalog, owned]
+  );
+
+  const shoes = useMemo(
+    () => catalog.filter(c => c.socket === "shoes" && owned[c.id]),
     [catalog, owned]
   );
 
@@ -216,33 +221,7 @@ export default function EquipScreen() {
         alignItems: "center",
         gap: spacing.md
       }}>
-        {item.socket === "headTop" ? (
-          <HatPreview hatId={item.id} size={48} />
-        ) : item.socket === "jacket" ? (
-          <View style={{
-            width: 48,
-            height: 48,
-            borderRadius: borderRadius.md,
-            backgroundColor: item.maskRecolor?.r || colors.primary[100],
-            alignItems: "center",
-            justifyContent: "center",
-            borderWidth: 2,
-            borderColor: item.maskRecolor?.g || colors.gray[300],
-          }}>
-            <Text style={{ fontSize: 20 }}>🧥</Text>
-          </View>
-        ) : (
-          <View style={{
-            width: 48,
-            height: 48,
-            borderRadius: borderRadius.md,
-            backgroundColor: colors.primary[100],
-            alignItems: "center",
-            justifyContent: "center",
-          }}>
-            <Text style={{ fontSize: 20 }}>🎨</Text>
-          </View>
-        )}
+        <CosmeticThumbnail itemId={item.id} socket={item.socket} size={48} />
         <View>
           <Text style={{
             color: colors.text.primary,
@@ -335,7 +314,8 @@ export default function EquipScreen() {
           { type: 'section', title: 'Shoe Color', items: shoeOptions, isPalette: true },
           { type: 'section', title: 'Color Themes', items: themes },
           { type: 'section', title: 'Hats', items: hats },
-          { type: 'section', title: 'Jackets', items: jackets }
+          { type: 'section', title: 'Jackets', items: jackets },
+          { type: 'section', title: 'Shoes', items: shoes }
         ]}
         keyExtractor={(item, index) => `${item.type}-${index}`}
         ItemSeparatorComponent={() => <View style={{ height: spacing.lg }} />}
@@ -387,6 +367,8 @@ export default function EquipScreen() {
                     ? "No hats unlocked yet. Visit the Shop to buy some!"
                     : section.title === 'Jackets'
                     ? "No jackets unlocked yet. Visit the Shop to buy some!"
+                    : section.title === 'Shoes'
+                    ? "No shoes unlocked yet. Visit the Shop to buy some!"
                     : "No options available"
                   }
                 </Text>
@@ -423,12 +405,16 @@ export default function EquipScreen() {
                       ? equipped.theme === item.id
                       : section.title === 'Jackets'
                       ? activeOutfit?.cosmetics?.jacket?.itemId === item.id
+                      : section.title === 'Shoes'
+                      ? activeOutfit?.cosmetics?.shoes?.itemId === item.id
                       : equipped.headTop === item.id;
 
                     const onEquip = section.title === 'Color Themes'
                       ? () => { equipTheme(item.id); addToast(`Equipped ${item.name} theme`); }
                       : section.title === 'Jackets' && activeOutfit
                       ? () => { equipCosmetic(activeOutfit.id, "jacket", item.id); addToast(`Equipped ${item.name}`); }
+                      : section.title === 'Shoes' && activeOutfit
+                      ? () => { equipCosmetic(activeOutfit.id, "shoes", item.id); addToast(`Equipped ${item.name}`); }
                       : () => { equip(item.id); addToast(`Equipped ${item.name}`); };
 
                     return (

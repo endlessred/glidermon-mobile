@@ -139,10 +139,19 @@ export default function SpineCharacterPreview({
     return cosmeticItem?.maskRecolor || null; // 4-channel recoloring for jacket parts
   };
 
-  // ---- set/refresh material override: recolor hats, body parts, hair, and jackets ----
-  const setupMaterialOverride = (skeletonMesh: SkeletonMesh, hatRecolor: any, skinRecolor: any, hairRecolor: any, jacketRecolor: any) => {
+  const getShoeCosmeticItem = () => {
+    const equippedShoe = outfit.cosmetics.shoes;
+    if (!equippedShoe?.itemId) return null;
+    return catalog.find((item) => item.id === equippedShoe.itemId) || null;
+  };
 
-    if (!hatRecolor && !skinRecolor && !hairRecolor && !jacketRecolor) {
+  // ---- set/refresh material override: recolor hats, body parts, hair, and jackets ----
+  const setupMaterialOverride = (skeletonMesh: SkeletonMesh, hatRecolor: any, skinRecolor: any, hairRecolor: any, jacketRecolor: any, shoeRecolor: any, shoeAttachmentBaseName?: string) => {
+
+    // Shoes always render something (a purchased design, or the plain default
+    // attachment), so this function must still run even when only shoeRecolor
+    // is set and everything else is undefined.
+    if (!hatRecolor && !skinRecolor && !hairRecolor && !jacketRecolor && !shoeRecolor) {
       skeletonMesh.materialOverride = undefined;
       return;
     }
@@ -155,6 +164,10 @@ export default function SpineCharacterPreview({
 
     // Jacket slots that should be recolored with jacket cosmetics
     const jacketSlots = ["JacketTorso", "JacketLArm", "JacketRArm"];
+
+    // Shoe slots - a purchased design uses hue-indexed shader recoloring; the
+    // plain default (no design equipped) does not.
+    const shoeSlots = ["L_Shoe", "R_Shoe"];
 
     // Switch skin slots to their shader variants when skin recoloring is enabled
     if (skinRecolor) {
@@ -339,6 +352,28 @@ export default function SpineCharacterPreview({
       }
     }
 
+    // Shoes always resolve to an attachment - a purchased design (L_<Name>/R_<Name>)
+    // or the plain L_Shoe/R_Shoe attachment (no shader) when none is set, so the
+    // default look doesn't pay for an always-on hue-indexed recolor draw.
+    {
+      const skeleton = skeletonRef.current;
+      if (skeleton) {
+        const pairs: Array<[string, string]> = [
+          ["L_Shoe", shoeAttachmentBaseName ? `L_${shoeAttachmentBaseName}` : "L_Shoe"],
+          ["R_Shoe", shoeAttachmentBaseName ? `R_${shoeAttachmentBaseName}` : "R_Shoe"],
+        ];
+        for (const [baseSlotName, attachmentName] of pairs) {
+          const slot = skeleton.findSlot(baseSlotName);
+          if (!slot) continue;
+          const attachment = getAttachmentFromAnySkin(skeletonDataRef.current, baseSlotName, attachmentName);
+          if (attachment) {
+            slot.pose.setAttachment(attachment);
+          }
+        }
+        skeleton.updateWorldTransform(Physics.update);
+      }
+    }
+
     skeletonMesh.materialOverride = (slot: any, baseTex: THREE.Texture) => {
       const slotName: string = slot?.data?.name ?? "";
       const attachment = slot.appliedPose?.getAttachment?.();
@@ -347,10 +382,22 @@ export default function SpineCharacterPreview({
 
       // Determine which recolor to apply
       let recolorData = null;
+      // Hats and shoes are disambiguated by which skin/attachment is active
+      // (setSkin() for hats, the L_/R_ attachment switch above for shoes), not
+      // by the attachment's own name ending in "Shader" like jacket/hair/skin -
+      // each hat/shoe design is its own uniquely-named mesh (e.g. "Cowboy Hat",
+      // "Sneakers"), so the usual isShaderAttachment name check is bypassed here.
+      let bypassShaderNameCheck = false;
 
       // Hat example (unchanged)
       if (slotName === "Hat_Base" && hatRecolor) {
         recolorData = hatRecolor;
+        bypassShaderNameCheck = true;
+      }
+      // Shoes via attachment switch (not name-suffix based)
+      else if (shoeSlots.includes(slotName) && shoeRecolor) {
+        recolorData = shoeRecolor;
+        bypassShaderNameCheck = true;
       }
       // Hair via shader variant
       else if (isShaderAttachment && hairRecolor && hairSlots.includes(slotName)) {
@@ -379,7 +426,7 @@ export default function SpineCharacterPreview({
       const isPupil = /Pupil/i.test(slotName);
       const alphaTest = isPupil ? 0.0 : 0.0015; // Match SpineThree logic
 
-      if (isShaderAttachment) {
+      if (isShaderAttachment || bypassShaderNameCheck) {
         // Use hue-indexed recolor for shader slots
         const key = `hue|${(baseTex as any).uuid}|${recolorData.r}|${recolorData.g}|${recolorData.b}|${recolorData.a}|${slotName}|${alphaTest}`;
         let mat = RECOLOR_CACHE.get(key);
@@ -426,6 +473,8 @@ export default function SpineCharacterPreview({
     const skinRecolor = getSkinMaskRecolor();
     const hairRecolor = getHairMaskRecolor();
     const jacketRecolor = getJacketMaskRecolor();
+    const shoeCosmeticItem = getShoeCosmeticItem();
+    const shoeRecolor = shoeCosmeticItem?.maskRecolor || null;
 
     if (skinName && skinName !== "default") {
       const skin = skeletonData.findSkin(skinName);
@@ -441,8 +490,8 @@ export default function SpineCharacterPreview({
       skeleton.updateWorldTransform(Physics.update);
     }
 
-    setupMaterialOverride(skeletonMesh, hatRecolor, skinRecolor, hairRecolor, jacketRecolor);
-  }, [outfit.cosmetics.headTop, outfit.cosmetics.skin, outfit.cosmetics.hair, outfit.cosmetics.jacket, catalog]);
+    setupMaterialOverride(skeletonMesh, hatRecolor, skinRecolor, hairRecolor, jacketRecolor, shoeRecolor, shoeCosmeticItem?.shoeAttachment);
+  }, [outfit.cosmetics.headTop, outfit.cosmetics.skin, outfit.cosmetics.hair, outfit.cosmetics.jacket, outfit.cosmetics.shoes, catalog]);
 
   const onContextCreate = async (gl: any) => {
     try {
@@ -466,6 +515,8 @@ export default function SpineCharacterPreview({
       const jsonRequire = require("../../assets/GliderMonSpine/skeleton.json");
       const basePageRequire = require("../../assets/GliderMonSpine/skeleton.png");
       const basePageRequire2 = require("../../assets/GliderMonSpine/skeleton_2.png");
+      const basePageRequire3 = require("../../assets/GliderMonSpine/skeleton_3.png");
+      const basePageRequire4 = require("../../assets/GliderMonSpine/skeleton_4.png");
 
       const skeletonJsonData = jsonRequire; // Metro-parsed JSON
       const atlasAsset = Asset.fromModule(atlasRequire);
@@ -493,6 +544,22 @@ export default function SpineCharacterPreview({
         ensureSRGBTexture(baseTex2);
         baseTex2.needsUpdate = true;
         pageBaseTextures["skeleton_2.png"] = baseTex2;
+
+        // Load skeleton_3.png
+        const baseTex3: THREE.Texture = await loadAsync(basePageRequire3);
+        baseTex3.flipY = false;
+        baseTex3.generateMipmaps = false;
+        ensureSRGBTexture(baseTex3);
+        baseTex3.needsUpdate = true;
+        pageBaseTextures["skeleton_3.png"] = baseTex3;
+
+        // Load skeleton_4.png
+        const baseTex4: THREE.Texture = await loadAsync(basePageRequire4);
+        baseTex4.flipY = false;
+        baseTex4.generateMipmaps = false;
+        ensureSRGBTexture(baseTex4);
+        baseTex4.needsUpdate = true;
+        pageBaseTextures["skeleton_4.png"] = baseTex4;
       } catch (e) {
         console.error("Failed to load base atlas page:", e);
         // Fallback: simple solid texture
@@ -504,6 +571,8 @@ export default function SpineCharacterPreview({
         fallback.needsUpdate = true;
         pageBaseTextures["skeleton.png"] = fallback;
         pageBaseTextures["skeleton_2.png"] = fallback;
+        pageBaseTextures["skeleton_3.png"] = fallback;
+        pageBaseTextures["skeleton_4.png"] = fallback;
       }
 
       // Hue-indexed recolor system doesn't need mask textures
@@ -576,7 +645,8 @@ export default function SpineCharacterPreview({
       scene.add(mesh);
 
       // Initial recolor override
-      setupMaterialOverride(mesh, getHatMaskRecolor(), getSkinMaskRecolor(), getHairMaskRecolor(), getJacketMaskRecolor());
+      const initialShoeCosmeticItem = getShoeCosmeticItem();
+      setupMaterialOverride(mesh, getHatMaskRecolor(), getSkinMaskRecolor(), getHairMaskRecolor(), getJacketMaskRecolor(), initialShoeCosmeticItem?.maskRecolor || null, initialShoeCosmeticItem?.shoeAttachment);
 
       // Render loop
       let lastTime = Date.now() / 1000;

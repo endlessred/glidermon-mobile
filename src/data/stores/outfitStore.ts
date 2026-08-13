@@ -42,6 +42,9 @@ function createDefaultOutfit(): OutfitSlot {
     cosmetics: {
       headTop: {
         itemId: "white_baseball_cap"
+      },
+      shoes: {
+        itemId: "shoe_classic"
       }
     },
     spineSettings: {
@@ -66,6 +69,9 @@ function createDefaultPublicOutfit(): OutfitSlot {
     cosmetics: {
       headTop: {
         itemId: "flower_crown"
+      },
+      shoes: {
+        itemId: "shoe_classic"
       },
       pose: {
         itemId: DEFAULT_POSE.id
@@ -472,7 +478,7 @@ export const useOutfitStore = create<OutfitStore>()(
     {
       name: "outfit-store",
       storage: createJSONStorage(() => AsyncStorage),
-      version: 2,
+      version: 3,
       migrate: (persistedState: any, version: number) => {
         const state = persistedState || {};
 
@@ -483,6 +489,20 @@ export const useOutfitStore = create<OutfitStore>()(
             return {
               ...outfit,
               cosmetics: otherCosmetics
+            };
+          });
+        }
+
+        // Give existing outfits the new default shoe look (replaces the old bare L_Shoe/R_Shoe attachment)
+        if (version < 3 && state.slots) {
+          state.slots = state.slots.map((outfit: OutfitSlot) => {
+            if (outfit.cosmetics?.shoes) return outfit;
+            return {
+              ...outfit,
+              cosmetics: {
+                ...outfit.cosmetics,
+                shoes: { itemId: "shoe_classic" }
+              }
             };
           });
         }
