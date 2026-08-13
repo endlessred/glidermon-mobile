@@ -439,6 +439,7 @@ export default function SpineCharacterPreview({
             hueCosMin: 0.75,    // More lenient angle matching (was 0.90)
             useYellow: true,    // Enable yellow detection
             preserveDarkThreshold: 0.15,
+            smoothOutlineEdges: false,
             colors: {
               red: recolorData.r ?? "#ff0000",
               green: recolorData.g ?? "#00ff00",

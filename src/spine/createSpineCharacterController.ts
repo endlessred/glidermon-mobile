@@ -403,6 +403,7 @@ export async function createSpineCharacterController(
           hueCosMin: 0.75,
           useYellow: true,
           preserveDarkThreshold: 0.15,
+          smoothOutlineEdges: false,
           colors: {
             red: recolor.r ?? "#ff0000",
             green: recolor.g ?? "#00ff00",

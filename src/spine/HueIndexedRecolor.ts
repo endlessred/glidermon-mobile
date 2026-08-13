@@ -15,6 +15,26 @@ export type HueIndexedRecolorOptions = {
   hueCosMin?: number;          // require closeness to ID hue, cos(theta) (default 0.90 ~= 25°)
   useYellow?: boolean;         // enable 4th ID (yellow), default false
   preserveDarkThreshold?: number; // default 0.15 (keep dark outlines)
+  // Replaces the hard brightness/saturation/hue-margin cutoff that decides
+  // "preserve as outline" vs. "fully recolor to the target hue" with a
+  // smooth blend, so a thin detail line that anti-aliases across texel
+  // boundaries along its length (a bilinear sample only ever reads a 2x2
+  // neighborhood) renders as a continuous line instead of dashing in and
+  // out as adjacent pixels flip abruptly between the two treatments. Also
+  // enables trilinear mipmapping + anisotropic filtering, which similarly
+  // helps thin lines survive minification once the character renders
+  // smaller than its source texture.
+  // Verified good for small decorative detail (e.g. an ear's inner-crease
+  // pattern) but NOT a safe default: on art where a classification-guide
+  // color runs close to outline edges more broadly (limb/wing/silhouette
+  // boundaries), the smooth confidence ramp lets enough of that guide color
+  // through to paint a visible colored rim along those edges -- worse than
+  // the dashing it fixes. Confirmed by A/B on-device: disabling this
+  // (keeping only the unconditional premultiply fix below) removed the rim
+  // with the ear detail only slightly more muted. Off by default; opt in
+  // only after checking full-body silhouette edges, not just the specific
+  // detail that motivated turning it on.
+  smoothOutlineEdges?: boolean;
 };
 
 function toColorOrDefault(c: any, defaultValue: number): THREE.Color {
@@ -47,6 +67,7 @@ export function makeHueIndexedRecolorMaterial(
     hueCosMin: 0.90,
     useYellow: false,
     preserveDarkThreshold: 0.15,
+    smoothOutlineEdges: false,
     colors: {},
     ...(opts || {})
   };
@@ -57,6 +78,36 @@ export function makeHueIndexedRecolorMaterial(
   const colY = toColorOrDefault(o.colors!.yellow, 0xffff00);
 
   ensureSRGBTexture(baseMap);
+
+  if (o.smoothOutlineEdges) {
+    // Trilinear mipmapping meaningfully improves minification of thin
+    // detail lines (rib lines, fine creases) that alias/dash under mip-less
+    // bilinear filtering once the character renders smaller than its source
+    // texture -- a bilinear sample only ever reads a 2x2 texel neighborhood,
+    // which can't properly represent a near-1px-wide line as it crosses
+    // texel boundaries along its length.
+    //
+    // Mipmaps were previously disabled project-wide (see ensureSRGBTexture
+    // above and src/spine/CLAUDE.md) because mip generation box-filters in
+    // neighboring atlas padding, and padding pixels that are fully
+    // transparent but not black bled into the art as halos near region
+    // edges -- worse at smaller mip levels, i.e. worse exactly when the
+    // character renders smaller, same as the dashing this fixes. Relying on
+    // the alphaTest cutout already in place to suppress that bleed instead.
+    // Scoped to this same opt-in flag so other consumers of the shared
+    // ensureSRGBTexture helper (e.g. wall furniture) are unaffected.
+    baseMap.generateMipmaps = true;
+    baseMap.minFilter = THREE.LinearMipmapLinearFilter;
+    // Trilinear alone still leaves residual dashing on parts viewed at a
+    // steep angle (e.g. the near ear in the 3/4 character view), since
+    // minification there is anisotropic -- squashed harder along one axis
+    // than the other -- and an isotropic mip chain picks a mip level sized
+    // for the worse axis, over-blurring the better one. A high anisotropy
+    // value is safe to request unconditionally; three.js clamps it to
+    // whatever the GPU actually supports when the texture uploads.
+    baseMap.anisotropy = 16;
+    baseMap.needsUpdate = true;
+  }
 
   const vert = `
     varying vec2 vUv;
@@ -105,13 +156,139 @@ export function makeHueIndexedRecolorMaterial(
       return vec3(h, s, v);
     }
 
+    ${o.smoothOutlineEdges ? `
+    void main(){
+      vec4 tex = texture2D(uMap, vUv);
+      if (tex.a <= uAlphaTest * uGlobalAlpha) discard;
+
+      // This atlas is exported with premultiplied alpha (pma:true in the
+      // .atlas file) -- confirmed by the legacy MeshBasicMaterial path
+      // (SpineThree.ts) explicitly setting premultipliedAlpha:true to match.
+      // This shader instead does its own manual opaque compositing (no GL
+      // blending, alpha hardcoded to 1.0 below) and was sampling tex.rgb
+      // directly as if it were straight alpha, so every partially-transparent
+      // texel (anti-aliased edges) rendered at its alpha-darkened stored
+      // value instead of its true color -- reading as washed-out/"slightly
+      // transparent" outlines and detail lines. Un-premultiply in sRGB space
+      // (matching how it was premultiplied at export) before doing anything
+      // else with it.
+      vec3 rawRGB = tex.rgb / max(tex.a, 0.0001);
+      vec3 texRGB = SRGBToLinear(rawRGB);
+
+      float Y = lumaLinear(texRGB);
+      vec3 hsv = rgb2hsv_linear(texRGB);
+      float sat = hsv.y;
+
+      bool isBlueish = texRGB.b > texRGB.r && texRGB.b > texRGB.g && texRGB.b > 0.1;
+
+      // Classify dominant channel. Rather than a hard tol-gated cutoff
+      // (which flips abruptly between buckets, or between a bucket and
+      // "preserve", for near-tied samples), always pick the closest bucket
+      // and separately track how decisively it won (margin) -- verified via
+      // a raw, unrecolored source-texture crop that the art itself has zero
+      // speckling, so any dashing has to come from bilinear-sampled texels
+      // straddling a black outline / color fill boundary (or two adjacent
+      // color fills) landing near-tied between two channels and flipping
+      // classification pixel-to-pixel along the curve. margin drives a
+      // continuous confidence fade below instead of a binary decision.
+      int id = -1;
+      float margin = 0.0;
+      float maxComponent = max(max(texRGB.r, texRGB.g), texRGB.b);
+      float classifyThreshold = 0.05;
+      if (maxComponent > classifyThreshold) {
+        if (uUseYellow > 0.5 && texRGB.r > texRGB.b && texRGB.g > texRGB.b) {
+          id = 3; // Yellow
+          margin = min(texRGB.r, texRGB.g) - texRGB.b;
+        } else if (texRGB.r >= texRGB.g && texRGB.r >= texRGB.b) {
+          id = 0; // Red
+          margin = texRGB.r - max(texRGB.g, texRGB.b);
+        } else if (texRGB.g >= texRGB.r && texRGB.g >= texRGB.b) {
+          id = 1; // Green
+          margin = texRGB.g - max(texRGB.r, texRGB.b);
+        } else {
+          id = 2; // Blue
+          margin = texRGB.b - max(texRGB.r, texRGB.g);
+        }
+      }
+
+      vec3 outLinear = texRGB;
+      if (id != -1) {
+        vec3 target_srgb = (id==0) ? uColR : (id==1) ? uColG : (id==2) ? uColB : uColY;
+        vec3 target = SRGBToLinear(target_srgb);
+
+        vec3 recolored;
+        if (id == 2) {
+          recolored = mix(texRGB, target, uStrength);
+        } else {
+          // refY normalizes shading brightness against the mask art's flat
+          // classification color -- see the non-smooth path below for why.
+          float refY = (id == 0) ? 0.299 : (id == 1) ? 0.587 : 0.886;
+          float shadeFactor = clamp(Y / max(refY, 1e-4), 0.4, 1.3);
+          vec3 shaded = mix(target, target * shadeFactor, uShadeMode);
+          recolored = mix(texRGB, shaded, uStrength);
+        }
+
+        // Smoothly fade between "preserve as outline" and "fully recolored"
+        // across the anti-aliased blend, instead of the hard Y/sat cutoff
+        // below -- a hard cutoff makes adjacent AA'd edge pixels flip
+        // abruptly between the two treatments depending on which side they
+        // land on, which reads as colored speckling right along outlines.
+        // Gated on maxComponent (raw channel magnitude), not perceptual
+        // luma Y -- Y weights green ~2x heavier than red (~0.59 vs ~0.30),
+        // so a near-black outline texel with a faint green bias reads as
+        // meaningfully brighter than an equally-dim one with a red bias,
+        // letting green outline noise slip past this gate far more easily
+        // than red. maxComponent treats every hue's noise the same.
+        float darkFade = isBlueish ? 1.0 : smoothstep(uPreserveDark, uPreserveDark + 0.15, maxComponent);
+        float satFade = smoothstep(uSatMin, uSatMin + 0.15, sat);
+        // Low-margin (near-tied) classifications are low confidence -- fade
+        // those toward the raw sampled color instead of committing to a
+        // bucket, which is what removes the boundary-speckling artifact.
+        // The deadzone below 0.06 matters: near-black outline texels have
+        // tiny, essentially noisy differences between their R/G/B channels,
+        // so a confidence ramp starting at margin=0 let that noise pick a
+        // "winning" channel and tint outlines green/red broadly (visible
+        // once mipmapping/anisotropy widened the sampled neighborhood).
+        // Requiring a real margin before confidence leaves zero reproduces
+        // the original hard classifier's outline protection, while still
+        // ramping smoothly instead of snapping once a pixel clears it.
+        float classifyConfidence = smoothstep(0.06, 0.18, margin);
+        // Anti-aliased silhouette edges (partial alpha, where the source
+        // art blends toward transparent background or toward an abutting
+        // region) shouldn't receive confident recoloring the way genuinely
+        // opaque interior pixels do -- without this, once un-premultiplied
+        // to their true brightness these edge-halo pixels can classify
+        // decisively and paint a thin rim of the target color along every
+        // silhouette edge (wings, limbs, shoes), not just the fur/skin
+        // interior. Fully opaque pixels (the vast majority of the art) are
+        // unaffected: alphaConfidence is 1 there, same as before this fade.
+        float alphaConfidence = smoothstep(0.5, 0.97, tex.a);
+        outLinear = mix(texRGB, recolored, classifyConfidence * darkFade * satFade * alphaConfidence);
+      }
+
+      gl_FragColor = vec4( LinearToSRGB(outLinear), 1.0 );
+    }
+    ` : `
     void main(){
       vec4 tex = texture2D(uMap, vUv);
       // conservative cutout using original alpha in conjunction with global alpha
       if (tex.a <= uAlphaTest * uGlobalAlpha) discard;
 
-      // IMPORTANT: convert sRGB map sample to LINEAR for all math
-      vec3 texRGB = SRGBToLinear(tex.rgb);
+      // This atlas is exported with premultiplied alpha (pma:true in the
+      // .atlas file) -- confirmed by the legacy MeshBasicMaterial path
+      // (SpineThree.ts) explicitly setting premultipliedAlpha:true to match.
+      // This shader instead does its own manual opaque compositing (no GL
+      // blending, alpha hardcoded to 1.0 below) and was sampling tex.rgb
+      // directly as if it were straight alpha, so every partially-transparent
+      // texel (anti-aliased edges) rendered at its alpha-darkened stored
+      // value instead of its true color -- reading as washed-out/"slightly
+      // transparent" outlines and detail lines. Un-premultiply in sRGB space
+      // (matching how it was premultiplied at export) before doing anything
+      // else with it. Applied unconditionally (both this and the
+      // smoothOutlineEdges path above) since it's a plain correctness fix,
+      // not tied to the smooth-classification behavior that flag controls.
+      vec3 rawRGB = tex.rgb / max(tex.a, 0.0001);
+      vec3 texRGB = SRGBToLinear(rawRGB);
 
       float Y = lumaLinear(texRGB);
       vec3 hsv = rgb2hsv_linear(texRGB);
@@ -185,6 +362,7 @@ export function makeHueIndexedRecolorMaterial(
       // Encode to output color space
       gl_FragColor = vec4( LinearToSRGB(outLinear), 1.0 );
     }
+    `}
   `;
 
   const safeColR = new THREE.Color(colR.getHex());
