@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 420">
+  <title>Pill Category Tab</title>
+  <desc>Rounded pill category tab with paper fill and stitched inner border.</desc>
+  <rect x="60" y="70" width="880" height="280" rx="140" fill="#F8EEDC" stroke="#4A312C" stroke-width="18"/>
+  <rect x="94" y="103" width="812" height="214" rx="107" fill="none" stroke="#EADCC2" stroke-width="10" stroke-dasharray="18 22" stroke-linecap="round"/>
+</svg>

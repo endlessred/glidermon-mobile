@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" fill="none">
+  <title>Selected Equipped Border</title>
+  <desc>Highlighted border with gold inner line and a green check badge at the top-right.</desc>
+  <path d="M110 160
+           C175 100, 310 92, 505 98
+           C700 104, 845 108, 895 155
+           C935 210, 944 345, 935 510
+           C926 690, 921 820, 880 875
+           C820 925, 690 928, 500 918
+           C330 910, 180 916, 120 872
+           C80 816, 74 690, 78 505
+           C82 328, 84 215, 110 160 Z"
+        stroke="#4A312C" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M145 190
+           C200 140, 325 136, 505 140
+           C670 144, 794 150, 842 186
+           C875 229, 882 349, 874 509
+           C866 658, 865 774, 831 820
+           C784 861, 665 874, 503 867
+           C350 861, 229 867, 174 832
+           C141 792, 129 682, 132 510
+           C135 352, 137 238, 140 190 Z"
+        stroke="#E3B54D" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  <g transform="translate(752 86)">
+    <circle cx="110" cy="110" r="92" fill="#7DB67A" stroke="#4A312C" stroke-width="14"/>
+    <circle cx="110" cy="110" r="70" fill="#EAF4DB" opacity="0.42"/>
+    <path d="M72 109 L100 138 L150 84" stroke="#FFF7E7" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M72 109 L100 138 L150 84" stroke="#4A312C" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.22"/>
+  </g>
+</svg>

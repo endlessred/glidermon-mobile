@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 700">
+  <title>Top Tab Selected Felt</title>
+  <desc>Selected cozy top tab with green felt fill, hand-drawn outline, and cream stitches.</desc>
+  <path d="M95 605
+           C102 455, 104 287, 138 198
+           C183 110, 307 78, 506 82
+           C705 86, 823 116, 866 203
+           C900 289, 902 455, 905 605
+           L95 605 Z"
+        fill="#8FBF82" stroke="#4A312C" stroke-width="20" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M142 562
+           C146 435, 154 314, 178 249
+           C210 188, 317 166, 506 169
+           C687 173, 789 193, 822 252
+           C847 312, 855 431, 858 562"
+        fill="none" stroke="#F3E5C8" stroke-width="12" stroke-linecap="round" stroke-dasharray="18 22"/>
+</svg>

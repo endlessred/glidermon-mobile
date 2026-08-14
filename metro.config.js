@@ -22,5 +22,10 @@ module.exports = (async () => {
     'lottie', // dotLottie animation bundles
   ];
 
+  // react-native-svg-transformer: import .svg files as React components
+  config.transformer.babelTransformerPath = require.resolve("react-native-svg-transformer");
+  config.resolver.assetExts = config.resolver.assetExts.filter((ext) => ext !== "svg");
+  config.resolver.sourceExts = [...config.resolver.sourceExts, "svg"];
+
   return config;
 })();

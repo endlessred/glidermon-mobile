@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" fill="none">
+  <title>Cream Running Stitch Border</title>
+  <desc>Cream stitched border following an irregular rounded rectangle path.</desc>
+  <path d="M140 190
+           C200 140, 325 136, 505 140
+           C670 144, 794 150, 842 186
+           C875 229, 882 349, 874 509
+           C866 658, 865 774, 831 820
+           C784 861, 665 874, 503 867
+           C350 861, 229 867, 174 832
+           C141 792, 129 682, 132 510
+           C135 352, 137 238, 140 190 Z"
+        stroke="#B4947A" stroke-width="16" opacity="0.35" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M140 190
+           C200 140, 325 136, 505 140
+           C670 144, 794 150, 842 186
+           C875 229, 882 349, 874 509
+           C866 658, 865 774, 831 820
+           C784 861, 665 874, 503 867
+           C350 861, 229 867, 174 832
+           C141 792, 129 682, 132 510
+           C135 352, 137 238, 140 190 Z"
+        stroke="#F5E6CC" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"
+        stroke-dasharray="14 24"/>
+</svg>

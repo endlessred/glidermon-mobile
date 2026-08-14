@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 700">
+  <title>Bottom Navigation Tab</title>
+  <desc>Bottom navigation tab plate with softly raised selected center.</desc>
+  <path d="M95 135
+           C220 126, 384 121, 500 121
+           C616 121, 780 126, 905 135
+           C915 265, 918 393, 905 557
+           C790 578, 634 586, 500 586
+           C366 586, 210 578, 95 557
+           C83 396, 86 263, 95 135 Z"
+        fill="#F8EBD5" stroke="#4A312C" stroke-width="20" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M260 139
+           C297 118, 391 104, 500 104
+           C609 104, 703 118, 740 139
+           C760 187, 768 227, 768 281
+           C768 351, 651 367, 500 367
+           C349 367, 232 351, 232 281
+           C232 227, 240 187, 260 139 Z"
+        fill="#DDEFCF" stroke="#4A312C" stroke-width="12"/>
+  <path d="M281 149
+           C315 132, 398 121, 500 121
+           C602 121, 685 132, 719 149
+           C733 183, 738 218, 738 263
+           C738 322, 632 337, 500 337
+           C368 337, 262 322, 262 263
+           C262 218, 267 183, 281 149 Z"
+        fill="#8FBE81" opacity="0.8"/>
+</svg>

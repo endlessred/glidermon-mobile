@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000">
+  <title>Wobbly Rounded Rectangle</title>
+  <desc>Cream-filled irregular rounded rectangle with a hand-drawn dark outline.</desc>
+  <path d="M130 185
+           C193 124, 322 117, 507 123
+           C694 129, 824 133, 876 181
+           C916 230, 921 348, 913 508
+           C905 679, 903 793, 865 846
+           C812 891, 685 899, 501 891
+           C321 883, 196 891, 136 849
+           C98 799, 90 679, 94 507
+           C98 333, 102 239, 130 185 Z"
+        fill="#F8EEDC" stroke="#4A312C" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M160 208
+           C215 159, 333 154, 506 158
+           C674 163, 790 167, 836 203
+           C868 244, 876 355, 868 510
+           C860 652, 858 759, 826 803
+           C782 840, 665 856, 503 849
+           C348 843, 229 850, 180 816
+           C151 776, 141 673, 145 509
+           C149 362, 152 251, 160 208 Z"
+        fill="#FFF7EA" opacity="0.65"/>
+</svg>

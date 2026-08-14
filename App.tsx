@@ -10,7 +10,6 @@ import HomeScreen from "./src/ui/screens/HudScreen"; // HudScreen serves as Home
 import GameCanvas from "./src/game/view/GameCanvas";
 import ShopScreen, { ShopCategory } from "./src/ui/screens/ShopScreen";
 import EquipScreen from "./src/ui/screens/EquipScreen";
-import OutfitScreen from "./src/ui/screens/OutfitScreen";
 import SettingsScreen from "./src/ui/screens/SettingsScreen";
 import LeaderboardScreen from "./src/ui/screens/LeaderboardScreen";
 import GalleryScreen from "./src/ui/screens/GalleryScreen";
@@ -320,7 +319,7 @@ export default function App() {
         {/* GAME tab removed - GameCanvas is now embedded in Home (formerly HUD) screen */}
 
         {tab === "SHOP" && <ShopScreen key={shopLinkNonce} initialCategory={shopCategory} />}
-        {tab === "OUTFIT" && <OutfitScreen />}
+        {tab === "OUTFIT" && <EquipScreen />}
         {tab === "🎨 GALLERY" && <GalleryScreen />}
         {tab === "🕹️ ARCADE" && <ArcadeScreen />}
         {tab === "SETTINGS" && <SettingsScreen />}

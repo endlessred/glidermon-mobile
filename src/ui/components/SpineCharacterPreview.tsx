@@ -69,12 +69,16 @@ interface SpineCharacterPreviewProps {
   outfit: OutfitSlot;
   highlightSocket?: CosmeticSocket | null;
   size?: "small" | "medium" | "large";
+  /** Strip the card chrome (background/border, SPINE tag, animation dot) so
+   * the character floats directly on whatever it's placed over. */
+  transparent?: boolean;
 }
 
 export default function SpineCharacterPreview({
   outfit,
   highlightSocket,
   size = "medium",
+  transparent = false,
 }: SpineCharacterPreviewProps) {
   const { colors, spacing, borderRadius, typography } = useTheme();
   const rafRef = useRef<number>(0);
@@ -692,12 +696,12 @@ export default function SpineCharacterPreview({
       style={{
         width: config.width,
         height: config.height,
-        backgroundColor: colors.background.secondary,
-        borderRadius: borderRadius.lg,
+        backgroundColor: transparent ? "transparent" : colors.background.secondary,
+        borderRadius: transparent ? 0 : borderRadius.lg,
         position: "relative",
         justifyContent: "center",
         alignItems: "center",
-        borderWidth: 2,
+        borderWidth: transparent ? 0 : 2,
         borderColor: colors.gray[200],
         overflow: "hidden",
       }}
@@ -708,18 +712,20 @@ export default function SpineCharacterPreview({
       />
 
       {/* Animation indicator */}
-      <View
-        style={{
-          position: "absolute",
-          bottom: spacing.xs,
-          right: spacing.xs,
-          width: 6,
-          height: 6,
-          backgroundColor: colors.health[500],
-          borderRadius: 3,
-          opacity: 0.8,
-        }}
-      />
+      {!transparent && (
+        <View
+          style={{
+            position: "absolute",
+            bottom: spacing.xs,
+            right: spacing.xs,
+            width: 6,
+            height: 6,
+            backgroundColor: colors.health[500],
+            borderRadius: 3,
+            opacity: 0.8,
+          }}
+        />
+      )}
 
       {/* Highlight indicator */}
       {highlightSocket && (
@@ -749,6 +755,7 @@ export default function SpineCharacterPreview({
       )}
 
       {/* Spine indicator */}
+      {!transparent && (
       <View
         style={{
           position: "absolute",
@@ -770,6 +777,7 @@ export default function SpineCharacterPreview({
           SPINE
         </Text>
       </View>
+      )}
     </View>
   );
 }

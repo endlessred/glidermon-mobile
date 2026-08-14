@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" fill="none">
+  <title>Thin Handmade Ink Border</title>
+  <desc>Thin dark hand-drawn irregular rounded rectangle border on transparent background.</desc>
+  <path d="M110 160
+           C175 100, 310 92, 505 98
+           C700 104, 845 108, 895 155
+           C935 210, 944 345, 935 510
+           C926 690, 921 820, 880 875
+           C820 925, 690 928, 500 918
+           C330 910, 180 916, 120 872
+           C80 816, 74 690, 78 505
+           C82 328, 84 215, 110 160 Z"
+        stroke="#4A312C" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 700">
+  <title>Icon Badge Tab</title>
+  <desc>Rounded square icon badge tab with felt fill and stitched border.</desc>
+  <path d="M130 146
+           C190 106, 515 104, 575 143
+           C614 203, 617 500, 578 560
+           C519 599, 191 600, 132 561
+           C92 502, 92 204, 130 146 Z"
+        fill="#95C689" stroke="#4A312C" stroke-width="18" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M165 175
+           C215 143, 488 143, 539 175
+           C572 226, 572 480, 539 531
+           C489 563, 216 564, 166 532
+           C134 482, 133 226, 165 175 Z"
+        fill="none" stroke="#F5E6CC" stroke-width="12" stroke-linecap="round" stroke-dasharray="16 20"/>
+</svg>

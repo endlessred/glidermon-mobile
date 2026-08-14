@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 700">
+  <title>Hanging Label Tab</title>
+  <desc>Hanging wood label tab with two rope holes, useful for section titles.</desc>
+  <path d="M127 171
+           C252 143, 746 143, 873 171
+           C900 265, 901 429, 875 526
+           C749 554, 252 554, 126 526
+           C101 429, 101 265, 127 171 Z"
+        fill="#B78354" stroke="#5A3C2B" stroke-width="20" stroke-linejoin="round"/>
+  <path d="M151 196
+           C261 176, 739 176, 849 196
+           C869 275, 869 420, 849 500
+           C739 520, 261 520, 151 500
+           C131 420, 131 275, 151 196 Z"
+        fill="#D6A371" opacity="0.6"/>
+  <circle cx="262" cy="178" r="21" fill="#F6E5C8" stroke="#5A3C2B" stroke-width="12"/>
+  <circle cx="738" cy="178" r="21" fill="#F6E5C8" stroke="#5A3C2B" stroke-width="12"/>
+  <path d="M262 28 C262 81, 262 110, 262 157" stroke="#CFAE82" stroke-width="10" stroke-linecap="round"/>
+  <path d="M738 28 C738 81, 738 110, 738 157" stroke="#CFAE82" stroke-width="10" stroke-linecap="round"/>
+</svg>

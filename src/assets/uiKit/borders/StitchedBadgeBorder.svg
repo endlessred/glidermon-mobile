@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" fill="none">
+  <title>Circular Stitched Badge Border</title>
+  <desc>Circular badge border with hand-drawn outer ring and cream stitches.</desc>
+  <circle cx="500" cy="500" r="398" stroke="#4A312C" stroke-width="22"/>
+  <circle cx="500" cy="500" r="352" stroke="#B4947A" stroke-width="18" opacity="0.28"/>
+  <circle cx="500" cy="500" r="352" stroke="#F5E6CC" stroke-width="12" stroke-linecap="round" stroke-dasharray="16 24"/>
+</svg>

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" fill="none">
+  <title>Thick Yarn Stitch Border</title>
+  <desc>Chunky yarn-like stitch border following an irregular rounded rectangle path.</desc>
+  <path d="M145 200
+           C205 145, 328 140, 505 143
+           C678 145, 800 154, 847 196
+           C882 240, 890 356, 882 508
+           C875 665, 873 780, 838 826
+           C790 867, 668 880, 503 873
+           C345 867, 225 871, 172 835
+           C136 790, 126 672, 130 510
+           C133 354, 136 246, 145 200 Z"
+        stroke="#A17D68" stroke-width="24" opacity="0.25" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M145 200
+           C205 145, 328 140, 505 143
+           C678 145, 800 154, 847 196
+           C882 240, 890 356, 882 508
+           C875 665, 873 780, 838 826
+           C790 867, 668 880, 503 873
+           C345 867, 225 871, 172 835
+           C136 790, 126 672, 130 510
+           C133 354, 136 246, 145 200 Z"
+        stroke="#F1DFC1" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"
+        stroke-dasharray="26 28"/>
+</svg>

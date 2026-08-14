@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 700">
+  <title>Corner Ribbon Tab</title>
+  <desc>Paper tab with a small decorative corner ribbon accent.</desc>
+  <path d="M110 165
+           C178 105, 312 98, 508 103
+           C702 109, 835 116, 889 163
+           C926 218, 928 348, 920 511
+           C913 677, 909 797, 871 849
+           C818 892, 687 900, 502 892
+           C328 885, 187 893, 127 852
+           C88 798, 82 680, 86 507
+           C90 333, 92 219, 110 165 Z"
+        fill="#F8EEDC" stroke="#4A312C" stroke-width="20" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M744 97 L912 97 L912 251 Z" fill="#F29AA8" stroke="#4A312C" stroke-width="16" stroke-linejoin="round"/>
+  <path d="M770 108 L901 108 L901 220 Z" fill="#F6B2BE" opacity="0.55"/>
+</svg>

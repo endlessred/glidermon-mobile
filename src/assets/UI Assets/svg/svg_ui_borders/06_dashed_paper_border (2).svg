@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" fill="none">
+  <title>Dashed Paper Border</title>
+  <desc>Handmade dashed border for paper panels.</desc>
+  <path d="M145 195
+           C205 145, 328 141, 505 145
+           C676 149, 799 156, 847 194
+           C881 238, 889 355, 881 509
+           C873 661, 871 776, 837 822
+           C789 863, 668 876, 503 869
+           C346 862, 226 868, 172 832
+           C137 790, 127 674, 131 510
+           C134 356, 137 247, 145 195 Z"
+        stroke="#7C5A4A" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"
+        stroke-dasharray="20 18"/>
+</svg>
