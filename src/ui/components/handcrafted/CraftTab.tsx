@@ -1,11 +1,12 @@
 // components/handcrafted/CraftTab.tsx
 import React from "react";
-import { Pressable, Text, StyleSheet, ViewStyle, StyleProp } from "react-native";
-import { INK, CREAM, FELT_GREEN, FELT_GREEN_DARK, INK_MUTED, KRAFT_TAN } from "./tokens";
+import { Pressable, Text, Image, ImageSourcePropType, StyleSheet, ViewStyle, StyleProp } from "react-native";
+import { INK, CREAM, CREAM_LIGHT, FELT_GREEN, INK_MUTED, KRAFT_TAN } from "./tokens";
 
 type CraftTabProps = {
   label: string;
-  icon?: string;
+  /** An emoji/symbol string, or a require()'d PNG icon. */
+  icon?: string | ImageSourcePropType;
   selected?: boolean;
   disabled?: boolean;
   onPress?: () => void;
@@ -17,9 +18,9 @@ type CraftTabProps = {
   shape?: "pill" | "flushTop";
 };
 
-// Category tab (Hats / Face / Clothes / Skin row): cream paper base with an
-// ink outline, tinted felt-green when selected. Native styling (not a
-// stretched SVG) so it never warps.
+// Category tab (Hats / Hair / Shoes / Clothes / Skin row): cream paper base
+// with an ink outline, tinted felt-green when selected. Native styling (not
+// a stretched SVG) so it never warps.
 export default function CraftTab({ label, icon, selected, disabled, onPress, style, shape = "pill" }: CraftTabProps) {
   return (
     <Pressable
@@ -30,10 +31,17 @@ export default function CraftTab({ label, icon, selected, disabled, onPress, sty
         styles.wrap,
         shape === "flushTop" ? styles.flushTop : styles.pill,
         selected ? styles.selected : disabled ? styles.disabled : styles.idle,
+        selected && shape === "flushTop" && styles.selectedLift,
         style,
       ]}
     >
-      {icon ? <Text style={styles.icon}>{icon}</Text> : null}
+      {icon ? (
+        typeof icon === "string" ? (
+          <Text style={[styles.icon, selected && styles.iconSelected]}>{icon}</Text>
+        ) : (
+          <Image source={icon} style={[styles.iconImage, selected && styles.iconImageSelected]} resizeMode="contain" />
+        )
+      ) : null}
       <Text
         numberOfLines={1}
         style={[styles.label, selected && styles.labelSelected, disabled && !selected && styles.labelDisabled]}
@@ -50,8 +58,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    paddingHorizontal: 14,
+    gap: 4,
+    paddingHorizontal: 8,
     paddingVertical: 10,
     borderWidth: 2.5,
     borderColor: INK,
@@ -71,21 +79,44 @@ const styles = StyleSheet.create({
   },
   selected: {
     backgroundColor: FELT_GREEN,
+    borderWidth: 3,
+  },
+  // Selected tab sits a touch taller than its neighbors, like a real folder
+  // tab popped forward, plus a soft lift shadow for depth.
+  selectedLift: {
+    marginTop: -5,
+    paddingBottom: 13,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 3,
+    elevation: 3,
   },
   disabled: {
     backgroundColor: KRAFT_TAN,
     opacity: 0.6,
   },
   icon: {
-    fontSize: 15,
+    fontSize: 14,
+  },
+  iconSelected: {
+    fontSize: 16,
+  },
+  iconImage: {
+    width: 22,
+    height: 22,
+  },
+  iconImageSelected: {
+    width: 26,
+    height: 26,
   },
   label: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "700",
     color: INK,
   },
   labelSelected: {
-    color: FELT_GREEN_DARK,
+    color: CREAM_LIGHT,
   },
   labelDisabled: {
     color: INK_MUTED,

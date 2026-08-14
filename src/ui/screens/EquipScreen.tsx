@@ -1,6 +1,6 @@
 // ui/screens/EquipScreen.tsx
 import React, { useMemo, useState } from "react";
-import { View, Text, StyleSheet, FlatList, Image } from "react-native";
+import { View, Text, StyleSheet, FlatList, Image, ImageSourcePropType } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../../data/hooks/useTheme";
 import { useCosmeticsStore, CosmeticItem } from "../../data/stores/cosmeticsStore";
@@ -16,23 +16,36 @@ const kraftPaper = require("../../assets/UI Assets/Textures/KraftPaper.png");
 const thumbtack = require("../../assets/UI Assets/Decorations/ThumbtackGreen.png");
 const leafAccent = require("../../assets/UI Assets/Decorations/LeafWithBuds.png");
 
+const hatIcon = require("../../assets/UI Assets/Icons/hat_icon.png");
+const hairIcon = require("../../assets/UI Assets/Icons/hair_icon.png");
+const shoeIcon = require("../../assets/UI Assets/Icons/shoe_icon.png");
+const outfitIcon = require("../../assets/UI Assets/Icons/outfit_icon.png");
+const skinIcon = require("../../assets/UI Assets/Icons/skin_icon.png");
+
 // The catalog thumbnails already render on transparent backgrounds -- strip
 // CosmeticThumbnail's own card chrome so they sit directly on ours instead
 // of floating in a second nested box.
 const transparentThumb = { backgroundColor: "transparent", borderWidth: 0 } as const;
 
-type CategoryId = "hats" | "face" | "clothes" | "skin";
+// Hair doesn't have a color picker in this screen yet -- equip with a fixed
+// default color (matching OutfitEditor's own default) rather than build a
+// second-step color UI for now.
+const DEFAULT_HAIR_RECOLOR = { r: "#f5deb3", g: "#fff8dc", b: "#daa520", a: "#ffff00" };
 
-const CATEGORIES: { id: CategoryId; label: string; icon: string }[] = [
-  { id: "hats", label: "Hats", icon: "🎩" },
-  { id: "face", label: "Face", icon: "👓" },
-  { id: "clothes", label: "Clothes", icon: "👕" },
-  { id: "skin", label: "Skin", icon: "🎨" },
+type CategoryId = "hats" | "hair" | "shoes" | "clothes" | "skin";
+
+const CATEGORIES: { id: CategoryId; label: string; icon: ImageSourcePropType }[] = [
+  { id: "hats", label: "Hats", icon: hatIcon },
+  { id: "hair", label: "Hair", icon: hairIcon },
+  { id: "shoes", label: "Shoes", icon: shoeIcon },
+  { id: "clothes", label: "Clothes", icon: outfitIcon },
+  { id: "skin", label: "Skin", icon: skinIcon },
 ];
 
 const EMPTY_MESSAGE: Record<CategoryId, string> = {
   hats: "No hats owned yet. Visit the Shop to find some!",
-  face: "Face slot is coming soon.",
+  hair: "No hair styles owned yet. Visit the Shop to find some!",
+  shoes: "No shoes owned yet. Visit the Shop to find some!",
   clothes: "No clothes owned yet. Visit the Shop to find some!",
   skin: "No skins owned yet. Visit the Shop to find some!",
 };
@@ -48,21 +61,34 @@ export default function EquipScreen() {
 
   const activeOutfit = useActiveLocalOutfit();
   const equipCosmetic = useOutfitStore(s => s.equipCosmetic);
+  const equipSpineCosmetic = useOutfitStore(s => s.equipSpineCosmetic);
   const unequipCosmetic = useOutfitStore(s => s.unequipCosmetic);
 
   const acorns = useProgressionStore(s => s.acorns);
   const addToast = useToastStore(s => s.addToast);
 
   const hats = useMemo(() => catalog.filter(c => c.socket === "headTop" && owned[c.id]), [catalog, owned]);
+  const hairs = useMemo(() => catalog.filter(c => c.socket === "hair" && owned[c.id]), [catalog, owned]);
+  const shoes = useMemo(() => catalog.filter(c => c.socket === "shoes" && owned[c.id]), [catalog, owned]);
   const clothes = useMemo(() => catalog.filter(c => c.socket === "jacket" && owned[c.id]), [catalog, owned]);
   const skins = useMemo(() => catalog.filter(c => c.socket === "skin" && owned[c.id]), [catalog, owned]);
 
-  const items: CosmeticItem[] = category === "hats" ? hats : category === "clothes" ? clothes : category === "skin" ? skins : [];
+  const items: CosmeticItem[] =
+    category === "hats"
+      ? hats
+      : category === "hair"
+      ? hairs
+      : category === "shoes"
+      ? shoes
+      : category === "clothes"
+      ? clothes
+      : skins;
 
   const categoryTotals: Record<CategoryId, number> = useMemo(
     () => ({
       hats: catalog.filter(c => c.socket === "headTop").length,
-      face: 0,
+      hair: catalog.filter(c => c.socket === "hair").length,
+      shoes: catalog.filter(c => c.socket === "shoes").length,
       clothes: catalog.filter(c => c.socket === "jacket").length,
       skin: catalog.filter(c => c.socket === "skin").length,
     }),
@@ -75,16 +101,33 @@ export default function EquipScreen() {
   // sync for Shop/HUD screens that still read the global slot, while
   // outfitStore is what actually drives what the character renders here.
   const equippedHatId = activeOutfit?.cosmetics?.headTop?.itemId;
+  const equippedHairId = activeOutfit?.cosmetics?.hair?.itemId;
+  const equippedShoeId = activeOutfit?.cosmetics?.shoes?.itemId;
   const equippedJacketId = activeOutfit?.cosmetics?.jacket?.itemId;
   const equippedSkinId = activeOutfit?.cosmetics?.skin?.itemId;
 
   const equippedIdForCategory = (cat: CategoryId) =>
-    cat === "hats" ? equippedHatId : cat === "clothes" ? equippedJacketId : cat === "skin" ? equippedSkinId : undefined;
+    cat === "hats"
+      ? equippedHatId
+      : cat === "hair"
+      ? equippedHairId
+      : cat === "shoes"
+      ? equippedShoeId
+      : cat === "clothes"
+      ? equippedJacketId
+      : equippedSkinId;
 
   const handleEquip = (item: CosmeticItem) => {
     if (category === "hats" && activeOutfit) {
       equipHat(item.id);
       equipCosmetic(activeOutfit.id, "headTop", item.id);
+    } else if (category === "hair" && activeOutfit) {
+      equipSpineCosmetic(activeOutfit.id, "hair", item.id, {
+        skinName: "default",
+        maskRecolor: DEFAULT_HAIR_RECOLOR,
+      });
+    } else if (category === "shoes" && activeOutfit) {
+      equipCosmetic(activeOutfit.id, "shoes", item.id);
     } else if (category === "clothes" && activeOutfit) {
       equipCosmetic(activeOutfit.id, "jacket", item.id);
     } else if (category === "skin" && activeOutfit) {
@@ -98,6 +141,8 @@ export default function EquipScreen() {
       unequipHat();
       unequipCosmetic(activeOutfit.id, "headTop");
     }
+    else if (category === "hair" && activeOutfit) unequipCosmetic(activeOutfit.id, "hair");
+    else if (category === "shoes" && activeOutfit) unequipCosmetic(activeOutfit.id, "shoes");
     else if (category === "clothes" && activeOutfit) unequipCosmetic(activeOutfit.id, "jacket");
     else if (category === "skin" && activeOutfit) unequipCosmetic(activeOutfit.id, "skin");
   };
@@ -123,13 +168,17 @@ export default function EquipScreen() {
             {equippedHatId ? (
               <CosmeticThumbnail itemId={equippedHatId} socket="headTop" size={32} style={transparentThumb} />
             ) : (
-              <Text style={styles.slotPlaceholder}>🎩</Text>
+              <Image source={hatIcon} style={styles.slotPlaceholderIcon} resizeMode="contain" />
             )}
           </EquipSlotBadge>
         </View>
         <View style={[styles.badgeSlot, styles.badgeTR]}>
-          <EquipSlotBadge label="Face" filled={false} onPress={() => setCategory("face")} size={56}>
-            <Text style={styles.slotPlaceholder}>👓</Text>
+          <EquipSlotBadge label="Shoes" filled={!!equippedShoeId} onPress={() => setCategory("shoes")} size={56}>
+            {equippedShoeId ? (
+              <CosmeticThumbnail itemId={equippedShoeId} socket="shoes" size={32} style={transparentThumb} />
+            ) : (
+              <Image source={shoeIcon} style={styles.slotPlaceholderIcon} resizeMode="contain" />
+            )}
           </EquipSlotBadge>
         </View>
         <View style={[styles.badgeSlot, styles.badgeBL]}>
@@ -137,7 +186,7 @@ export default function EquipScreen() {
             {equippedJacketId ? (
               <CosmeticThumbnail itemId={equippedJacketId} socket="jacket" size={32} style={transparentThumb} />
             ) : (
-              <Text style={styles.slotPlaceholder}>👕</Text>
+              <Image source={outfitIcon} style={styles.slotPlaceholderIcon} resizeMode="contain" />
             )}
           </EquipSlotBadge>
         </View>
@@ -146,7 +195,7 @@ export default function EquipScreen() {
             {equippedSkinId ? (
               <CosmeticThumbnail itemId={equippedSkinId} socket="skin" size={32} style={transparentThumb} />
             ) : (
-              <Text style={styles.slotPlaceholder}>🎨</Text>
+              <Image source={skinIcon} style={styles.slotPlaceholderIcon} resizeMode="contain" />
             )}
           </EquipSlotBadge>
         </View>
@@ -180,7 +229,6 @@ export default function EquipScreen() {
             icon={cat.icon}
             shape="flushTop"
             selected={category === cat.id}
-            disabled={cat.id === "face"}
             onPress={() => setCategory(cat.id)}
             style={styles.tab}
           />
@@ -226,11 +274,9 @@ export default function EquipScreen() {
           )}
         </View>
 
-        {category !== "face" && (
-          <Text style={styles.ownedCounter}>
-            Owned: {items.length} / {categoryTotals[category]}
-          </Text>
-        )}
+        <Text style={styles.ownedCounter}>
+          Owned: {items.length} / {categoryTotals[category]}
+        </Text>
       </PaperPanel>
 
       {/* Footer */}
@@ -290,8 +336,9 @@ const styles = StyleSheet.create({
   badgeTR: { top: 22, right: 10 },
   badgeBL: { bottom: 24, left: 10 },
   badgeBR: { bottom: 24, right: 10 },
-  slotPlaceholder: {
-    fontSize: 18,
+  slotPlaceholderIcon: {
+    width: 28,
+    height: 28,
     opacity: 0.4,
   },
   characterWrap: {
@@ -328,7 +375,7 @@ const styles = StyleSheet.create({
   },
   tabRow: {
     flexDirection: "row",
-    gap: 8,
+    gap: 5,
     marginTop: 10,
     zIndex: 2,
   },

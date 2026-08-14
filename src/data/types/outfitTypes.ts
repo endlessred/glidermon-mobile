@@ -17,7 +17,13 @@ export type UserCosmeticCustomization = {
 // Spine-specific cosmetic data
 export type SpineCosmeticData = {
   skinName: string;                       // Spine skin name (e.g., "Hats/Baseball Caps/Blue Baseball Cap")
-  renderType: "spine";                    // Indicates this uses Spine rendering
+  renderType?: "spine";                   // Indicates this uses Spine rendering
+  maskRecolor?: {                         // Shader-based recolor (used by hair, jackets, skins)
+    r?: string;
+    g?: string;
+    b?: string;
+    a?: string;
+  };
   animationOverrides?: {                  // Optional animation overrides for this cosmetic
     idle?: string;
     walk?: string;
