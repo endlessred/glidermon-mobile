@@ -1,20 +1,30 @@
 // ui/screens/EquipScreen.tsx
 import React, { useMemo, useState } from "react";
-import { View, Text, StyleSheet, FlatList, Image, ImageSourcePropType } from "react-native";
+import { View, Text, StyleSheet, Image, ImageSourcePropType } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../../data/hooks/useTheme";
 import { useCosmeticsStore, CosmeticItem } from "../../data/stores/cosmeticsStore";
 import { useOutfitStore, useActiveLocalOutfit } from "../../data/stores/outfitStore";
 import { useProgressionStore } from "../../data/stores/progressionStore";
 import { useToastStore } from "../../data/stores/toastStore";
+import type { CosmeticSocket } from "../../data/types/outfitTypes";
 import CosmeticThumbnail from "../components/CosmeticThumbnail";
 import SpineCharacterPreview from "../components/SpineCharacterPreview";
-import AcornBadge from "../components/AcornBadge";
-import { PaperPanel, CraftTab, EquipSlotBadge, ItemCard } from "../components/handcrafted";
-
-const kraftPaper = require("../../assets/UI Assets/Textures/KraftPaper.png");
-const thumbtack = require("../../assets/UI Assets/Decorations/ThumbtackGreen.png");
-const leafAccent = require("../../assets/UI Assets/Decorations/LeafWithBuds.png");
+import {
+  CraftPanel,
+  CraftTab,
+  CategoryTabRow,
+  CosmeticInventorySection,
+  CorkInventoryPanel,
+  InventoryHeader,
+  CosmeticGrid,
+  EquipSlotBadge,
+  EquipSlotState,
+  CosmeticCard,
+  ContactShadow,
+  CurrencyChip,
+  INK,
+} from "../components/handcrafted";
 
 const hatIcon = require("../../assets/UI Assets/Icons/hat_icon.png");
 const hairIcon = require("../../assets/UI Assets/Icons/hair_icon.png");
@@ -32,13 +42,21 @@ const transparentThumb = { backgroundColor: "transparent", borderWidth: 0 } as c
 // second-step color UI for now.
 const DEFAULT_HAIR_RECOLOR = { r: "#f5deb3", g: "#fff8dc", b: "#daa520", a: "#ffff00" };
 
-type CategoryId = "hats" | "hair" | "shoes" | "clothes" | "skin";
+type CategoryId = "hats" | "hair" | "shoes" | "outfit" | "skin";
+
+const SOCKET_FOR_CATEGORY: Record<CategoryId, CosmeticSocket> = {
+  hats: "headTop",
+  hair: "hair",
+  shoes: "shoes",
+  outfit: "jacket",
+  skin: "skin",
+};
 
 const CATEGORIES: { id: CategoryId; label: string; icon: ImageSourcePropType }[] = [
   { id: "hats", label: "Hats", icon: hatIcon },
   { id: "hair", label: "Hair", icon: hairIcon },
   { id: "shoes", label: "Shoes", icon: shoeIcon },
-  { id: "clothes", label: "Clothes", icon: outfitIcon },
+  { id: "outfit", label: "Outfit", icon: outfitIcon },
   { id: "skin", label: "Skin", icon: skinIcon },
 ];
 
@@ -46,13 +64,18 @@ const EMPTY_MESSAGE: Record<CategoryId, string> = {
   hats: "No hats owned yet. Visit the Shop to find some!",
   hair: "No hair styles owned yet. Visit the Shop to find some!",
   shoes: "No shoes owned yet. Visit the Shop to find some!",
-  clothes: "No clothes owned yet. Visit the Shop to find some!",
+  outfit: "No outfits owned yet. Visit the Shop to find some!",
   skin: "No skins owned yet. Visit the Shop to find some!",
 };
 
 export default function EquipScreen() {
   const { spacing } = useTheme();
   const [category, setCategory] = useState<CategoryId>("hats");
+  // Tapping a cosmetic previews it (on the character + as a gold "selected"
+  // card) without touching real equip state. Equip state only changes when
+  // the user confirms via the Equip button -- kept as a separate id so
+  // "previewing" and "actually worn" can never be confused with each other.
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const catalog = useCosmeticsStore(s => s.catalog);
   const owned = useCosmeticsStore(s => s.owned);
@@ -70,7 +93,7 @@ export default function EquipScreen() {
   const hats = useMemo(() => catalog.filter(c => c.socket === "headTop" && owned[c.id]), [catalog, owned]);
   const hairs = useMemo(() => catalog.filter(c => c.socket === "hair" && owned[c.id]), [catalog, owned]);
   const shoes = useMemo(() => catalog.filter(c => c.socket === "shoes" && owned[c.id]), [catalog, owned]);
-  const clothes = useMemo(() => catalog.filter(c => c.socket === "jacket" && owned[c.id]), [catalog, owned]);
+  const outfits = useMemo(() => catalog.filter(c => c.socket === "jacket" && owned[c.id]), [catalog, owned]);
   const skins = useMemo(() => catalog.filter(c => c.socket === "skin" && owned[c.id]), [catalog, owned]);
 
   const items: CosmeticItem[] =
@@ -80,8 +103,8 @@ export default function EquipScreen() {
       ? hairs
       : category === "shoes"
       ? shoes
-      : category === "clothes"
-      ? clothes
+      : category === "outfit"
+      ? outfits
       : skins;
 
   const categoryTotals: Record<CategoryId, number> = useMemo(
@@ -89,7 +112,7 @@ export default function EquipScreen() {
       hats: catalog.filter(c => c.socket === "headTop").length,
       hair: catalog.filter(c => c.socket === "hair").length,
       shoes: catalog.filter(c => c.socket === "shoes").length,
-      clothes: catalog.filter(c => c.socket === "jacket").length,
+      outfit: catalog.filter(c => c.socket === "jacket").length,
       skin: catalog.filter(c => c.socket === "skin").length,
     }),
     [catalog]
@@ -103,7 +126,7 @@ export default function EquipScreen() {
   const equippedHatId = activeOutfit?.cosmetics?.headTop?.itemId;
   const equippedHairId = activeOutfit?.cosmetics?.hair?.itemId;
   const equippedShoeId = activeOutfit?.cosmetics?.shoes?.itemId;
-  const equippedJacketId = activeOutfit?.cosmetics?.jacket?.itemId;
+  const equippedOutfitId = activeOutfit?.cosmetics?.jacket?.itemId;
   const equippedSkinId = activeOutfit?.cosmetics?.skin?.itemId;
 
   const equippedIdForCategory = (cat: CategoryId) =>
@@ -113,87 +136,128 @@ export default function EquipScreen() {
       ? equippedHairId
       : cat === "shoes"
       ? equippedShoeId
-      : cat === "clothes"
-      ? equippedJacketId
+      : cat === "outfit"
+      ? equippedOutfitId
       : equippedSkinId;
 
-  const handleEquip = (item: CosmeticItem) => {
-    if (category === "hats" && activeOutfit) {
-      equipHat(item.id);
-      equipCosmetic(activeOutfit.id, "headTop", item.id);
-    } else if (category === "hair" && activeOutfit) {
-      equipSpineCosmetic(activeOutfit.id, "hair", item.id, {
+  const currentEquippedId = equippedIdForCategory(category);
+  const activeCategory = CATEGORIES.find(c => c.id === category)!;
+
+  // While something's selected (previewing, not yet equipped), show it on
+  // the character by feeding SpineCharacterPreview a locally-patched copy
+  // of the outfit -- the real outfitStore state is untouched until Equip.
+  const previewOutfit = useMemo(() => {
+    if (!activeOutfit || !selectedId) return activeOutfit;
+    const socket = SOCKET_FOR_CATEGORY[category];
+    const entry =
+      category === "hair"
+        ? { itemId: selectedId, spineData: { skinName: "default", maskRecolor: DEFAULT_HAIR_RECOLOR } }
+        : { itemId: selectedId };
+    return { ...activeOutfit, cosmetics: { ...activeOutfit.cosmetics, [socket]: entry } };
+  }, [activeOutfit, selectedId, category]);
+
+  const goToCategory = (cat: CategoryId) => {
+    setCategory(cat);
+    setSelectedId(null);
+  };
+
+  const handleSelectCard = (item: CosmeticItem) => {
+    if (item.id === currentEquippedId) return;
+    setSelectedId(prev => (prev === item.id ? null : item.id));
+  };
+
+  const commitEquip = (itemId: string, name: string) => {
+    if (!activeOutfit) return;
+    if (category === "hats") {
+      equipHat(itemId);
+      equipCosmetic(activeOutfit.id, "headTop", itemId);
+    } else if (category === "hair") {
+      equipSpineCosmetic(activeOutfit.id, "hair", itemId, {
         skinName: "default",
         maskRecolor: DEFAULT_HAIR_RECOLOR,
       });
-    } else if (category === "shoes" && activeOutfit) {
-      equipCosmetic(activeOutfit.id, "shoes", item.id);
-    } else if (category === "clothes" && activeOutfit) {
-      equipCosmetic(activeOutfit.id, "jacket", item.id);
-    } else if (category === "skin" && activeOutfit) {
-      equipCosmetic(activeOutfit.id, "skin", item.id);
+    } else if (category === "shoes") {
+      equipCosmetic(activeOutfit.id, "shoes", itemId);
+    } else if (category === "outfit") {
+      equipCosmetic(activeOutfit.id, "jacket", itemId);
+    } else if (category === "skin") {
+      equipCosmetic(activeOutfit.id, "skin", itemId);
     }
-    addToast(`Equipped ${item.name}`);
+    addToast(`Equipped ${name}`);
   };
 
-  const handleRemove = () => {
-    if (category === "hats" && activeOutfit) {
+  const handleConfirmEquip = () => {
+    if (!selectedId) return;
+    const item = items.find(i => i.id === selectedId);
+    commitEquip(selectedId, item?.name ?? "item");
+    setSelectedId(null);
+  };
+
+  const handleUnequip = () => {
+    if (!activeOutfit) return;
+    if (category === "hats") {
       unequipHat();
       unequipCosmetic(activeOutfit.id, "headTop");
-    }
-    else if (category === "hair" && activeOutfit) unequipCosmetic(activeOutfit.id, "hair");
-    else if (category === "shoes" && activeOutfit) unequipCosmetic(activeOutfit.id, "shoes");
-    else if (category === "clothes" && activeOutfit) unequipCosmetic(activeOutfit.id, "jacket");
-    else if (category === "skin" && activeOutfit) unequipCosmetic(activeOutfit.id, "skin");
+    } else if (category === "hair") unequipCosmetic(activeOutfit.id, "hair");
+    else if (category === "shoes") unequipCosmetic(activeOutfit.id, "shoes");
+    else if (category === "outfit") unequipCosmetic(activeOutfit.id, "jacket");
+    else if (category === "skin") unequipCosmetic(activeOutfit.id, "skin");
   };
 
-  const currentEquippedId = equippedIdForCategory(category);
+  const slotState = (cat: CategoryId, equippedId?: string): EquipSlotState =>
+    category === cat && selectedId ? "selected" : equippedId ? "equipped" : "empty";
 
   return (
     <SafeAreaView style={styles.root} edges={["top", "left", "right"]}>
       {/* Header */}
       <View style={[styles.header, { paddingHorizontal: spacing.lg }]}>
-        <PaperPanel texture="kraft" style={styles.titlePanel} contentStyle={styles.titlePanelContent} inset={8}>
+        <CraftPanel texture="kraft" shadow="card" style={styles.titlePanel} contentStyle={styles.titlePanelContent} inset={8}>
           <Text style={styles.title}>Glidermon Equip</Text>
-        </PaperPanel>
-        <AcornBadge count={acorns} />
+        </CraftPanel>
+        <CurrencyChip count={acorns} />
       </View>
 
-      {/* Character + equip slots */}
-      <PaperPanel texture="paper" style={[styles.previewPanel, { marginHorizontal: spacing.lg }]}>
-        <Image source={thumbtack} style={styles.tack} />
-
+      {/* Character + equip slots -- calm, uncluttered; Glidermon is the focus */}
+      <CraftPanel texture="paper" shadow="panel" style={[styles.previewPanel, { marginHorizontal: spacing.lg }]}>
         <View style={[styles.badgeSlot, styles.badgeTL]}>
-          <EquipSlotBadge label="Head" filled={!!equippedHatId} onPress={() => setCategory("hats")} size={56}>
-            {equippedHatId ? (
-              <CosmeticThumbnail itemId={equippedHatId} socket="headTop" size={32} style={transparentThumb} />
+          <EquipSlotBadge label="Head" state={slotState("hats", equippedHatId)} onPress={() => goToCategory("hats")} size={60}>
+            {category === "hats" && selectedId ? (
+              <CosmeticThumbnail itemId={selectedId} socket="headTop" size={46} style={transparentThumb} />
+            ) : equippedHatId ? (
+              <CosmeticThumbnail itemId={equippedHatId} socket="headTop" size={46} style={transparentThumb} />
             ) : (
               <Image source={hatIcon} style={styles.slotPlaceholderIcon} resizeMode="contain" />
             )}
           </EquipSlotBadge>
         </View>
         <View style={[styles.badgeSlot, styles.badgeTR]}>
-          <EquipSlotBadge label="Shoes" filled={!!equippedShoeId} onPress={() => setCategory("shoes")} size={56}>
-            {equippedShoeId ? (
-              <CosmeticThumbnail itemId={equippedShoeId} socket="shoes" size={32} style={transparentThumb} />
+          <EquipSlotBadge label="Shoes" state={slotState("shoes", equippedShoeId)} onPress={() => goToCategory("shoes")} size={60}>
+            {category === "shoes" && selectedId ? (
+              <CosmeticThumbnail itemId={selectedId} socket="shoes" size={46} style={transparentThumb} />
+            ) : equippedShoeId ? (
+              <CosmeticThumbnail itemId={equippedShoeId} socket="shoes" size={46} style={transparentThumb} />
             ) : (
               <Image source={shoeIcon} style={styles.slotPlaceholderIcon} resizeMode="contain" />
             )}
           </EquipSlotBadge>
         </View>
         <View style={[styles.badgeSlot, styles.badgeBL]}>
-          <EquipSlotBadge label="Clothes" filled={!!equippedJacketId} onPress={() => setCategory("clothes")} size={56}>
-            {equippedJacketId ? (
-              <CosmeticThumbnail itemId={equippedJacketId} socket="jacket" size={32} style={transparentThumb} />
+          <EquipSlotBadge label="Outfit" state={slotState("outfit", equippedOutfitId)} onPress={() => goToCategory("outfit")} size={60}>
+            {category === "outfit" && selectedId ? (
+              <CosmeticThumbnail itemId={selectedId} socket="jacket" size={46} style={transparentThumb} />
+            ) : equippedOutfitId ? (
+              <CosmeticThumbnail itemId={equippedOutfitId} socket="jacket" size={46} style={transparentThumb} />
             ) : (
               <Image source={outfitIcon} style={styles.slotPlaceholderIcon} resizeMode="contain" />
             )}
           </EquipSlotBadge>
         </View>
         <View style={[styles.badgeSlot, styles.badgeBR]}>
-          <EquipSlotBadge label="Skin" filled={!!equippedSkinId} onPress={() => setCategory("skin")} size={56}>
-            {equippedSkinId ? (
-              <CosmeticThumbnail itemId={equippedSkinId} socket="skin" size={32} style={transparentThumb} />
+          <EquipSlotBadge label="Skin" state={slotState("skin", equippedSkinId)} onPress={() => goToCategory("skin")} size={60}>
+            {category === "skin" && selectedId ? (
+              <CosmeticThumbnail itemId={selectedId} socket="skin" size={46} style={transparentThumb} />
+            ) : equippedSkinId ? (
+              <CosmeticThumbnail itemId={equippedSkinId} socket="skin" size={46} style={transparentThumb} />
             ) : (
               <Image source={skinIcon} style={styles.slotPlaceholderIcon} resizeMode="contain" />
             )}
@@ -208,83 +272,50 @@ export default function EquipScreen() {
                 visually instead of relying on its built-in size prop. */}
             <View style={styles.characterClip}>
               <View style={styles.characterScale}>
-                <SpineCharacterPreview outfit={activeOutfit} size="large" transparent />
+                <SpineCharacterPreview outfit={previewOutfit ?? activeOutfit} size="large" transparent />
               </View>
             </View>
+            <ContactShadow width={90} height={14} style={styles.contactShadow} />
           </View>
         ) : null}
+      </CraftPanel>
 
-        <View style={styles.hint}>
-          <Image source={leafAccent} style={styles.leafIcon} />
-          <Text style={styles.hintText}>Dress up your Glidermon and show off your style!</Text>
-        </View>
-      </PaperPanel>
-
-      {/* Category tabs, flush against the corkboard panel below */}
-      <View style={[styles.tabRow, { paddingHorizontal: spacing.lg }]}>
-        {CATEGORIES.map(cat => (
-          <CraftTab
-            key={cat.id}
-            label={cat.label}
-            icon={cat.icon}
-            shape="flushTop"
-            selected={category === cat.id}
-            onPress={() => setCategory(cat.id)}
-            style={styles.tab}
-          />
-        ))}
-      </View>
-
-      {/* Corkboard: item grid + owned counter */}
-      <PaperPanel
-        texture="cork"
-        stitched={false}
-        style={[styles.boardPanel, { marginHorizontal: spacing.lg, marginTop: -3 }]}
-        contentStyle={styles.boardPanelContent}
+      {/* Tabs + corkboard, welded into one continuous inventory object. */}
+      <CosmeticInventorySection
+        style={{ marginHorizontal: spacing.lg, marginTop: 10 }}
+        tabs={<CategoryTabRow categories={CATEGORIES} selectedId={category} onSelect={goToCategory} />}
       >
-        <View style={styles.gridWrap}>
-          {items.length === 0 ? (
-            <PaperPanel
-              texture="paper"
-              stitched={false}
-              style={styles.emptyPanel}
-              contentStyle={styles.emptyPanelContent}
-            >
-              <Text style={styles.emptyText}>{EMPTY_MESSAGE[category]}</Text>
-            </PaperPanel>
-          ) : (
-            <FlatList
-              data={items}
-              keyExtractor={item => item.id}
-              numColumns={4}
-              columnWrapperStyle={styles.gridRow}
-              contentContainerStyle={styles.gridContent}
-              renderItem={({ item }) => (
-                <View style={styles.gridCell}>
-                  <ItemCard
-                    name={item.name}
-                    equipped={currentEquippedId === item.id}
-                    onPress={() => handleEquip(item)}
-                  >
-                    <CosmeticThumbnail itemId={item.id} socket={item.socket} size={48} style={transparentThumb} />
-                  </ItemCard>
-                </View>
-              )}
-            />
-          )}
-        </View>
+        <CorkInventoryPanel style={styles.boardPanel} contentStyle={styles.boardPanelContent}>
+          <InventoryHeader label={activeCategory.label} owned={items.length} total={categoryTotals[category]} />
+          <CosmeticGrid
+            items={items}
+            keyExtractor={item => item.id}
+            emptyMessage={EMPTY_MESSAGE[category]}
+            renderItem={(item, index) => (
+              <CosmeticCard
+                name={item.name}
+                state={item.id === selectedId ? "selected" : item.id === currentEquippedId ? "equipped" : "default"}
+                rotationIndex={index}
+                onPress={() => handleSelectCard(item)}
+              >
+                <CosmeticThumbnail itemId={item.id} socket={item.socket} size={64} style={transparentThumb} />
+              </CosmeticCard>
+            )}
+          />
+        </CorkInventoryPanel>
+      </CosmeticInventorySection>
 
-        <Text style={styles.ownedCounter}>
-          Owned: {items.length} / {categoryTotals[category]}
-        </Text>
-      </PaperPanel>
-
-      {/* Footer */}
-      {currentEquippedId && (
+      {/* Footer: Equip confirms a pending selection; otherwise Unequip is
+          available for whatever's currently worn in this category. */}
+      {selectedId ? (
         <View style={[styles.footer, { paddingHorizontal: spacing.lg }]}>
-          <CraftTab label="Remove" icon="✕" onPress={handleRemove} style={styles.removeButton} />
+          <CraftTab label="Equip" icon="✓" onPress={handleConfirmEquip} style={styles.removeButton} />
         </View>
-      )}
+      ) : currentEquippedId ? (
+        <View style={[styles.footer, { paddingHorizontal: spacing.lg }]}>
+          <CraftTab label="Unequip" icon="✕" onPress={handleUnequip} style={styles.removeButton} />
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -312,30 +343,20 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: "800",
-    color: "#4A312C",
+    color: INK,
   },
   previewPanel: {
     marginTop: 8,
-    height: 220,
-  },
-  tack: {
-    position: "absolute",
-    top: 2,
-    left: "50%",
-    marginLeft: -11,
-    width: 22,
-    height: 22,
-    zIndex: 3,
-    resizeMode: "contain",
+    height: 320,
   },
   badgeSlot: {
     position: "absolute",
     zIndex: 2,
   },
-  badgeTL: { top: 22, left: 10 },
-  badgeTR: { top: 22, right: 10 },
-  badgeBL: { bottom: 24, left: 10 },
-  badgeBR: { bottom: 24, right: 10 },
+  badgeTL: { top: 10, left: 6 },
+  badgeTR: { top: 10, right: 6 },
+  badgeBL: { bottom: 10, left: 6 },
+  badgeBR: { bottom: 10, right: 6 },
   slotPlaceholderIcon: {
     width: 28,
     height: 28,
@@ -347,83 +368,29 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   characterClip: {
-    width: 116,
-    height: 145,
+    width: 208,
+    height: 260,
+    marginTop: -6,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
   },
   characterScale: {
-    transform: [{ scale: 0.58 }],
+    transform: [{ scale: 1.04 }],
   },
-  hint: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-  },
-  leafIcon: {
-    width: 16,
-    height: 16,
-    resizeMode: "contain",
-  },
-  hintText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#4A312C",
-    textAlign: "center",
-  },
-  tabRow: {
-    flexDirection: "row",
-    gap: 5,
-    marginTop: 10,
-    zIndex: 2,
-  },
-  tab: {
-    flex: 1,
+  contactShadow: {
+    marginTop: -76,
   },
   boardPanel: {
     flex: 1,
   },
   boardPanelContent: {
     flex: 1,
-  },
-  gridWrap: {
-    flex: 1,
-  },
-  gridContent: {
-    paddingBottom: 12,
-    gap: 10,
-  },
-  gridRow: {
-    gap: 10,
-  },
-  gridCell: {
-    flex: 1,
-  },
-  emptyPanel: {
-    height: 72,
-  },
-  emptyPanelContent: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  emptyText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#4A312C",
-    textAlign: "center",
-    fontStyle: "italic",
-  },
-  ownedCounter: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#4A312C",
-    textAlign: "center",
-    marginTop: 8,
+    paddingHorizontal: 22,
   },
   footer: {
-    paddingVertical: 8,
+    paddingTop: 2,
+    paddingBottom: 8,
   },
   removeButton: {
     alignSelf: "center",

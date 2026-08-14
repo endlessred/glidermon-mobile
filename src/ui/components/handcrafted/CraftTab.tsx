@@ -1,7 +1,7 @@
 // components/handcrafted/CraftTab.tsx
 import React from "react";
 import { Pressable, Text, Image, ImageSourcePropType, StyleSheet, ViewStyle, StyleProp } from "react-native";
-import { INK, CREAM, CREAM_LIGHT, FELT_GREEN, INK_MUTED, KRAFT_TAN } from "./tokens";
+import { INK, INK_MUTED, CREAM, CREAM_LIGHT, FELT_GREEN, KRAFT_TAN, SHADOW_CARD_RAISED } from "./tokens";
 
 type CraftTabProps = {
   label: string;
@@ -18,9 +18,11 @@ type CraftTabProps = {
   shape?: "pill" | "flushTop";
 };
 
-// Category tab (Hats / Hair / Shoes / Clothes / Skin row): cream paper base
+// Category tab (Hats / Hair / Shoes / Outfit / Skin row): cream paper base
 // with an ink outline, tinted felt-green when selected. Native styling (not
-// a stretched SVG) so it never warps.
+// a stretched SVG) so it never warps. The selected tab pops forward with a
+// shadow; idle tabs use a muted outline so they read as sitting slightly
+// behind/recessed into the panel below.
 export default function CraftTab({ label, icon, selected, disabled, onPress, style, shape = "pill" }: CraftTabProps) {
   return (
     <Pressable
@@ -54,15 +56,15 @@ export default function CraftTab({ label, icon, selected, disabled, onPress, sty
 
 const styles = StyleSheet.create({
   wrap: {
-    minHeight: 46,
+    minHeight: 54,
+    minWidth: 76,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 10,
-    borderWidth: 2.5,
-    borderColor: INK,
+    paddingHorizontal: 10,
+    paddingVertical: 12,
+    borderWidth: 2,
   },
   pill: {
     borderRadius: 999,
@@ -76,21 +78,20 @@ const styles = StyleSheet.create({
   },
   idle: {
     backgroundColor: CREAM,
+    borderColor: INK_MUTED,
+    opacity: 0.88,
   },
   selected: {
     backgroundColor: FELT_GREEN,
+    borderColor: INK,
     borderWidth: 3,
   },
   // Selected tab sits a touch taller than its neighbors, like a real folder
   // tab popped forward, plus a soft lift shadow for depth.
   selectedLift: {
-    marginTop: -5,
-    paddingBottom: 13,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.18,
-    shadowRadius: 3,
-    elevation: 3,
+    marginTop: -6,
+    paddingBottom: 15,
+    ...SHADOW_CARD_RAISED,
   },
   disabled: {
     backgroundColor: KRAFT_TAN,

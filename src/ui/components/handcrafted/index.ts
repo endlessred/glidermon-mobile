@@ -1,6 +1,18 @@
 // components/handcrafted/index.ts
-export { default as PaperPanel } from "./PaperPanel";
+export { default as CraftPanel } from "./CraftPanel";
 export { default as StitchedBorder } from "./StitchedBorder";
 export { default as CraftTab } from "./CraftTab";
+export { default as CosmeticCategoryTab } from "./CosmeticCategoryTab";
+export { default as CategoryTabRow } from "./CategoryTabRow";
+export { default as CorkInventoryPanel } from "./CorkInventoryPanel";
+export { default as CosmeticInventorySection } from "./CosmeticInventorySection";
+export { default as InventoryHeader } from "./InventoryHeader";
+export { default as CosmeticGrid } from "./CosmeticGrid";
 export { default as EquipSlotBadge } from "./EquipSlotBadge";
-export { default as ItemCard } from "./ItemCard";
+export type { EquipSlotState } from "./EquipSlotBadge";
+export { default as CosmeticCard } from "./CosmeticCard";
+export { default as CardBacking } from "./CardBacking";
+export { default as ContactShadow } from "./ContactShadow";
+export { default as CurrencyChip } from "./CurrencyChip";
+export { default as CheckBadge } from "./CheckBadge";
+export * from "./tokens";

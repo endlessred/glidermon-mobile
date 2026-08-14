@@ -2,9 +2,9 @@
 import React from "react";
 import { View, StyleSheet, ViewStyle, StyleProp } from "react-native";
 import CheckBadge from "./CheckBadge";
-import { INK, INK_MUTED, GOLD, WOBBLE_RADIUS_SM } from "./tokens";
+import { INK, INK_MUTED, GOLD, FELT_GREEN_DARK, WOBBLE_RADIUS_SM } from "./tokens";
 
-export type BorderVariant = "ink" | "dashed" | "yarn" | "equipped";
+export type BorderVariant = "ink" | "dashed" | "yarn" | "equipped" | "selected";
 
 type StitchedBorderProps = {
   variant?: BorderVariant;
@@ -15,9 +15,15 @@ type StitchedBorderProps = {
 // positioned parent alongside its real content. Uses native borders (not a
 // stretched SVG path) so it never warps regardless of the parent's aspect
 // ratio.
+//
+// "equipped" (green) means this is the thing currently worn -- used
+// consistently everywhere equip state shows, both the grid and the corner
+// slot badges. "selected" (gold) is a distinct, momentary pick state, kept
+// visually separate from "equipped" so a checkmark never means two things.
 export default function StitchedBorder({ variant = "ink", style }: StitchedBorderProps) {
   const isDashed = variant === "dashed";
   const isEquipped = variant === "equipped";
+  const isSelected = variant === "selected";
   const isYarn = variant === "yarn";
 
   return (
@@ -27,6 +33,7 @@ export default function StitchedBorder({ variant = "ink", style }: StitchedBorde
         styles.base,
         isDashed && styles.dashed,
         isYarn && styles.yarn,
+        isSelected && styles.selected,
         isEquipped && styles.equipped,
         style,
       ]}
@@ -52,9 +59,13 @@ const styles = StyleSheet.create({
     borderWidth: 4,
     borderColor: INK,
   },
-  equipped: {
+  selected: {
     borderWidth: 3,
     borderColor: GOLD,
+  },
+  equipped: {
+    borderWidth: 3,
+    borderColor: FELT_GREEN_DARK,
   },
   badge: {
     position: "absolute",
