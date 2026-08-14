@@ -1,10 +1,11 @@
 // App.tsx
 // import './src/spine/spinePhysicsShim'; // Temporarily removed to debug physics issues
 import React, { useState, useEffect } from "react";
-import { Platform, View, Text, Pressable, AppState, ScrollView, Linking } from "react-native";
+import { Platform, View, AppState, Linking, ImageSourcePropType } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { useProgressionStore } from "./src/data/stores/progressionStore";
 import { useUserStore } from "./src/data/stores/userStore";
+import { CraftBottomNav, CraftNavItem } from "./src/ui/components/handcrafted";
 import HomeScreen from "./src/ui/screens/HudScreen"; // HudScreen serves as HomeScreen
 // import DexcomEgvsScreen from "./src/ui/screens/DexcomEgvsScreen"; // Preserved for future Bluetooth device integration
 import GameCanvas from "./src/game/view/GameCanvas";
@@ -14,7 +15,6 @@ import SettingsScreen from "./src/ui/screens/SettingsScreen";
 import LeaderboardScreen from "./src/ui/screens/LeaderboardScreen";
 import GalleryScreen from "./src/ui/screens/GalleryScreen";
 import AcornHuntScreen from "./src/ui/screens/AcornHuntScreen";
-import ArcadeScreen from "./src/ui/screens/ArcadeScreen";
 import UpsAndDownsScreen from "./src/ui/screens/UpsAndDownsScreen";
 import OnboardingScreen from "./src/ui/screens/OnboardingScreen";
 import CosmeticThumbnailCapture from "./src/dev/CosmeticThumbnailCapture";
@@ -45,12 +45,46 @@ import { POSE_DEFINITIONS } from "./src/data/poses/poseDefinitions";
 import { useHealthKit } from "./src/data/hooks/useHealthKit";
 // import { migrateEquippedCosmeticsToOutfit, syncOutfitToCosmeticsStore } from "./src/data/utils/outfitMigration.ts";
 
-const TABS = ["HOME", "SHOP", "OUTFIT", "🎨 GALLERY", "🕹️ ARCADE", "SETTINGS"] as const;
+// Arcade is deprecated and deliberately excluded from TABS (not just hidden
+// in the nav) -- ArcadeScreen itself is left in place, just disconnected.
+// Settings stays a valid Tab (still reachable via setTab("SETTINGS") / the
+// glidermon://settings deep link below, and SettingsScreen still renders
+// off it) but is intentionally excluded from NAV_TABS -- see NAV_TABS.
+const TABS = ["HOME", "SHOP", "OUTFIT", "🎨 GALLERY", "SETTINGS"] as const;
 type Tab = typeof TABS[number];
+
+// The persistent bottom nav's four primary destinations. Settings has no
+// dedicated nav/UI entry point right now (product decision, 2026-08) --
+// deep-link-only until a proper location (e.g. a profile/menu entry) is
+// designed for it.
+const NAV_TABS = ["HOME", "SHOP", "OUTFIT", "🎨 GALLERY"] as const;
+type NavTab = typeof NAV_TABS[number];
+
+const homeNavIcon = require("./src/assets/UI Assets/Icons/Home.png");
+const shopNavIcon = require("./src/assets/UI Assets/Icons/Shop.png");
+
+// Display metadata for the crafted bottom nav -- kept separate from TABS
+// (which stays the single source of truth for routing/deep-link/state
+// values) so the nav shows clean title-case labels + icons without any of
+// that touching navigation logic. Home/Shop use the existing custom craft
+// icon set; Outfit/Gallery fall back to emoji since no custom icon exists
+// for them yet (Wardrobe.png bakes in its own green felt badge, which would
+// clash with the nav's blue/green color semantics).
+const NAV_ICONS: Record<NavTab, string | ImageSourcePropType> = {
+  HOME: homeNavIcon,
+  SHOP: shopNavIcon,
+  OUTFIT: "👕",
+  "🎨 GALLERY": "🎨",
+};
+const NAV_LABELS: Record<NavTab, string> = {
+  HOME: "Home",
+  SHOP: "Shop",
+  OUTFIT: "Outfit",
+  "🎨 GALLERY": "Gallery",
+};
 
 // Dev/test deep links, e.g.:
 //   adb shell am start -a android.intent.action.VIEW -d "glidermon://shop/floors"
-// Arcade is intentionally left unlinked.
 const DEEP_LINK_TABS: Record<string, Tab> = {
   home: "HOME",
   shop: "SHOP",
@@ -101,7 +135,7 @@ function parseGlidermonUrl(url: string): { tab: Tab; shopCategory?: ShopCategory
 
 export default function App() {
   // ---- theme ----
-  const { colors, spacing, borderRadius, typography } = useTheme();
+  const { colors } = useTheme();
 
   // Filter out noisy EXGL warnings
   useEffect(() => {
@@ -118,20 +152,6 @@ export default function App() {
       console.log = originalLog;
     };
   }, []);
-
-  // Cross-platform shadow styles for tabs
-  const getTabShadow = (isActive: boolean) => Platform.select({
-    web: {
-      boxShadow: isActive ? `0 1px 2px rgba(0, 0, 0, 0.1)` : `0 1px 2px rgba(0, 0, 0, 0.05)`,
-    },
-    default: {
-      shadowColor: colors.gray?.[900] || '#fafaf9',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: isActive ? 0.1 : 0.05,
-      shadowRadius: 2,
-      elevation: isActive ? 2 : 1,
-    },
-  });
 
   // ---- persistence → engine sync ----
   const rehydrated = useProgressionStore((s) => s._rehydrated);
@@ -321,51 +341,22 @@ export default function App() {
         {tab === "SHOP" && <ShopScreen key={shopLinkNonce} initialCategory={shopCategory} />}
         {tab === "OUTFIT" && <EquipScreen />}
         {tab === "🎨 GALLERY" && <GalleryScreen />}
-        {tab === "🕹️ ARCADE" && <ArcadeScreen />}
         {tab === "SETTINGS" && <SettingsScreen />}
       </View>
 
-      {/* bottom tabs */}
-      <View style={{
-        backgroundColor: colors.background.secondary,
-        borderTopWidth: 1,
-        borderTopColor: colors.gray[200],
-      }}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{
-            padding: spacing.md,
-            gap: spacing.sm,
-          }}
-        >
-          {TABS.map((t) => (
-            <Pressable
-              key={t}
-              onPress={() => setTab(t)}
-              style={{
-                paddingVertical: spacing.sm,
-                paddingHorizontal: spacing.md,
-                borderRadius: borderRadius.md,
-                backgroundColor: tab === t ? (colors.primary?.[500] || '#0ea5e9') : (colors.background?.card || '#ffffff'),
-                borderWidth: 1,
-                borderColor: tab === t ? (colors.primary?.[600] || '#0284c7') : (colors.gray?.[300] || '#d6d3d1'),
-                minWidth: 80,
-                ...getTabShadow(tab === t),
-              }}
-            >
-              <Text style={{
-                color: tab === t ? (colors.text?.inverse || '#ffffff') : (colors.text?.primary || '#1c1917'),
-                fontWeight: (typography.weight?.semibold || '600') as any,
-                fontSize: typography.size?.sm || 14,
-                textAlign: 'center',
-              }}>
-                {t}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-      </View>
+      {/* bottom nav: one continuous crafted shelf, matching the Home/Equip
+          handmade material system -- see src/ui/components/handcrafted/. */}
+      <CraftBottomNav>
+        {NAV_TABS.map((t) => (
+          <CraftNavItem
+            key={t}
+            icon={NAV_ICONS[t]}
+            label={NAV_LABELS[t]}
+            active={tab === t}
+            onPress={() => setTab(t)}
+          />
+        ))}
+      </CraftBottomNav>
 
       {/* global overlays */}
       <ToastHost />

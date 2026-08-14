@@ -4,13 +4,14 @@
 // furniture are built once and never touched again, same principle as the
 // `quad` renderer (see sceneBuilder.ts).
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, TouchableOpacity, Text } from 'react-native';
+import { View } from 'react-native';
 import * as THREE from 'three';
 import { Physics } from '@esotericsoftware/spine-core';
 import { GLView } from 'expo-gl';
 import { Renderer } from 'expo-three';
 import { useHousingStore, ROOM_SIZE_TIERS, GridTile } from '../../../data/stores/housingStore';
 import { useCosmeticsStore } from '../../../data/stores/cosmeticsStore';
+import { useCharacterReactionStore } from '../../../data/stores/characterReactionStore';
 import { OutfitSlot } from '../../../data/types/outfitTypes';
 import { createSpineCharacterController, SpineCharacterController } from '../../../spine/createSpineCharacterController';
 import { buildRoomScene3D, WALL_HEIGHT } from '../render/sceneBuilder3D';
@@ -29,6 +30,10 @@ interface IsometricRoomView3DProps {
   characterScale?: number;
   animation?: string;
   outfit?: OutfitSlot | null;
+  /** Controlled camera mode: false = standard wide Nest overview, true =
+   * close camera following Glidermon. Driven externally (e.g. by
+   * CameraPresetTabs on the Home screen) rather than an internal toggle. */
+  zoomedIn?: boolean;
 }
 
 // Glidermon teleports (Tamagotchi-style, no walk cycle) to a random empty
@@ -132,6 +137,7 @@ export default function IsometricRoomView3D({
   characterScale = DEFAULT_CHARACTER_SCALE,
   animation = 'idle',
   outfit,
+  zoomedIn = false,
 }: IsometricRoomView3DProps) {
   const catalog = useCosmeticsStore((state) => state.catalog);
   const roomSizeTier = useHousingStore((s) => s.roomSizeTier);
@@ -141,7 +147,6 @@ export default function IsometricRoomView3D({
   const characterTile = useHousingStore((s) => s.characterTile);
 
   const [isLoaded, setIsLoaded] = useState(false);
-  const [isZoomedIn, setIsZoomedIn] = useState(false);
   const initializedRef = useRef(false);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -412,17 +417,31 @@ export default function IsometricRoomView3D({
   }, [activeFloorPatternId, activeWallPatternId, updateCameraForZoom]);
 
   useEffect(() => {
-    isZoomedInRef.current = isZoomedIn;
+    isZoomedInRef.current = zoomedIn;
     // Toggling into zoomed mode is a deliberate user action, not a
     // background wander -- frame on Glidermon immediately rather than
     // starting a multi-second pan from wherever the (unseen) look-at point
     // last was.
-    if (isZoomedIn) {
+    if (zoomedIn) {
       cameraLookAtRef.current.copy(characterTargetRef.current);
     }
     const camera = cameraRef.current;
-    if (camera) updateCameraForZoom(camera, isZoomedIn);
-  }, [isZoomedIn, updateCameraForZoom]);
+    if (camera) updateCameraForZoom(camera, zoomedIn);
+  }, [zoomedIn, updateCameraForZoom]);
+
+  // Plays a one-shot positive reaction whenever something outside this
+  // component (e.g. completing a Home-screen goal) fires
+  // characterReactionStore -- a decoupled trigger bus, same pattern as
+  // acornFxStore, since nothing outside this component holds a ref to the
+  // Spine controller. No-ops harmlessly if the controller isn't ready yet.
+  const reactionNonce = useCharacterReactionStore((s) => s.nonce);
+  const reactionName = useCharacterReactionStore((s) => s.reaction);
+  const lastReactionNonceRef = useRef(0);
+  useEffect(() => {
+    if (reactionNonce === lastReactionNonceRef.current) return;
+    lastReactionNonceRef.current = reactionNonce;
+    if (reactionName) spineRef.current?.playReaction(reactionName);
+  }, [reactionNonce, reactionName]);
 
   useEffect(
     () => () => {
@@ -584,7 +603,7 @@ export default function IsometricRoomView3D({
       scene.add(treetopGroup);
       treetopGroupRef.current = treetopGroup;
 
-      updateCameraForZoom(camera, isZoomedIn);
+      updateCameraForZoom(camera, isZoomedInRef.current);
 
       rendererRef.current = renderer;
       spineRef.current = controller;
@@ -666,24 +685,6 @@ export default function IsometricRoomView3D({
             backgroundColor: 'rgba(26, 28, 44, 0.4)',
           }}
         />
-      )}
-      {isLoaded && (
-        <TouchableOpacity
-          style={{
-            position: 'absolute',
-            top: 8,
-            right: 8,
-            backgroundColor: 'rgba(0, 0, 0, 0.7)',
-            paddingHorizontal: 12,
-            paddingVertical: 6,
-            borderRadius: 16,
-          }}
-          onPress={() => setIsZoomedIn(!isZoomedIn)}
-        >
-          <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>
-            {isZoomedIn ? '🏠 Overview' : '🔍 Zoom In'}
-          </Text>
-        </TouchableOpacity>
       )}
     </View>
   );

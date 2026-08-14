@@ -16,6 +16,12 @@ type CraftTabProps = {
    * directly on top of a panel with a small negative margin so it reads as
    * attached rather than floating above it. */
   shape?: "pill" | "flushTop";
+  /** Overrides the default emoji icon size (both idle/selected use this same
+   * size, rather than the built-in 14/16 idle/selected split) -- for callers
+   * that need a bigger touch target than the default category-tab sizing. */
+  iconSize?: number;
+  /** Overrides the default label font size (12). */
+  labelSize?: number;
 };
 
 // Category tab (Hats / Hair / Shoes / Outfit / Skin row): cream paper base
@@ -23,7 +29,7 @@ type CraftTabProps = {
 // a stretched SVG) so it never warps. The selected tab pops forward with a
 // shadow; idle tabs use a muted outline so they read as sitting slightly
 // behind/recessed into the panel below.
-export default function CraftTab({ label, icon, selected, disabled, onPress, style, shape = "pill" }: CraftTabProps) {
+export default function CraftTab({ label, icon, selected, disabled, onPress, style, shape = "pill", iconSize, labelSize }: CraftTabProps) {
   return (
     <Pressable
       onPress={onPress}
@@ -39,14 +45,19 @@ export default function CraftTab({ label, icon, selected, disabled, onPress, sty
     >
       {icon ? (
         typeof icon === "string" ? (
-          <Text style={[styles.icon, selected && styles.iconSelected]}>{icon}</Text>
+          <Text style={[styles.icon, selected && styles.iconSelected, iconSize ? { fontSize: iconSize } : null]}>{icon}</Text>
         ) : (
           <Image source={icon} style={[styles.iconImage, selected && styles.iconImageSelected]} resizeMode="contain" />
         )
       ) : null}
       <Text
         numberOfLines={1}
-        style={[styles.label, selected && styles.labelSelected, disabled && !selected && styles.labelDisabled]}
+        style={[
+          styles.label,
+          selected && styles.labelSelected,
+          disabled && !selected && styles.labelDisabled,
+          labelSize ? { fontSize: labelSize } : null,
+        ]}
       >
         {label}
       </Text>

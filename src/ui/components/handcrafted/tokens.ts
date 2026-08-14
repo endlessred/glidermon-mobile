@@ -13,6 +13,15 @@ export const KRAFT_TAN = "#C9A06B";
 export const CORK_BROWN = "#B98F62";
 export const GOLD = "#E3B54D";
 export const LOCK_GRAY = "#B9AFA0";
+export const LAVENDER_PAPER = "#E7DFF6";
+export const LAVENDER_CTA = "#7C5DAE";
+export const PALE_GREEN = "#E3EEDD";
+// Muted denim/dusty-blue felt for the global bottom nav's active
+// destination -- a fabric color, not a digital/electric blue. Deliberately
+// not FELT_GREEN: green already means "selected/equipped" inside a screen
+// (CraftTab, CosmeticCard); blue reads as a distinct signal -- "this is
+// where you are in the app" -- for global navigation.
+export const NAV_BLUE = "#5F7A8F";
 
 // Physical depth, not digital gloss: low-opacity contact shadows, no glossy
 // highlights/elevation. Selected/equipped elements get a slightly stronger

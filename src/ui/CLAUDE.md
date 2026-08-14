@@ -34,21 +34,22 @@ Navigation structure and routing logic.
 
 ### Daily Goals Components
 
-#### `GoalsList.tsx`
-- **Purpose**: Vertical stack of small auto-generated diabetes-management goal cards, rendered on the HUD home screen (one goal per row, not a horizontal scroller)
-- **Behavior**: Generates a fixed daily batch (`goalsStore.resetDailyIfNeeded`) once per day; renders only currently-visible goals (pending, not snoozed)
-- **Integration**: Reads `goalsStore`; renders one `GoalCard` per visible goal
+#### `DailyGoalBoard.tsx`
+- **Purpose**: Single handcrafted "Today's Goals" panel (kraft-paper `CraftPanel`) rendered on the Home screen, replacing the old stack of separate white app cards
+- **Behavior**: Generates a fixed daily batch (`goalsStore.resetDailyIfNeeded`) once per day; renders only currently-visible goals (pending, not snoozed) as `DailyGoalRow`s inside the one board
+- **Integration**: Reads `goalsStore`; renders one `DailyGoalRow` per visible goal
 
-#### `GoalCard.tsx`
-- **Purpose**: Single goal row — icon on the left, title, an acorn reward chip, a circular checkmark button, and a "⋯" button that swaps the checkmark+⋯ segment for inline Skip/Snooze actions
+#### `DailyGoalRow.tsx`
+- **Purpose**: One goal as a small paper strip inside `DailyGoalBoard` — icon, title, a plain reward amount, a material completion control (cream/outlined circle idle, green felt `CheckBadge` when completing), and a "⋯" button that swaps the completion segment for inline Skip/Snooze/Cancel
 - **Props**: `goal: ActiveGoalWithDef` (a `goalsStore` active-goal instance joined with its catalog definition)
-- **Reward flow**: on checkmark tap, calls `progressionStore.grantAcorns` then `useAcornSource().spawnFromRef` to fly acorns from the row to the balance badge (same reusable pattern as `CheckInFlowModal`)
+- **Completion flow**: on tap, plays a local pop/float animation (checkmark swaps to `CheckBadge`, reward text floats up and fades) for ~480ms, *then* calls `goalsStore.completeGoal` → `progressionStore.grantAcorns` → `useAcornSource().spawnFromRef` to fly acorns from the row to the balance badge — deferred just long enough for the animation to read as a beat before the row leaves the board (completing removes it from the visible list and refills the slot)
+- **States**: `glucose_response` category goals get a gold left-edge accent (currently-actionable); mid-completion gets a pale-green tint (`PALE_GREEN` token) matching the rest of the handcrafted state language
 - **Integration**: `goalsStore.completeGoal` / `skipGoal` / `snoozeGoal`
 
 ### Check-In Components (see `docs/superpowers/specs/2026-07-19-checkin-system-design.md`)
 
 #### `CheckInCard.tsx`
-- **Purpose**: Glowing card that appears on the HUD home screen when a check-in slot is available
+- **Purpose**: A deliberate, special-feeling interaction on the Home screen when a check-in slot is available — styled as a pale-lavender paper note (one restrained tape accent, purple CTA) rather than a generic banner
 - **Behavior**: Shows for the active time window (Morning 6–11 AM, Midday 11 AM–4 PM, Evening 5 PM–midnight). Each slot's availability only depends on its own window/null-ness now — a missed slot no longer blocks later ones that day.
 - **Props**: `{ onPress: () => void }` — reads which slot is available itself via `checkInStore.availableSlot()`, doesn't take one as a prop
 - **Integration**: Reads from `checkInStore`; `onPress` opens `CheckInFlowModal`
@@ -99,9 +100,10 @@ Navigation structure and routing logic.
 ## Screen Architecture
 
 ### `HudScreen.tsx` (Main/Home)
-- **Purpose**: Primary gameplay screen, styled as a tamagotchi-like device
-- **Components**: Room/pet 3D view with a reserved status strip (name, acorn badge, streak badge) above the canvas, GoalsList, CheckInCard (when a slot is available)
-- **Layout**: The room card occupies the top third of the screen; below it in the scrollable area is GoalsList, then CheckInCard when active. No glucose display or level/XP bars on Home — glucose monitoring was moved off Home, and leveling is being phased out in favor of goal-based progression (GoalsList is the first concrete piece of that).
+- **Purpose**: Primary gameplay screen, redesigned to share the handcrafted/paper-craft visual language established on `EquipScreen.tsx` (see `handcrafted/` below), kept calmer/less decorated since it holds the daily health ritual
+- **Components** (fixed, non-scrolling top region): `HomeHeader` (compact kraft-cardstock name/acorn/streak strip), `NestCraftPanel` wrapping the room/pet 3D view, `CameraPresetTabs` (Nest / Glidermon presets, attached directly under the frame). Scrollable region below: `CheckInCard` (when a slot is available, shown above the goal board per the hierarchy), `DailyGoalBoard`.
+- **Layout**: Hierarchy is Glidermon/Nest first, then the check-in ritual, then Today's Goals, then currency/streak (in the compact header), then decoration — roughly 70% clean paper surfaces / 20% texture / 10% decorative accents, deliberately less busy than Equip. No glucose display or level/XP bars on Home — glucose monitoring was moved off Home, and leveling is being phased out in favor of goal-based progression (`DailyGoalBoard` is the first concrete piece of that).
+- **Camera presets**: `cameraMode` (`"nest" | "glidermon"`) is local `HudScreen` state, only changed by an explicit tab press (never by incidental manual camera movement) — passed to `IsometricRoomView3D` as the controlled `zoomedIn` prop. "Nest" = standard wide overview; "Glidermon" activates the existing close/follow character camera (`IsometricRoomView3D`'s own camera math, untouched — see `src/game/CLAUDE.md`'s sibling doc / the component itself for `updateCameraForZoom`). The renderer's old internal "🔍 Zoom In" toggle button was removed in favor of this external, controlled prop.
 
 ### `ShopScreen.tsx`
 - **Purpose**: In-game store for cosmetic purchases

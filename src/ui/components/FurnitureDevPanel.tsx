@@ -60,7 +60,7 @@ export default function FurnitureDevPanel() {
   };
 
   return (
-    <View style={{ position: "absolute", top: 40, left: 8, zIndex: 20 }}>
+    <View style={{ position: "absolute", top: 8, left: 8, zIndex: 20 }}>
       <Pressable
         onPress={() => setOpen((o) => !o)}
         style={{ backgroundColor: "#2d4356", paddingVertical: 6, paddingHorizontal: 10, borderRadius: 6 }}

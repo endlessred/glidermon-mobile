@@ -15,4 +15,6 @@ export { default as CardBacking } from "./CardBacking";
 export { default as ContactShadow } from "./ContactShadow";
 export { default as CurrencyChip } from "./CurrencyChip";
 export { default as CheckBadge } from "./CheckBadge";
+export { default as CraftBottomNav } from "./CraftBottomNav";
+export { default as CraftNavItem } from "./CraftNavItem";
 export * from "./tokens";
