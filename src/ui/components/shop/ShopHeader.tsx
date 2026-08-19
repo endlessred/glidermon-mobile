@@ -1,7 +1,7 @@
 // components/shop/ShopHeader.tsx
 import React from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
-import { INK, INK_MUTED, CREAM_LIGHT, LUMA_PEACH, SABLE_DUSTY_PURPLE } from "../handcrafted/tokens";
+import { INK, INK_MUTED, CREAM_LIGHT } from "../handcrafted/tokens";
 import { formatRestockCountdown } from "./shopTimeFormat";
 import type { ShopTone } from "./ShopStockCard";
 
@@ -12,20 +12,14 @@ type Props = {
   onClose?: () => void;
 };
 
-const NAME_PILL_COLOR: Record<ShopTone, string> = {
-  luma: LUMA_PEACH,
-  sable: SABLE_DUSTY_PURPLE,
-};
-
-// Clear shopkeeper name + a subtle secondary countdown -- the timer is
-// deliberately small/muted so it doesn't compete with "whose shop is this."
-export default function ShopHeader({ shopkeeperName, tone, msUntilRestock, onClose }: Props) {
+// Plain crafted typography -- the selected merchant tab above this panel
+// already communicates "whose shop is this," so no second colored pill is
+// needed here. Just a clear dark-brown title and a small, quiet countdown.
+export default function ShopHeader({ shopkeeperName, msUntilRestock, onClose }: Props) {
   return (
     <View style={styles.row}>
       <View style={styles.titleGroup}>
-        <View style={[styles.namePill, { backgroundColor: NAME_PILL_COLOR[tone] }]}>
-          <Text style={[styles.name, tone === "sable" && styles.nameOnDark]}>{shopkeeperName}'s Shop</Text>
-        </View>
+        <Text style={styles.name}>{shopkeeperName}'s Shop</Text>
         <Text style={styles.countdown}>{formatRestockCountdown(msUntilRestock)}</Text>
       </View>
       {onClose ? (
@@ -40,41 +34,28 @@ export default function ShopHeader({ shopkeeperName, tone, msUntilRestock, onClo
 const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "space-between",
     marginBottom: 10,
   },
   titleGroup: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    gap: 10,
     flexShrink: 1,
   },
-  namePill: {
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderWidth: 2,
-    borderColor: INK,
-  },
   name: {
-    fontSize: 15,
+    fontSize: 18,
     fontWeight: "800",
     color: INK,
   },
-  nameOnDark: {
-    color: CREAM_LIGHT,
-  },
   countdown: {
-    fontSize: 11.5,
+    fontSize: 12,
     fontWeight: "600",
     color: INK_MUTED,
-    flexShrink: 1,
+    marginTop: 1,
   },
   closeButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     borderWidth: 2,
     borderColor: INK,
     backgroundColor: CREAM_LIGHT,
@@ -82,9 +63,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   closeGlyph: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "800",
     color: INK,
-    marginTop: -2,
+    marginTop: -1,
   },
 });

@@ -9,11 +9,50 @@ import { loadSpineFromExpoAssets } from '../../spine/loaders';
 import { SkeletonMesh } from '../../spine/SpineThree';
 import { applySubtleWindGusts } from '../../../utils/spinePhysics';
 
+export type ShopCameraTarget = 'overview' | 'luma' | 'sable';
+
 interface ShadedShopViewportProps {
   width?: number;
   height?: number;
   onSableTap?: () => void;
   onLumaTap?: () => void;
+  /** Which framing the camera should smoothly ease toward -- 'overview' is
+   * the original wide two-character shot; 'luma'/'sable' reframe/zoom
+   * toward that character so they stay clearly visible above a bottom
+   * merchandise panel. Defaults to 'overview'. */
+  cameraTarget?: ShopCameraTarget;
+}
+
+type CameraFraming = { x: number; y: number; zoomFactor: number };
+
+// How far down from the top of the FULL render a shopping-mode character
+// should sit -- tuned so they land within the visible band above a bottom
+// panel that covers ~65-70% of the screen (see ShopScreen's panel height).
+// ShopScreen's merchandise panel covers the bottom ~68% of the screen, so
+// only the top ~32% of this viewport's full-height render is ever actually
+// visible. Center the character+counter within THAT visible band (not the
+// full screen) -- half of 0.32.
+const VISIBLE_BAND_FRACTION = 0.32;
+const SHOPPING_FRAME_FRACTION = VISIBLE_BAND_FRACTION / 2;
+// Tighter than the 2.4 overview zoom so a single character+counter reads
+// clearly within that smaller visible band, but zoomed out enough that
+// both their head and their counter (below them) fit without clipping.
+const SHOPPING_ZOOM_FACTOR = 2.0;
+// Seconds -- exponential smoothing time-constant for camera reframes.
+const CAMERA_EASE_TAU = 0.22;
+
+// Given a character's resolved world anchor (same point used for tap
+// detection) and the viewport's pixel height, computes the camera framing
+// that places that character at SHOPPING_FRAME_FRACTION from the top of the
+// full render -- i.e. centered in the band that stays visible above a
+// bottom merchandise panel.
+function computeShoppingFraming(pos: { x: number; y: number }, viewportHeight: number): CameraFraming {
+  const cameraHeight = viewportHeight * SHOPPING_ZOOM_FACTOR;
+  return {
+    x: pos.x,
+    y: pos.y - (0.5 - SHOPPING_FRAME_FRACTION) * cameraHeight,
+    zoomFactor: SHOPPING_ZOOM_FACTOR,
+  };
 }
 
 // Standalone Spine loader for ShadedShop using the existing loader
@@ -89,6 +128,7 @@ export default function ShadedShopViewport({
   height = 250,
   onSableTap,
   onLumaTap,
+  cameraTarget = 'overview',
 }: ShadedShopViewportProps) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -105,6 +145,16 @@ export default function ShadedShopViewport({
   const cameraRef = useRef<THREE.OrthographicCamera | null>(null);
   const sablePositionRef = useRef<{ x: number; y: number; scale: number; characterSize?: number } | null>(null);
   const lumaPositionRef = useRef<{ x: number; y: number; scale: number; characterSize?: number } | null>(null);
+  // Per-merchant camera framings (populated once positions are known during
+  // load) and the live eased state the render loop actually applies each
+  // frame -- see the render() closure below.
+  const cameraPresetsRef = useRef<Partial<Record<ShopCameraTarget, CameraFraming>>>({});
+  const cameraCurrentRef = useRef<CameraFraming | null>(null);
+  const cameraDesiredKeyRef = useRef<ShopCameraTarget>(cameraTarget);
+
+  useEffect(() => {
+    cameraDesiredKeyRef.current = cameraTarget;
+  }, [cameraTarget]);
 
   const handleTouch = useCallback((event: any) => {
     if ((!onSableTap && !onLumaTap) || !cameraRef.current || (!sablePositionRef.current && !lumaPositionRef.current)) return;
@@ -125,12 +175,14 @@ export default function ShadedShopViewport({
     const normalizedX = (touchX / width - 0.5) * 2; // -1 to 1
     const normalizedY = (touchY / height - 0.5) * 2; // -1 to 1 (inverted)
 
-    // Convert to world coordinates using camera's orthographic bounds
+    // Convert to world coordinates using camera's orthographic bounds --
+    // read the camera's *live* position rather than assuming the original
+    // fixed (0, 1000), since it now eases toward a per-merchant framing.
     const cameraWidth = camera.right - camera.left;
     const cameraHeight = camera.top - camera.bottom;
 
-    const worldX = normalizedX * (cameraWidth / 2);
-    const worldY = -normalizedY * (cameraHeight / 2) + 1000; // Add camera's Y offset
+    const worldX = normalizedX * (cameraWidth / 2) + camera.position.x;
+    const worldY = -normalizedY * (cameraHeight / 2) + camera.position.y;
 
     // Check both characters' tappable areas, picking whichever is closer if
     // both boxes happen to overlap.
@@ -191,6 +243,12 @@ export default function ShadedShopViewport({
 
       // Store camera reference for touch detection
       cameraRef.current = camera;
+
+      // The wide two-character overview is the camera's resting framing --
+      // matches the hardcoded position/zoom set just above.
+      cameraPresetsRef.current.overview = { x: 0, y: 1000, zoomFactor };
+      cameraCurrentRef.current = { x: 0, y: 1000, zoomFactor };
+      console.log('[camera] overview preset', { w, h, zoomFactor });
 
       // Load ShadedShop spine scene
       const { skeleton, state, resolveTexture } = await loadShadedShopSpine();
@@ -258,6 +316,14 @@ export default function ShadedShopViewport({
       // The ShadedShop scene skeleton coordinates are already in the right space
       sableSkeleton.x = sableBoneX;
       sableSkeleton.y = sableBoneY;
+
+      // Camera framing anchors directly on (sableBoneX, sableBoneY) -- the
+      // same values used to position her skeleton just above, so this is
+      // guaranteed to line up with where she's actually rendered. (The
+      // marker-bone lookup below resolves a *different* point used only
+      // for tap hit-testing -- verified empirically that it does not
+      // coincide with her rendered position, so it's not used for framing.)
+      cameraPresetsRef.current.sable = computeShoppingFraming({ x: sableBoneX, y: sableBoneY }, h);
 
       // Store Sable's position info for touch detection
       // Find the Sable bone in the ShadedShop skeleton to get its world position
@@ -410,6 +476,11 @@ export default function ShadedShopViewport({
       lumaSkeleton.x = lumaBoneX;
       lumaSkeleton.y = lumaBoneY;
 
+      // Camera framing anchors directly on (lumaBoneX, lumaBoneY) -- see the
+      // matching Sable comment above for why this differs from the
+      // marker-bone-resolved position used only for tap hit-testing below.
+      cameraPresetsRef.current.luma = computeShoppingFraming({ x: lumaBoneX, y: lumaBoneY }, h);
+
       // Store Luma's position info for touch detection, mirroring the Sable
       // resolution above -- find the 'Luma' anchor bone in the ShadedShop
       // scene skeleton and resolve its actual world position rather than
@@ -543,6 +614,37 @@ export default function ShadedShopViewport({
 
           if (lumaMeshRef.current) {
             lumaMeshRef.current.update(deltaSeconds);
+          }
+
+          // Ease the camera toward whichever framing is currently desired
+          // (overview / luma / sable). Only touches the camera's frustum/
+          // matrix while an actual reframe is in progress -- once settled
+          // (within epsilon) this is skipped entirely, so a steady camera
+          // costs nothing extra per frame beyond what it always did.
+          const desiredFraming =
+            cameraPresetsRef.current[cameraDesiredKeyRef.current] ?? cameraPresetsRef.current.overview;
+          const currentFraming = cameraCurrentRef.current;
+          if (desiredFraming && currentFraming) {
+            const dx = desiredFraming.x - currentFraming.x;
+            const dy = desiredFraming.y - currentFraming.y;
+            const dz = desiredFraming.zoomFactor - currentFraming.zoomFactor;
+            const settled = Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5 && Math.abs(dz) < 0.001;
+
+            if (!settled) {
+              const k = 1 - Math.exp(-deltaSeconds / CAMERA_EASE_TAU);
+              currentFraming.x += dx * k;
+              currentFraming.y += dy * k;
+              currentFraming.zoomFactor += dz * k;
+
+              camera.left = (-w / 2) * currentFraming.zoomFactor;
+              camera.right = (w / 2) * currentFraming.zoomFactor;
+              camera.top = (h / 2) * currentFraming.zoomFactor;
+              camera.bottom = (-h / 2) * currentFraming.zoomFactor;
+              camera.position.x = currentFraming.x;
+              camera.position.y = currentFraming.y;
+              camera.lookAt(currentFraming.x, currentFraming.y, 0);
+              camera.updateProjectionMatrix();
+            }
           }
 
           renderer.render(scene, camera);

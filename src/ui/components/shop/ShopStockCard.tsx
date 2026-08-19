@@ -152,7 +152,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   thumbWrap: {
-    width: "70%",
+    width: "84%",
     aspectRatio: 1,
     alignItems: "center",
     justifyContent: "center",
@@ -182,7 +182,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   price: {
-    fontSize: 13,
+    fontSize: 14.5,
     fontWeight: "800",
     color: INK,
   },

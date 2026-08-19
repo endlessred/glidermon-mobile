@@ -10,6 +10,7 @@ import PatternSwatch from "../PatternSwatch";
 import { getFurnitureImageSource } from "../../../game/housing/assets/quadTextures";
 import { getShopItemVisualSource } from "../../../data/shop/shopDisplay";
 import type { ShopCatalogItem } from "../../../data/shop/shopTypes";
+import { INK_MUTED } from "../handcrafted/tokens";
 
 type Props = {
   item: ShopCatalogItem;
@@ -50,7 +51,16 @@ export default function ShopItemThumbnail({ item, size }: Props) {
   }
 
   if (source?.kind === "floorPattern" || source?.kind === "wallPattern") {
-    return <PatternSwatch item={source.pattern} size={size} />;
+    // Reads as a physical material sample chip -- thin cream border, slight
+    // rotation, small contact shadow -- rather than a plain floating
+    // rectangle, since these are the one item type that's genuinely "just
+    // a swatch" rather than an isolated object/cosmetic preview.
+    const swatchSize = size * 0.78;
+    return (
+      <View style={styles.swatchFrame}>
+        <PatternSwatch item={source.pattern} size={swatchSize} />
+      </View>
+    );
   }
 
   return (
@@ -68,5 +78,18 @@ const styles = StyleSheet.create({
   fallback: {
     alignItems: "center",
     justifyContent: "center",
+  },
+  swatchFrame: {
+    padding: 3,
+    borderRadius: 5,
+    backgroundColor: "#FFFDF7",
+    borderWidth: 1.5,
+    borderColor: INK_MUTED,
+    transform: [{ rotate: "-3.5deg" }],
+    shadowColor: "#2A1C16",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2,
   },
 });

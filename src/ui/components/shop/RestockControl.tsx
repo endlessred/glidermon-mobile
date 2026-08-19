@@ -1,8 +1,9 @@
 // components/shop/RestockControl.tsx
 import React, { useState } from "react";
-import { View, StyleSheet } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
 import CraftActionButton from "../handcrafted/CraftActionButton";
 import CraftConfirmModal from "../handcrafted/CraftConfirmModal";
+import { INK_MUTED, KRAFT_TAN } from "../handcrafted/tokens";
 
 // Wrapper for the row of restock sources -- today just the daily free
 // restock, but structured so a future subscriber/rewarded-ad option can be
@@ -12,12 +13,22 @@ export function RestockOptions({ children }: { children: React.ReactNode }) {
 }
 
 export function DailyFreeRestockOption({ available, onPress }: { available: boolean; onPress: () => void }) {
+  // Once used, this collapses to a quiet single-line status strip -- the
+  // full-size actionable button only makes sense while there's still an
+  // action to take.
+  if (!available) {
+    return (
+      <View style={styles.usedStrip} accessibilityRole="text">
+        <Text style={styles.usedStripText}>✓ Free restock used · Resets tomorrow</Text>
+      </View>
+    );
+  }
+
   return (
     <CraftActionButton
-      label={available ? "↻ Restock Shops" : "Free restock used"}
-      caption={available ? "1 free today" : "Available again tomorrow"}
-      tone={available ? "green" : "cream"}
-      disabled={!available}
+      label="↻ Restock Shops"
+      caption="1 free today"
+      tone="green"
       onPress={onPress}
       style={styles.button}
     />
@@ -65,5 +76,19 @@ const styles = StyleSheet.create({
   },
   button: {
     alignSelf: "stretch",
+  },
+  usedStrip: {
+    alignSelf: "stretch",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: KRAFT_TAN,
+    opacity: 0.5,
+  },
+  usedStripText: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: INK_MUTED,
   },
 });

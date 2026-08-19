@@ -72,46 +72,69 @@ export default function NpcStorePanel({
   const canAfford = selectedItem ? acorns >= selectedItem.price : false;
 
   return (
-    <CraftPanel texture="paper" stitched={false} shadow="panel" flatTop style={styles.panel} contentStyle={styles.content} inset={16}>
-      <ShopTabs activeShopId={shopId} onSelect={handleSelectShop} />
-      <ShopHeader shopkeeperName={SHOPKEEPERS[shopId]} tone={shopId} msUntilRestock={msUntilRestock} onClose={onClose} />
-
-      <View style={styles.body}>
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {restocking && (
-            <View style={styles.restockingBanner}>
-              <Text style={styles.restockingText}>Restocking…</Text>
-            </View>
-          )}
-          <ShopStockGrid
-            items={items}
-            tone={shopId}
-            selectedItemId={selectedItemId}
-            onSelectItem={handleSelectItem}
-            transitionKey={transitionKey}
-          />
-          <RestockControl freeRestockAvailable={freeRestockAvailable} onConfirmRestock={onConfirmRestock} />
-        </ScrollView>
-
-        {/* Overlays the bottom of the scroll area rather than flowing after
-            it -- a sibling ScrollView with flex:1 would otherwise claim all
-            remaining height and push this sheet out past the panel's own
-            clipped bounds. */}
-        <View style={styles.purchaseSheetWrap} pointerEvents="box-none">
-          <ShopPurchaseSheet item={selectedItem} canAfford={canAfford} onBuy={handleBuy} onDismiss={() => setSelectedItemId(null)} />
-        </View>
+    <View style={styles.wrap}>
+      {/* Tabs paint above the panel and the panel slides up behind them
+          (negative margin below), so the two read as one welded object --
+          same technique as Outfit's CategoryTabRow/CorkInventoryPanel. */}
+      <View style={styles.tabRow}>
+        <ShopTabs activeShopId={shopId} onSelect={handleSelectShop} />
       </View>
-    </CraftPanel>
+
+      <CraftPanel
+        texture="paper"
+        stitched={false}
+        shadow="panel"
+        flatTop
+        style={styles.panel}
+        contentStyle={styles.content}
+        inset={16}
+      >
+        <ShopHeader shopkeeperName={SHOPKEEPERS[shopId]} tone={shopId} msUntilRestock={msUntilRestock} onClose={onClose} />
+
+        <View style={styles.body}>
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {restocking && (
+              <View style={styles.restockingBanner}>
+                <Text style={styles.restockingText}>Restocking…</Text>
+              </View>
+            )}
+            <ShopStockGrid
+              items={items}
+              tone={shopId}
+              selectedItemId={selectedItemId}
+              onSelectItem={handleSelectItem}
+              transitionKey={transitionKey}
+            />
+            <RestockControl freeRestockAvailable={freeRestockAvailable} onConfirmRestock={onConfirmRestock} />
+          </ScrollView>
+
+          {/* Overlays the bottom of the scroll area rather than flowing after
+              it -- a sibling ScrollView with flex:1 would otherwise claim all
+              remaining height and push this sheet out past the panel's own
+              clipped bounds. */}
+          <View style={styles.purchaseSheetWrap} pointerEvents="box-none">
+            <ShopPurchaseSheet item={selectedItem} canAfford={canAfford} onBuy={handleBuy} onDismiss={() => setSelectedItemId(null)} />
+          </View>
+        </View>
+      </CraftPanel>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  wrap: {
+    flex: 1,
+  },
+  tabRow: {
+    zIndex: 2,
+  },
   panel: {
     flex: 1,
+    marginTop: -6,
   },
   content: {
     flex: 1,

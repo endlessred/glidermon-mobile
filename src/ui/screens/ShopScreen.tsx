@@ -110,6 +110,7 @@ export default function ShopScreen({ initialShop }: { initialShop?: ShopId }) {
         height={height}
         onSableTap={() => setActiveShop("sable")}
         onLumaTap={() => setActiveShop("luma")}
+        cameraTarget={activeShop ?? "overview"}
       />
 
       {currentConversation && activeShop === null && (
@@ -127,7 +128,7 @@ export default function ShopScreen({ initialShop }: { initialShop?: ShopId }) {
       )}
 
       {activeShop && activeRecord && (
-        <View style={[styles.panelWrap, { height: height * 0.62 }]}>
+        <View style={[styles.panelWrap, { height: height * 0.68 }]}>
           <NpcStorePanel
             shopId={activeShop}
             items={items}

@@ -64,7 +64,7 @@ export default function ShopStockGrid({ items, tone, selectedItemId, onSelectIte
               rotationIndex={index}
               onPress={() => onSelectItem(slot.itemId)}
             >
-              <ShopItemThumbnail item={catalogItem} size={56} />
+              <ShopItemThumbnail item={catalogItem} size={68} />
             </ShopStockCard>
           </View>
         );

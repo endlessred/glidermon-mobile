@@ -15,13 +15,16 @@ const SELECTED_COLOR: Record<ShopId, string> = {
   sable: SABLE_DUSTY_PURPLE,
 };
 
-// Compact merchant switcher sitting beside the shop header -- lets the
-// player hop between Luma's and Sable's stock without closing the panel.
+// Folder-tab pair meant to sit welded to the top of NpcStorePanel (see its
+// negative-margin overlap) -- same "attached to the panel below" language
+// as CategoryTabRow/CosmeticCategoryTab on Outfit, just two merchants
+// instead of five categories.
 export default function ShopTabs({ activeShopId, onSelect }: Props) {
   return (
     <View style={styles.row}>
       <CraftTab
         label="Luma"
+        shape="flushTop"
         selected={activeShopId === "luma"}
         selectedColor={SELECTED_COLOR.luma}
         onPress={() => onSelect("luma")}
@@ -30,6 +33,7 @@ export default function ShopTabs({ activeShopId, onSelect }: Props) {
       />
       <CraftTab
         label="Sable"
+        shape="flushTop"
         selected={activeShopId === "sable"}
         selectedColor={SELECTED_COLOR.sable}
         onPress={() => onSelect("sable")}
@@ -43,11 +47,12 @@ export default function ShopTabs({ activeShopId, onSelect }: Props) {
 const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
-    gap: 8,
-    marginBottom: 12,
+    gap: 6,
+    paddingLeft: 6,
   },
   tab: {
-    minHeight: 38,
-    paddingVertical: 6,
+    minWidth: 82,
+    minHeight: 40,
+    paddingVertical: 8,
   },
 });
