@@ -9,7 +9,9 @@ import { CraftBottomNav, CraftNavItem } from "./src/ui/components/handcrafted";
 import HomeScreen from "./src/ui/screens/HudScreen"; // HudScreen serves as HomeScreen
 // import DexcomEgvsScreen from "./src/ui/screens/DexcomEgvsScreen"; // Preserved for future Bluetooth device integration
 import GameCanvas from "./src/game/view/GameCanvas";
-import ShopScreen, { ShopCategory } from "./src/ui/screens/ShopScreen";
+import ShopScreen from "./src/ui/screens/ShopScreen";
+import type { ShopId } from "./src/data/shop/shopTypes";
+import { SHOP_IDS } from "./src/data/shop/shopTypes";
 import EquipScreen from "./src/ui/screens/EquipScreen";
 import SettingsScreen from "./src/ui/screens/SettingsScreen";
 import LeaderboardScreen from "./src/ui/screens/LeaderboardScreen";
@@ -84,7 +86,7 @@ const NAV_LABELS: Record<NavTab, string> = {
 };
 
 // Dev/test deep links, e.g.:
-//   adb shell am start -a android.intent.action.VIEW -d "glidermon://shop/floors"
+//   adb shell am start -a android.intent.action.VIEW -d "glidermon://shop/luma"
 const DEEP_LINK_TABS: Record<string, Tab> = {
   home: "HOME",
   shop: "SHOP",
@@ -92,7 +94,6 @@ const DEEP_LINK_TABS: Record<string, Tab> = {
   gallery: "🎨 GALLERY",
   settings: "SETTINGS",
 };
-const SHOP_CATEGORIES: ShopCategory[] = ["cosmetics", "floors", "walls", "furniture"];
 
 // Dev/test deep links for jumping straight to a specific streak popup, e.g.:
 //   adb shell am start -a android.intent.action.VIEW -d "glidermon://streak/lost"
@@ -109,7 +110,7 @@ const STREAK_SCENARIOS: Record<string, () => void> = {
   milestone365: () => triggerMilestone(365),
 };
 
-function parseGlidermonUrl(url: string): { tab: Tab; shopCategory?: ShopCategory } | { streakScenario: string } | { devRoute: string } | null {
+function parseGlidermonUrl(url: string): { tab: Tab; shopId?: ShopId } | { streakScenario: string } | { devRoute: string } | null {
   const match = url.match(/^glidermon:\/\/([^/?]+)\/?([^/?]*)/i);
   if (!match) return null;
   const segment = match[1].toLowerCase();
@@ -127,8 +128,8 @@ function parseGlidermonUrl(url: string): { tab: Tab; shopCategory?: ShopCategory
 
   const tab = DEEP_LINK_TABS[segment];
   if (!tab) return null;
-  if (tab === "SHOP" && SHOP_CATEGORIES.includes(sub as ShopCategory)) {
-    return { tab, shopCategory: sub as ShopCategory };
+  if (tab === "SHOP" && SHOP_IDS.includes(sub as ShopId)) {
+    return { tab, shopId: sub as ShopId };
   }
   return { tab };
 }
@@ -162,11 +163,11 @@ export default function App() {
 
   // ---- tabs ----
   const [tab, setTab] = useState<Tab>("HOME");
-  const [shopCategory, setShopCategory] = useState<ShopCategory | undefined>(undefined);
+  const [shopId, setShopId] = useState<ShopId | undefined>(undefined);
   const [shopLinkNonce, setShopLinkNonce] = useState(0);
   const [devRoute, setDevRoute] = useState<string | null>(null);
 
-  // ---- dev/test deep links (glidermon://<tab>[/<shop-category>]) ----
+  // ---- dev/test deep links (glidermon://<tab>[/<shop-id>]) ----
   useEffect(() => {
     const handleUrl = (url: string) => {
       const parsed = parseGlidermonUrl(url);
@@ -184,8 +185,8 @@ export default function App() {
       }
 
       setTab(parsed.tab);
-      if (parsed.shopCategory) {
-        setShopCategory(parsed.shopCategory);
+      if (parsed.shopId) {
+        setShopId(parsed.shopId);
         setShopLinkNonce((n) => n + 1);
       }
     };
@@ -338,7 +339,7 @@ export default function App() {
         {/* DEXCOM tab removed - component preserved for future Bluetooth device integration */}
         {/* GAME tab removed - GameCanvas is now embedded in Home (formerly HUD) screen */}
 
-        {tab === "SHOP" && <ShopScreen key={shopLinkNonce} initialCategory={shopCategory} />}
+        {tab === "SHOP" && <ShopScreen key={shopLinkNonce} initialShop={shopId} />}
         {tab === "OUTFIT" && <EquipScreen />}
         {tab === "🎨 GALLERY" && <GalleryScreen />}
         {tab === "SETTINGS" && <SettingsScreen />}

@@ -22,6 +22,10 @@ type CraftTabProps = {
   iconSize?: number;
   /** Overrides the default label font size (12). */
   labelSize?: number;
+  /** Overrides the selected-state fill (default FELT_GREEN) -- for callers
+   * that need a tab's "active" color to carry its own material accent
+   * (e.g. a per-shopkeeper tone) rather than the universal selected-green. */
+  selectedColor?: string;
 };
 
 // Category tab (Hats / Hair / Shoes / Outfit / Skin row): cream paper base
@@ -29,7 +33,7 @@ type CraftTabProps = {
 // a stretched SVG) so it never warps. The selected tab pops forward with a
 // shadow; idle tabs use a muted outline so they read as sitting slightly
 // behind/recessed into the panel below.
-export default function CraftTab({ label, icon, selected, disabled, onPress, style, shape = "pill", iconSize, labelSize }: CraftTabProps) {
+export default function CraftTab({ label, icon, selected, disabled, onPress, style, shape = "pill", iconSize, labelSize, selectedColor }: CraftTabProps) {
   return (
     <Pressable
       onPress={onPress}
@@ -40,6 +44,7 @@ export default function CraftTab({ label, icon, selected, disabled, onPress, sty
         shape === "flushTop" ? styles.flushTop : styles.pill,
         selected ? styles.selected : disabled ? styles.disabled : styles.idle,
         selected && shape === "flushTop" && styles.selectedLift,
+        selected && selectedColor ? { backgroundColor: selectedColor } : null,
         style,
       ]}
     >

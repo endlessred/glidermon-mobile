@@ -13,6 +13,7 @@ interface ShadedShopViewportProps {
   width?: number;
   height?: number;
   onSableTap?: () => void;
+  onLumaTap?: () => void;
 }
 
 // Standalone Spine loader for ShadedShop using the existing loader
@@ -87,6 +88,7 @@ export default function ShadedShopViewport({
   width = 300,
   height = 250,
   onSableTap,
+  onLumaTap,
 }: ShadedShopViewportProps) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -101,33 +103,21 @@ export default function ShadedShopViewport({
   const lastTimeRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
   const cameraRef = useRef<THREE.OrthographicCamera | null>(null);
-  const sablePositionRef = useRef<{ x: number; y: number; scale: number } | null>(null);
+  const sablePositionRef = useRef<{ x: number; y: number; scale: number; characterSize?: number } | null>(null);
+  const lumaPositionRef = useRef<{ x: number; y: number; scale: number; characterSize?: number } | null>(null);
 
   const handleTouch = useCallback((event: any) => {
-    console.log('Touch event received:', {
-      hasOnSableTap: !!onSableTap,
-      hasCamera: !!cameraRef.current,
-      hasSablePos: !!sablePositionRef.current,
-      eventType: event.nativeEvent?.type,
-    });
-
-    if (!onSableTap || !cameraRef.current || !sablePositionRef.current) return;
+    if ((!onSableTap && !onLumaTap) || !cameraRef.current || (!sablePositionRef.current && !lumaPositionRef.current)) return;
 
     const touch = event.nativeEvent.touches?.[0] || event.nativeEvent;
-    if (!touch) {
-      console.log('No touch data found');
-      return;
-    }
+    if (!touch) return;
 
     // Get touch coordinates relative to the GLView
     const touchX = touch.locationX || touch.pageX;
     const touchY = touch.locationY || touch.pageY;
 
-    console.log('Touch coordinates:', { touchX, touchY, width, height });
-
     // Convert screen coordinates to world coordinates
     const camera = cameraRef.current;
-    const sablePos = sablePositionRef.current;
 
     // Calculate world position from screen coordinates
     // The camera is positioned at (0, 1000, 10) looking at (0, 1000, 0)
@@ -142,25 +132,28 @@ export default function ShadedShopViewport({
     const worldX = normalizedX * (cameraWidth / 2);
     const worldY = -normalizedY * (cameraHeight / 2) + 1000; // Add camera's Y offset
 
-    // Check if touch is within Sable's bounds (square tappable area)
-    const characterSize = sablePos.characterSize || (200 * sablePos.scale); // Use stored size or fallback
-    const distance = Math.sqrt(
-      Math.pow(worldX - sablePos.x, 2) +
-      Math.pow(worldY - sablePos.y, 2)
-    );
-
-    console.log('Touch detection:', {
-      worldX, worldY,
-      sableX: sablePos.x, sableY: sablePos.y,
-      distance, characterSize,
-      isHit: distance < characterSize
-    });
-
-    if (distance < characterSize) {
-      console.log('Sable tapped! Opening store...');
-      onSableTap();
+    // Check both characters' tappable areas, picking whichever is closer if
+    // both boxes happen to overlap.
+    const hits: { name: 'sable' | 'luma'; distance: number }[] = [];
+    if (onSableTap && sablePositionRef.current) {
+      const sablePos = sablePositionRef.current;
+      const characterSize = sablePos.characterSize || (200 * sablePos.scale);
+      const distance = Math.sqrt(Math.pow(worldX - sablePos.x, 2) + Math.pow(worldY - sablePos.y, 2));
+      if (distance < characterSize) hits.push({ name: 'sable', distance });
     }
-  }, [onSableTap, width, height]);
+    if (onLumaTap && lumaPositionRef.current) {
+      const lumaPos = lumaPositionRef.current;
+      const characterSize = lumaPos.characterSize || (200 * lumaPos.scale);
+      const distance = Math.sqrt(Math.pow(worldX - lumaPos.x, 2) + Math.pow(worldY - lumaPos.y, 2));
+      if (distance < characterSize) hits.push({ name: 'luma', distance });
+    }
+
+    if (hits.length === 0) return;
+    hits.sort((a, b) => a.distance - b.distance);
+    const winner = hits[0].name;
+    if (winner === 'sable') onSableTap?.();
+    else onLumaTap?.();
+  }, [onSableTap, onLumaTap, width, height]);
 
   const handleContextCreate = async (gl: any) => {
     if (initializedRef.current) return;
@@ -416,6 +409,48 @@ export default function ShadedShopViewport({
       // Position Luma at the Luma bone coordinates within the ShadedShop coordinate space
       lumaSkeleton.x = lumaBoneX;
       lumaSkeleton.y = lumaBoneY;
+
+      // Store Luma's position info for touch detection, mirroring the Sable
+      // resolution above -- find the 'Luma' anchor bone in the ShadedShop
+      // scene skeleton and resolve its actual world position rather than
+      // trusting the hand-copied lumaBoneX/Y constants directly (those are
+      // the bone's *local* coordinates, not its rendered world position).
+      const lumaBone = skeleton.findBone('Luma');
+      if (lumaBone) {
+        skeleton.updateWorldTransform(Physics.update);
+
+        const lumaBoneWorldX = lumaBone.appliedPose.worldX;
+        const lumaBoneWorldY = lumaBone.appliedPose.worldY;
+
+        const sceneCenterX = sceneX + (sceneWidth / 2);
+        const sceneCenterY = sceneY + (sceneHeight / 2);
+
+        const worldLumaX = lumaBoneWorldX + (-sceneCenterX * scale);
+        const worldLumaY = lumaBoneWorldY + (-sceneCenterY * scale) + 1000;
+
+        const characterSize = 150 * 5 * 1.2 * 1.2;
+        const adjustedLumaY = worldLumaY + (characterSize / 2);
+
+        lumaPositionRef.current = {
+          x: worldLumaX,
+          y: adjustedLumaY,
+          scale: 1,
+          characterSize,
+        };
+      } else {
+        console.warn('Luma bone not found in ShadedShop skeleton');
+        const sceneCenterX = sceneX + (sceneWidth / 2);
+        const sceneCenterY = sceneY + (sceneHeight / 2);
+
+        const transformedLumaX = lumaBoneX + (-sceneCenterX * scale);
+        const transformedLumaY = lumaBoneY + (-sceneCenterY * scale) + 1000;
+
+        lumaPositionRef.current = {
+          x: transformedLumaX,
+          y: transformedLumaY,
+          scale: lumaScale,
+        };
+      }
 
       // Apply animations to Luma using Spine track system
       const lumaState = lumaResult.state;

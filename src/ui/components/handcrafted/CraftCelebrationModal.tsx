@@ -1,11 +1,10 @@
 // components/handcrafted/CraftCelebrationModal.tsx
 import React, { useEffect, useRef, useState } from "react";
-import { View, Text, Image, Pressable, Animated, Easing, StyleSheet, ViewStyle, StyleProp } from "react-native";
+import { View, Text, Animated, Easing, StyleSheet, ViewStyle, StyleProp } from "react-native";
 import { useTheme } from "../../../data/hooks/useTheme";
 import CraftPanel from "./CraftPanel";
-import { INK, INK_MUTED, GOLD, WOBBLE_RADIUS_SM } from "./tokens";
-
-const felt = require("../../../assets/UI Assets/Textures/Felt.png");
+import CraftActionButton from "./CraftActionButton";
+import { INK, INK_MUTED, GOLD } from "./tokens";
 
 export type CelebrationVariant = "celebration" | "confirmation" | "information" | "warning";
 
@@ -199,41 +198,6 @@ function Spark({ pos, reduceMotion }: { pos: SparkPos; reduceMotion: boolean }) 
   );
 }
 
-function CraftActionButton({ label, onPress }: { label: string; onPress: () => void }) {
-  const pressScale = useRef(new Animated.Value(1)).current;
-  const pressTranslateY = useRef(new Animated.Value(0)).current;
-
-  const handlePressIn = () => {
-    Animated.parallel([
-      Animated.timing(pressScale, { toValue: 0.96, duration: 70, useNativeDriver: true }),
-      Animated.timing(pressTranslateY, { toValue: 1, duration: 70, useNativeDriver: true }),
-    ]).start();
-  };
-  const handlePressOut = () => {
-    Animated.parallel([
-      Animated.timing(pressScale, { toValue: 1, duration: 130, useNativeDriver: true }),
-      Animated.timing(pressTranslateY, { toValue: 0, duration: 130, useNativeDriver: true }),
-    ]).start();
-  };
-
-  return (
-    <Pressable
-      onPress={onPress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-      style={styles.buttonTouch}
-    >
-      <Animated.View style={[styles.button, { transform: [{ scale: pressScale }, { translateY: pressTranslateY }] }]}>
-        <Image source={felt} resizeMode="cover" style={styles.buttonGrain} />
-        <Text style={styles.buttonLabel}>{label}</Text>
-      </Animated.View>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   backdrop: {
     backgroundColor: "#2A1C16",
@@ -300,34 +264,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: "center",
     lineHeight: 19,
-  },
-  buttonTouch: {
-    alignSelf: "stretch",
-  },
-  button: {
-    position: "relative",
-    overflow: "hidden",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 13,
-    paddingHorizontal: 24,
-    backgroundColor: GOLD,
-    borderWidth: 2.5,
-    borderColor: INK,
-    ...WOBBLE_RADIUS_SM,
-    shadowColor: "#2A1C16",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.18,
-    shadowRadius: 5,
-    elevation: 3,
-  },
-  buttonGrain: {
-    ...StyleSheet.absoluteFillObject,
-    opacity: 0.18,
-  },
-  buttonLabel: {
-    color: INK,
-    fontWeight: "800",
-    fontSize: 16,
   },
 });

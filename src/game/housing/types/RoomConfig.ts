@@ -164,6 +164,13 @@ export interface FurnitureVariant {
    * when omitted.
    */
   layers?: FurnitureVariantLayer[];
+
+  // Shop stock metadata (see data/shop/shopTypes.ts) -- independent of cost
+  // above. Absence of shopStock just means this variant isn't sold through
+  // the Luma/Sable restock system.
+  rarity?: import("../../../data/shop/shopTypes").Rarity;
+  tags?: string[];
+  shopStock?: import("../../../data/shop/shopTypes").ShopStockConfig[];
 }
 
 // --- Plain-data grid/slot model for the quad-based room renderer ---

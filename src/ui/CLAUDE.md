@@ -106,10 +106,10 @@ Navigation structure and routing logic.
 - **Camera presets**: `cameraMode` (`"nest" | "glidermon"`) is local `HudScreen` state, only changed by an explicit tab press (never by incidental manual camera movement) — passed to `IsometricRoomView3D` as the controlled `zoomedIn` prop. "Nest" = standard wide overview; "Glidermon" activates the existing close/follow character camera (`IsometricRoomView3D`'s own camera math, untouched — see `src/game/CLAUDE.md`'s sibling doc / the component itself for `updateCameraForZoom`). The renderer's old internal "🔍 Zoom In" toggle button was removed in favor of this external, controlled prop.
 
 ### `ShopScreen.tsx`
-- **Purpose**: In-game store for cosmetic purchases
-- **Features**: Item catalog, purchase flow, currency display
-- **Categories**: Hats, themes, effects
-- **Economy**: Integrates with progression system
+- **Purpose**: Entry point for the Shaded Shop -- keeps `ShadedShopViewport` (Luma/Sable in their 3D scene) visible full-bleed at all times; tapping either character opens that merchant's `components/shop/NpcStorePanel` as a bottom overlay (~62% of screen height) without hiding the scene above it
+- **Data**: Reads generated stock from `data/stores/shopStockStore.ts` (persisted six-item batches per shop, natural-restock timer, daily free-restock tracking) and resolves each stock slot's display info via `data/shop/shopCatalog.ts`'s `getShopCatalogItem` -- purchase logic here just picks the matching ownership-store action (`cosmeticsStore.buy` / `housingStore.unlock*`) by the resolved item's `sourceKind`, then `progressionStore.spend` + `shopStockStore.markSlotSold`
+- **Components** (`components/shop/`): `NpcStorePanel` (the one reusable store surface, configured per shop via props -- do not fork per-merchant), `ShopHeader` (name + "New stock in Xh Ym"), `ShopTabs` (Luma/Sable switcher, reuses `handcrafted/CraftTab`'s `selectedColor` override for per-shop tone), `ShopStockGrid` (3x2 `ShopStockCard`s with a fade/pop transition keyed off the stock record's `generatedAt`), `ShopPurchaseSheet` (bottom buy sheet, not a per-card button), `RestockControl` (wraps a `RestockOptions`/`DailyFreeRestockOption` pair so future subscriber/ad restock sources can be added as siblings), `ShopItemThumbnail` (picks the right underlying thumbnail renderer -- `CosmeticThumbnail`/furniture image/`PatternSwatch` -- by the item's `sourceKind`)
+- **Personality tokens**: `handcrafted/tokens.ts`'s `LUMA_PEACH`/`LUMA_PALE_YELLOW` and `SABLE_PLUM`/`SABLE_DUSTY_PURPLE`/`SABLE_FELT_DARK` are used sparingly (tab accent, card backing tint, name pill) -- assigned by each character's *personality* (cheery vs. goth), not by item category; the shared cream/kraft/stitched-border craft language stays identical between the two shops
 
 ### `EquipScreen.tsx`
 - **Purpose**: Cosmetic customization and inventory management
@@ -144,9 +144,9 @@ There is no router (`@react-navigation/*` is not wired up — a dead `AppNavigat
 ### Deep links
 `App.tsx` also listens for `glidermon://` URLs (via `Linking.getInitialURL`/`addEventListener` + `parseGlidermonUrl`) and maps them onto that same `tab` state, purely for local dev/testing — jump straight to a surface instead of tapping through the app after every reload:
 ```bash
-adb shell am start -a android.intent.action.VIEW -d "glidermon://shop/floors"
+adb shell am start -a android.intent.action.VIEW -d "glidermon://shop/luma"
 ```
-Supported today: `home`, `shop` (optionally `shop/cosmetics|floors|walls`, which also skips ShopScreen's walk-up intro), `outfit`, `gallery`, `settings`. Arcade is deliberately excluded.
+Supported today: `home`, `shop` (optionally `shop/luma|sable`, which opens straight to that merchant's `NpcStorePanel` and skips the Shaded Shop walk-up), `outfit`, `gallery`, `settings`. Arcade is deliberately excluded.
 
 Also `streak/<started|continued|frozen|lost|commitment|milestone7|milestone30|milestone100|milestone365>` — jumps straight to a specific streak popup by forcing `streakStore` into that scenario (via `src/data/stores/streakTestScenarios.ts`, shared with `StreakTestButton.tsx`'s on-screen panel) and switching to HOME, e.g. `adb shell am start -a android.intent.action.VIEW -d "glidermon://streak/lost"`. Useful for screenshotting a specific splash without the on-screen test panel in the way (both the panel and the full-screen splash capture touch, so there's no way to toggle the panel off once a splash is showing).
 

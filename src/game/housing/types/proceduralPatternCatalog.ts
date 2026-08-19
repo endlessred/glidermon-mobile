@@ -14,6 +14,7 @@
 // than a generated DataTexture -- both kinds share this same catalog/id
 // space since they're both consumed only by the primitive3d room shell.
 import { materialCatalogManifest } from '../assets/generated/materialCatalogManifest';
+import type { Rarity } from '../../../data/shop/shopTypes';
 
 export type PatternFamily = 'BlackWhite' | 'Blue' | 'Brown1' | 'Dark' | 'Grey' | 'Red' | 'Yellow';
 
@@ -60,20 +61,20 @@ export type FloorPatternStyle =
   | 'Hexagon'
   | 'Marble';
 
-export const FLOOR_STYLES: { style: FloorPatternStyle; name: string; cost: number }[] = [
-  { style: 'Blank', name: 'Blank', cost: 80 },
-  { style: 'Carpet', name: 'Carpet', cost: 120 },
-  { style: 'Checkered', name: 'Checkered', cost: 120 },
-  { style: 'Wood', name: 'Wood Floor', cost: 130 },
-  { style: 'Stripe', name: 'Striped', cost: 100 },
-  { style: 'PolkaDot', name: 'Polka Dot', cost: 110 },
-  { style: 'Gingham', name: 'Gingham', cost: 130 },
-  { style: 'DiagonalCheckered', name: 'Diagonal Checker', cost: 140 },
-  { style: 'Terrazzo', name: 'Terrazzo', cost: 150 },
-  { style: 'Herringbone', name: 'Herringbone', cost: 160 },
-  { style: 'Basketweave', name: 'Basketweave', cost: 160 },
-  { style: 'Hexagon', name: 'Hexagon Tile', cost: 170 },
-  { style: 'Marble', name: 'Marble', cost: 180 },
+export const FLOOR_STYLES: { style: FloorPatternStyle; name: string; cost: number; rarity?: Rarity }[] = [
+  { style: 'Blank', name: 'Blank', cost: 80, rarity: 'common' },
+  { style: 'Carpet', name: 'Carpet', cost: 120, rarity: 'common' },
+  { style: 'Checkered', name: 'Checkered', cost: 120, rarity: 'common' },
+  { style: 'Wood', name: 'Wood Floor', cost: 130, rarity: 'common' },
+  { style: 'Stripe', name: 'Striped', cost: 100, rarity: 'common' },
+  { style: 'PolkaDot', name: 'Polka Dot', cost: 110, rarity: 'common' },
+  { style: 'Gingham', name: 'Gingham', cost: 130, rarity: 'common' },
+  { style: 'DiagonalCheckered', name: 'Diagonal Checker', cost: 140, rarity: 'uncommon' },
+  { style: 'Terrazzo', name: 'Terrazzo', cost: 150, rarity: 'uncommon' },
+  { style: 'Herringbone', name: 'Herringbone', cost: 160, rarity: 'uncommon' },
+  { style: 'Basketweave', name: 'Basketweave', cost: 160, rarity: 'uncommon' },
+  { style: 'Hexagon', name: 'Hexagon Tile', cost: 170, rarity: 'rare' },
+  { style: 'Marble', name: 'Marble', cost: 180, rarity: 'rare' },
 ];
 
 export type WallPatternStyle =
@@ -87,16 +88,16 @@ export type WallPatternStyle =
   | 'Wainscoting'
   | 'SubwayTile';
 
-export const WALL_STYLES: { style: WallPatternStyle; name: string; cost: number }[] = [
-  { style: 'Blank', name: 'Blank', cost: 100 },
-  { style: 'Brick', name: 'Brick', cost: 150 },
-  { style: 'WoodPaneling', name: 'Wood Paneling', cost: 150 },
-  { style: 'VerticalPaneling', name: 'Vertical Paneling', cost: 150 },
-  { style: 'Stripe', name: 'Striped Wallpaper', cost: 120 },
-  { style: 'PolkaDot', name: 'Polka Dot Wallpaper', cost: 130 },
-  { style: 'Beadboard', name: 'Beadboard', cost: 160 },
-  { style: 'Wainscoting', name: 'Wainscoting', cost: 190 },
-  { style: 'SubwayTile', name: 'Subway Tile', cost: 180 },
+export const WALL_STYLES: { style: WallPatternStyle; name: string; cost: number; rarity?: Rarity }[] = [
+  { style: 'Blank', name: 'Blank', cost: 100, rarity: 'common' },
+  { style: 'Brick', name: 'Brick', cost: 150, rarity: 'common' },
+  { style: 'WoodPaneling', name: 'Wood Paneling', cost: 150, rarity: 'common' },
+  { style: 'VerticalPaneling', name: 'Vertical Paneling', cost: 150, rarity: 'common' },
+  { style: 'Stripe', name: 'Striped Wallpaper', cost: 120, rarity: 'common' },
+  { style: 'PolkaDot', name: 'Polka Dot Wallpaper', cost: 130, rarity: 'common' },
+  { style: 'Beadboard', name: 'Beadboard', cost: 160, rarity: 'uncommon' },
+  { style: 'Wainscoting', name: 'Wainscoting', cost: 190, rarity: 'rare' },
+  { style: 'SubwayTile', name: 'Subway Tile', cost: 180, rarity: 'uncommon' },
 ];
 
 // Two kinds of floor/wall product: 'procedural' (the DataTexture-painted
@@ -112,6 +113,7 @@ interface ProceduralFloorPatternItem {
   style: FloorPatternStyle;
   name: string;
   cost: number;
+  rarity?: Rarity;
 }
 
 export interface MaterialFloorPatternItem {
@@ -120,6 +122,7 @@ export interface MaterialFloorPatternItem {
   materialId: string;
   name: string;
   cost: number;
+  rarity?: Rarity;
 }
 
 export type FloorPatternItem = ProceduralFloorPatternItem | MaterialFloorPatternItem;
@@ -131,6 +134,7 @@ interface ProceduralWallPatternItem {
   style: WallPatternStyle;
   name: string;
   cost: number;
+  rarity?: Rarity;
 }
 
 export interface MaterialWallPatternItem {
@@ -139,29 +143,32 @@ export interface MaterialWallPatternItem {
   materialId: string;
   name: string;
   cost: number;
+  rarity?: Rarity;
 }
 
 export type WallPatternItem = ProceduralWallPatternItem | MaterialWallPatternItem;
 
 const PROCEDURAL_FLOOR_PATTERN_CATALOG: FloorPatternItem[] = PATTERN_FAMILIES.flatMap((family) =>
-  FLOOR_STYLES.map(({ style, name, cost }) => ({
+  FLOOR_STYLES.map(({ style, name, cost, rarity }) => ({
     id: `${family}_${style}`,
     kind: 'procedural' as const,
     family,
     style,
     name: `${FAMILY_DISPLAY_NAMES[family]} ${name}`,
     cost,
+    rarity,
   }))
 );
 
 const PROCEDURAL_WALL_PATTERN_CATALOG: WallPatternItem[] = PATTERN_FAMILIES.flatMap((family) =>
-  WALL_STYLES.map(({ style, name, cost }) => ({
+  WALL_STYLES.map(({ style, name, cost, rarity }) => ({
     id: `${family}_${style}`,
     kind: 'procedural' as const,
     family,
     style,
     name: `${FAMILY_DISPLAY_NAMES[family]} ${name}`,
     cost,
+    rarity,
   }))
 );
 

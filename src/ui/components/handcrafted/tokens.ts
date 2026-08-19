@@ -23,6 +23,17 @@ export const PALE_GREEN = "#E3EEDD";
 // where you are in the app" -- for global navigation.
 export const NAV_BLUE = "#5F7A8F";
 
+// Per-shopkeeper material accents (NpcStorePanel/ShopStockCard) -- used
+// sparingly for panel/tab/backing tint, never as a wholesale re-theme.
+// Luma = cheery/bright: warm cream, soft peach, pale yellow (alongside the
+// shared FELT_GREEN/GOLD). Sable = goth/moody: plum, dusty purple, dark
+// felt (alongside the shared KRAFT_TAN/CORK_BROWN).
+export const LUMA_PEACH = "#F3C7A0";
+export const LUMA_PALE_YELLOW = "#F3DE93";
+export const SABLE_PLUM = "#5B3A56";
+export const SABLE_DUSTY_PURPLE = "#8A7093";
+export const SABLE_FELT_DARK = "#3A3238";
+
 // Physical depth, not digital gloss: low-opacity contact shadows, no glossy
 // highlights/elevation. Selected/equipped elements get a slightly stronger
 // shadow so they read as physically raised.

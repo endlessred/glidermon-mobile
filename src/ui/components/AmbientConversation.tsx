@@ -3,6 +3,7 @@ import { View, Text, Animated, Easing, TouchableOpacity } from "react-native";
 import { AmbientConversation, ConversationLine, CharacterName } from "../../data/types/conversation";
 import { useTheme } from "../../data/hooks/useTheme";
 import CharacterPortrait from "./CharacterPortrait";
+import { INK, INK_MUTED, CREAM } from "./handcrafted/tokens";
 
 interface AmbientConversationProps {
   conversation: AmbientConversation;
@@ -285,25 +286,27 @@ export default function AmbientConversationDisplay({
         </View>
       </View>
 
-      {/* Dialog Box */}
+      {/* Dialog Box -- cream cardstock, matching the handcrafted craft
+          language used everywhere else (Home/Outfit/Shop) rather than the
+          old black translucent overlay. */}
       <View
         style={{
-          backgroundColor: "rgba(0, 0, 0, 0.85)",
+          backgroundColor: CREAM,
           borderRadius: 16,
           padding: 16,
-          borderWidth: 1,
-          borderColor: "rgba(255, 255, 255, 0.1)",
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.3,
-          shadowRadius: 8,
-          elevation: 8,
+          borderWidth: 2.5,
+          borderColor: INK,
+          shadowColor: "#2A1C16",
+          shadowOffset: { width: 0, height: 3 },
+          shadowOpacity: 0.18,
+          shadowRadius: 6,
+          elevation: 5,
         }}
       >
         {/* Speaker Name */}
         <Text
           style={{
-            color: currentLine.character === "Luma" ? "#ffeaa7" : "#a29bfe",
+            color: currentLine.character === "Luma" ? "#B5751F" : "#5B3A56",
             fontWeight: "700",
             fontSize: 14,
             marginBottom: 6,
@@ -316,7 +319,7 @@ export default function AmbientConversationDisplay({
         {/* Dialog Text */}
         <Text
           style={{
-            color: "#ffffff",
+            color: INK,
             fontSize: 15,
             lineHeight: 20,
             textAlign: "center",
@@ -342,9 +345,8 @@ export default function AmbientConversationDisplay({
                 width: 6,
                 height: 6,
                 borderRadius: 3,
-                backgroundColor: index === currentLineIndex
-                  ? "#ffffff"
-                  : "rgba(255, 255, 255, 0.3)",
+                backgroundColor: index === currentLineIndex ? INK : INK_MUTED,
+                opacity: index === currentLineIndex ? 1 : 0.35,
               }}
             />
           ))}

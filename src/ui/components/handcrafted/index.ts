@@ -22,4 +22,7 @@ export { default as PaletteCard } from "./PaletteCard";
 export { default as CraftCelebrationModal } from "./CraftCelebrationModal";
 export type { CelebrationVariant } from "./CraftCelebrationModal";
 export { default as FeltFlameAnimation } from "./FeltFlameAnimation";
+export { default as CraftActionButton } from "./CraftActionButton";
+export type { CraftActionButtonTone } from "./CraftActionButton";
+export { default as CraftConfirmModal } from "./CraftConfirmModal";
 export * from "./tokens";

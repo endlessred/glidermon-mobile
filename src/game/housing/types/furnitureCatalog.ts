@@ -1,5 +1,6 @@
 import { FurnitureCatalog, FurnitureDef } from './RoomConfig';
 import { SlotType } from './roomSlots';
+import type { Rarity, ShopStockConfig } from '../../../data/shop/shopTypes';
 
 // Furniture catalog defining all available furniture items, one entry per
 // slot type (see roomSlots.ts) with 1-2 starter variants each, sourced from
@@ -18,8 +19,16 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
     supportsFacing: true,
     defaultFacing: "left",
     variants: [
-      { id: "wood_chair_green", cost: 150, skin: "WoodChair_Green", restPoseAsset: "1x1_WoodChair_Front_Green" },
-      { id: "wood_chair_brown", cost: 150, skin: "WoodChair_Brown", restPoseAsset: "1x1_WoodChair_Front_Brown" },
+      {
+        id: "wood_chair_green", cost: 150, skin: "WoodChair_Green", restPoseAsset: "1x1_WoodChair_Front_Green",
+        rarity: "common", tags: ["cozy", "casual", "cheerful"],
+        shopStock: [{ store: "luma", weight: 6 }, { store: "sable", weight: 4 }],
+      },
+      {
+        id: "wood_chair_brown", cost: 150, skin: "WoodChair_Brown", restPoseAsset: "1x1_WoodChair_Front_Brown",
+        rarity: "common", tags: ["casual"],
+        shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
+      },
     ]
   },
 
@@ -37,12 +46,18 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
         cost: 260,
         skin: "BedSingle_Wood",
         restPoseAsset: "SingleBed1",
+        rarity: "uncommon",
+        tags: ["casual"],
+        shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
       },
       {
         id: "bed_single_pink",
         cost: 260,
         skin: "BedSingle_Pink",
         restPoseAsset: "SingleBed3",
+        rarity: "uncommon",
+        tags: ["cute", "cheerful"],
+        shopStock: [{ store: "luma", weight: 7 }, { store: "sable", weight: 3 }],
       },
     ]
   },
@@ -61,6 +76,9 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
         skin: "Cabinet_Wood",
         restPoseAsset: "1x1_CabinetteBottomOverDoors",
         layers: [{ assetName: "1x1_CabinetteBottomOverDoors" }],
+        rarity: "common",
+        tags: ["casual"],
+        shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
       },
       {
         id: "storage_chest",
@@ -72,6 +90,9 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
           { assetName: "Animation_Chest_Layer2" },
           { assetName: "Animation_Chest_Layer3", frameCount: 7, fps: 6 },
         ],
+        rarity: "rare",
+        tags: ["mysterious"],
+        shopStock: [{ store: "sable", weight: 6 }, { store: "luma", weight: 4 }],
       },
     ]
   },
@@ -84,8 +105,16 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
     supportsLayers: ["under"],
     occlusion: "none",
     variants: [
-      { id: "rug_brown", cost: 130, skin: "SquareCarpet_Brown", restPoseAsset: "1x1_SquareCarpet_Brown" },
-      { id: "rug_blue", cost: 130, skin: "SquareCarpet_Blue", restPoseAsset: "1x1_SquareCarpet_Blue" },
+      {
+        id: "rug_brown", cost: 130, skin: "SquareCarpet_Brown", restPoseAsset: "1x1_SquareCarpet_Brown",
+        rarity: "common", tags: ["casual"],
+        shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
+      },
+      {
+        id: "rug_blue", cost: 130, skin: "SquareCarpet_Blue", restPoseAsset: "1x1_SquareCarpet_Blue",
+        rarity: "common", tags: ["calm"],
+        shopStock: [{ store: "luma", weight: 6 }, { store: "sable", weight: 4 }],
+      },
     ]
   },
 
@@ -97,8 +126,16 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
     supportsLayers: ["mid"],
     occlusion: "none",
     variants: [
-      { id: "wall_painting", cost: 140, skin: "Painting1Frame1_Wood", restPoseAsset: "WallDecor_Painting1Frame1_Wood" },
-      { id: "wall_clock", cost: 140, skin: "RoundClock_Brown", restPoseAsset: "WallDecor_RoundClock_Brown" },
+      {
+        id: "wall_painting", cost: 140, skin: "Painting1Frame1_Wood", restPoseAsset: "WallDecor_Painting1Frame1_Wood",
+        rarity: "common", tags: ["artsy"],
+        shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
+      },
+      {
+        id: "wall_clock", cost: 140, skin: "RoundClock_Brown", restPoseAsset: "WallDecor_RoundClock_Brown",
+        rarity: "common", tags: ["casual"],
+        shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
+      },
     ]
   },
 
@@ -110,8 +147,16 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
     supportsLayers: ["mid"],
     occlusion: "none",
     variants: [
-      { id: "table_square", cost: 160, skin: "TableSquareWood_Wood", restPoseAsset: "1x1_TableSquareWood_Wood" },
-      { id: "table_round", cost: 160, skin: "TableRound_Wood", restPoseAsset: "1x1_TableRound_Wood" },
+      {
+        id: "table_square", cost: 160, skin: "TableSquareWood_Wood", restPoseAsset: "1x1_TableSquareWood_Wood",
+        rarity: "common", tags: ["casual"],
+        shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
+      },
+      {
+        id: "table_round", cost: 160, skin: "TableRound_Wood", restPoseAsset: "1x1_TableRound_Wood",
+        rarity: "common", tags: ["casual"],
+        shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
+      },
     ]
   },
 
@@ -123,8 +168,16 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
     supportsLayers: ["mid"],
     occlusion: "none",
     variants: [
-      { id: "lamp_table", cost: 140, skin: "TableLamp_On", restPoseAsset: "1x1_TableLamp_On" },
-      { id: "lamp_classic", cost: 140, skin: "ClassicLamp_On", restPoseAsset: "1x1_ClassicLamp_On" },
+      {
+        id: "lamp_table", cost: 140, skin: "TableLamp_On", restPoseAsset: "1x1_TableLamp_On",
+        rarity: "common", tags: ["cozy", "cheerful"],
+        shopStock: [{ store: "luma", weight: 6 }, { store: "sable", weight: 4 }],
+      },
+      {
+        id: "lamp_classic", cost: 140, skin: "ClassicLamp_On", restPoseAsset: "1x1_ClassicLamp_On",
+        rarity: "common", tags: ["moody"],
+        shopStock: [{ store: "sable", weight: 6 }, { store: "luma", weight: 4 }],
+      },
     ]
   },
 
@@ -136,8 +189,16 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
     supportsLayers: ["mid"],
     occlusion: "tall",
     variants: [
-      { id: "hobby_piano", cost: 200, skin: "Piano_Brown", restPoseAsset: "1x1_Piano_Brown" },
-      { id: "hobby_record_player", cost: 200, skin: "RecordPlayerOff_Brown", restPoseAsset: "1x1_RecordPlayerOff_Brown" },
+      {
+        id: "hobby_piano", cost: 200, skin: "Piano_Brown", restPoseAsset: "1x1_Piano_Brown",
+        rarity: "uncommon", tags: ["artsy", "moody"],
+        shopStock: [{ store: "sable", weight: 6 }, { store: "luma", weight: 4 }],
+      },
+      {
+        id: "hobby_record_player", cost: 200, skin: "RecordPlayerOff_Brown", restPoseAsset: "1x1_RecordPlayerOff_Brown",
+        rarity: "uncommon", tags: ["fun", "nostalgic", "cheerful"],
+        shopStock: [{ store: "luma", weight: 6 }, { store: "sable", weight: 4 }],
+      },
     ]
   },
 
@@ -158,6 +219,9 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
           { assetName: "1x1_FireplaceUnder_Brown" },
           { assetName: "1x1_FireplaceOver_Brown" },
         ],
+        rarity: "uncommon",
+        tags: ["cozy", "warm", "cheerful"],
+        shopStock: [{ store: "luma", weight: 6 }, { store: "sable", weight: 4 }],
       },
       {
         id: "feature_campfire",
@@ -168,6 +232,9 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
           { assetName: "Animation_Campfire_Layer1" },
           { assetName: "Animation_Campfire_Layer2", frameCount: 5, fps: 8 },
         ],
+        rarity: "rare",
+        tags: ["night", "cozy"],
+        shopStock: [{ store: "sable", weight: 6 }, { store: "luma", weight: 4 }],
       },
     ]
   },
@@ -200,6 +267,9 @@ export interface FurnitureShopItem {
   name: string;
   cost: number;
   previewAsset: string;
+  rarity?: Rarity;
+  tags?: string[];
+  shopStock?: ShopStockConfig[];
 }
 
 const SLOT_TYPE_LABELS: Record<SlotType, string> = {
@@ -223,6 +293,9 @@ export const FURNITURE_SHOP_CATALOG: FurnitureShopItem[] = Object.values(FURNITU
     name: `${SLOT_TYPE_LABELS[SLOT_TYPE_FOR_FURNITURE_ID[def.id]]} – ${variant.skin ?? variant.id}`,
     cost: variant.cost,
     previewAsset: variant.restPoseAsset ?? variant.layers?.[0]?.assetName ?? '',
+    rarity: variant.rarity,
+    tags: variant.tags,
+    shopStock: variant.shopStock,
   }))
 );
 

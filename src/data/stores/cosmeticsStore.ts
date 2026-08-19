@@ -4,6 +4,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { themeDisplayNames } from "../../styles/themeVariations";
 import type { CosmeticPalette } from "../cosmetics/palette";
+import type { Rarity, ShopStockConfig } from "../shop/shopTypes";
 
 export type { CosmeticPalette, PaletteTier, PaletteEffect } from "../cosmetics/palette";
 
@@ -33,6 +34,14 @@ export type CosmeticItem = {
   };
   recolorable?: boolean;  // Does this item offer alternate premade palettes?
   palettes?: CosmeticPalette[]; // Designer-made colorway options (no free-form color picker)
+
+  // Shop stock metadata (see data/shop/shopTypes.ts) -- independent of the
+  // ownership/purchase fields above. Absence of shopStock just means this
+  // item isn't sold through the Luma/Sable restock system (e.g. starter items).
+  rarity?: Rarity;
+  tags?: string[];
+  shopStock?: ShopStockConfig[];
+  repeatable?: boolean;   // defaults false (one-time permanent purchase)
 };
 
 type Equipped = {
@@ -109,7 +118,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "headTop",
     spineSkin: "Hats/Baseball Caps/White Baseball Cap", // Use white cap as base
     maskRecolor: { r: "#5f80a6" }, // Blue color for R channel
-    tex: hatPackPng // Keep thumbnail for shop display
+    tex: hatPackPng, // Keep thumbnail for shop display
+    rarity: "common",
+    tags: ["casual", "colorful"],
+    shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
   },
   {
     id: "green_baseball_cap",
@@ -118,7 +130,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "headTop",
     spineSkin: "Hats/Baseball Caps/White Baseball Cap", // Use white cap as base
     maskRecolor: { r: "#6f975e" }, // Green color for R channel
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "common",
+    tags: ["casual", "colorful"],
+    shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
   },
   {
     id: "red_baseball_cap",
@@ -127,7 +142,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "headTop",
     spineSkin: "Hats/Baseball Caps/White Baseball Cap", // Use white cap as base
     maskRecolor: { r: "#a83f48" }, // Red color from palette
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "common",
+    tags: ["casual", "colorful"],
+    shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
   },
   {
     id: "white_baseball_cap",
@@ -135,7 +153,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     cost: 150,
     socket: "headTop",
     spineSkin: "Hats/Baseball Caps/White Baseball Cap",
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "common",
+    tags: ["casual"],
+    shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
   },
 
   // Spine-based Hat Cosmetics - Special Hats
@@ -145,7 +166,12 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     cost: 400,
     socket: "headTop",
     spineSkin: "Hats/Flower Crown",
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "uncommon",
+    tags: ["cute", "colorful", "nature", "cheerful"],
+    // Never naturally appears in Sable's store -- a single row means exclusive.
+    // Bright/cute/nature -- pure Luma personality fit.
+    shopStock: [{ store: "luma", weight: 10 }],
   },
   {
     id: "top_hat",
@@ -153,7 +179,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     cost: 500,
     socket: "headTop",
     spineSkin: "Hats/Top Hat",
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "rare",
+    tags: ["formal", "fancy"],
+    shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
   },
   {
     id: "wizard_hat",
@@ -161,7 +190,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     cost: 600,
     socket: "headTop",
     spineSkin: "Hats/Wizard Hat",
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "special",
+    tags: ["magic", "fantasy"],
+    shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
   },
 
   // Spine-based Hat Cosmetics - Shader hats (hue-indexed recolor: r=primary, g=secondary, b=detail)
@@ -172,7 +204,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "headTop",
     spineSkin: "Hats/Shader/Band and Bow",
     maskRecolor: { r: "#b6607c", g: "#dec575", b: "#2a202a" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "common",
+    tags: ["cute", "formal", "cheerful"],
+    shopStock: [{ store: "luma", weight: 7 }, { store: "sable", weight: 3 }],
   },
   {
     id: "hat_beret",
@@ -183,6 +218,9 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     maskRecolor: { r: "#a83f48", g: "#2a202a", b: "#d9d3d9" },
     tex: hatPackPng,
     recolorable: true,
+    rarity: "common",
+    tags: ["artsy", "casual"],
+    shopStock: [{ store: "sable", weight: 6 }, { store: "luma", weight: 4 }],
     palettes: [
       { id: "original", name: "Original", colors: ["#a83f48", "#2a202a", "#d9d3d9"], channelColors: { r: "#a83f48", g: "#2a202a", b: "#d9d3d9" } },
       { id: "forest", name: "Forest", colors: ["#6f975e", "#3b6b58", "#dec575"], channelColors: { r: "#6f975e", g: "#3b6b58", b: "#dec575" } },
@@ -203,7 +241,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "headTop",
     spineSkin: "Hats/Shader/Bonnett",
     maskRecolor: { r: "#dec575", g: "#d9d3d9", b: "#b6607c" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "common",
+    tags: ["cute", "vintage", "cheerful"],
+    shopStock: [{ store: "luma", weight: 7 }, { store: "sable", weight: 3 }],
   },
   {
     id: "hat_brunch",
@@ -212,7 +253,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "headTop",
     spineSkin: "Hats/Shader/Brunch",
     maskRecolor: { r: "#dc995d", g: "#865d56", b: "#d9d3d9" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "common",
+    tags: ["cute", "casual", "cheerful"],
+    shopStock: [{ store: "luma", weight: 7 }, { store: "sable", weight: 3 }],
   },
   {
     id: "hat_cowboy_hat",
@@ -221,7 +265,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "headTop",
     spineSkin: "Hats/Shader/Cowboy Hat",
     maskRecolor: { r: "#865d56", g: "#2a202a", b: "#dec575" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "uncommon",
+    tags: ["rugged", "casual"],
+    shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
   },
   {
     id: "hat_crown",
@@ -232,6 +279,9 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     maskRecolor: { r: "#dec575", g: "#613661", b: "#a83f48" },
     tex: hatPackPng,
     recolorable: true,
+    rarity: "special",
+    tags: ["formal", "fancy"],
+    shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
     palettes: [
       { id: "original", name: "Original", colors: ["#dec575", "#613661", "#a83f48"], channelColors: { r: "#dec575", g: "#613661", b: "#a83f48" } },
       { id: "berry", name: "Berry", colors: ["#b6607c", "#613661", "#524f73"], channelColors: { r: "#b6607c", g: "#613661", b: "#524f73" } },
@@ -252,7 +302,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "headTop",
     spineSkin: "Hats/Shader/Durag",
     maskRecolor: { r: "#2a202a", g: "#a83f48", b: "#d9d3d9" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "common",
+    tags: ["street", "edgy"],
+    shopStock: [{ store: "sable", weight: 6 }, { store: "luma", weight: 4 }],
   },
   {
     id: "hat_ear_beanie",
@@ -261,7 +314,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "headTop",
     spineSkin: "Hats/Shader/Ear Beanie",
     maskRecolor: { r: "#6f975e", g: "#865d56", b: "#d9d3d9" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "common",
+    tags: ["cute", "cozy", "cheerful"],
+    shopStock: [{ store: "luma", weight: 7 }, { store: "sable", weight: 3 }],
   },
   {
     id: "hat_fedora",
@@ -270,7 +326,11 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "headTop",
     spineSkin: "Hats/Shader/Fedora",
     maskRecolor: { r: "#2a202a", g: "#9a919b", b: "#dec575" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "uncommon",
+    tags: ["goth", "mysterious"],
+    // Moody/mysterious -- pure Sable personality fit.
+    shopStock: [{ store: "sable", weight: 10 }],
   },
   {
     id: "hat_headwrap",
@@ -279,7 +339,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "headTop",
     spineSkin: "Hats/Shader/Headwrap",
     maskRecolor: { r: "#dc995d", g: "#613661", b: "#dec575" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "common",
+    tags: ["casual"],
+    shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
   },
   {
     id: "hat_jester",
@@ -288,7 +351,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "headTop",
     spineSkin: "Hats/Shader/Jester",
     maskRecolor: { r: "#613661", g: "#dec575", b: "#a83f48" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "uncommon",
+    tags: ["weird", "theatrical"],
+    shopStock: [{ store: "sable", weight: 7 }, { store: "luma", weight: 3 }],
   },
   {
     id: "hat_moon_and_stars",
@@ -297,7 +363,11 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "headTop",
     spineSkin: "Hats/Shader/Moon and Stars",
     maskRecolor: { r: "#2a202a", g: "#5f80a6", b: "#dec575" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "uncommon",
+    tags: ["magic", "spooky", "night"],
+    // Moody/nocturnal -- pure Sable personality fit.
+    shopStock: [{ store: "sable", weight: 10 }],
   },
   {
     id: "hat_newsboy",
@@ -306,7 +376,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "headTop",
     spineSkin: "Hats/Shader/Newsboy",
     maskRecolor: { r: "#865d56", g: "#2a202a", b: "#9a919b" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "common",
+    tags: ["casual", "vintage"],
+    shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
   },
   {
     id: "hat_nurse",
@@ -315,7 +388,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "headTop",
     spineSkin: "Hats/Shader/Nurse",
     maskRecolor: { r: "#d9d3d9", g: "#a83f48", b: "#5f80a6" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "common",
+    tags: ["costume"],
+    shopStock: [{ store: "sable", weight: 6 }, { store: "luma", weight: 4 }],
   },
   {
     id: "hat_officer",
@@ -324,7 +400,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "headTop",
     spineSkin: "Hats/Shader/Officer",
     maskRecolor: { r: "#5f80a6", g: "#2a202a", b: "#dec575" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "uncommon",
+    tags: ["formal", "dark"],
+    shopStock: [{ store: "sable", weight: 7 }, { store: "luma", weight: 3 }],
   },
   {
     id: "hat_paper_hat",
@@ -333,7 +412,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "headTop",
     spineSkin: "Hats/Shader/Paper Hat",
     maskRecolor: { r: "#d9d3d9", g: "#9a919b", b: "#2a202a" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "common",
+    tags: ["silly", "casual", "cheerful"],
+    shopStock: [{ store: "luma", weight: 6 }, { store: "sable", weight: 4 }],
   },
   {
     id: "hat_party_hat",
@@ -342,7 +424,11 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "headTop",
     spineSkin: "Hats/Shader/Party Hat",
     maskRecolor: { r: "#a83f48", g: "#dec575", b: "#5f80a6" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "common",
+    tags: ["cute", "colorful", "fun", "cheerful"],
+    // Bright, festive, fun -- pure Luma personality fit.
+    shopStock: [{ store: "luma", weight: 9 }, { store: "sable", weight: 1 }],
   },
   {
     id: "hat_pilgrim",
@@ -351,7 +437,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "headTop",
     spineSkin: "Hats/Shader/Pilgrim",
     maskRecolor: { r: "#2a202a", g: "#d9d3d9", b: "#dec575" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "common",
+    tags: ["costume", "vintage"],
+    shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
   },
   {
     id: "hat_pom_beanie",
@@ -360,7 +449,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "headTop",
     spineSkin: "Hats/Shader/Pom Beanie",
     maskRecolor: { r: "#6f975e", g: "#d9d3d9", b: "#865d56" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "common",
+    tags: ["cute", "cozy", "cheerful"],
+    shopStock: [{ store: "luma", weight: 8 }, { store: "sable", weight: 2 }],
   },
   {
     id: "hat_propeller",
@@ -369,7 +461,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "headTop",
     spineSkin: "Hats/Shader/Propeller",
     maskRecolor: { r: "#a83f48", g: "#6f975e", b: "#5f80a6" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "uncommon",
+    tags: ["silly", "weird", "cheerful"],
+    shopStock: [{ store: "luma", weight: 6 }, { store: "sable", weight: 4 }],
   },
   {
     id: "hat_sailor",
@@ -378,7 +473,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "headTop",
     spineSkin: "Hats/Shader/Sailor",
     maskRecolor: { r: "#5f80a6", g: "#d9d3d9", b: "#2a202a" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "common",
+    tags: ["casual", "nautical"],
+    shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
   },
   {
     id: "hat_santa_hat",
@@ -387,7 +485,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "headTop",
     spineSkin: "Hats/Shader/Santa Hat",
     maskRecolor: { r: "#a83f48", g: "#d9d3d9", b: "#dec575" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "uncommon",
+    tags: ["festive", "colorful", "cheerful"],
+    shopStock: [{ store: "luma", weight: 8 }, { store: "sable", weight: 2 }],
   },
   {
     id: "hat_striped_pom_beanie",
@@ -396,7 +497,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "headTop",
     spineSkin: "Hats/Shader/Striped Pom Beanie",
     maskRecolor: { r: "#a83f48", g: "#d9d3d9", b: "#5f80a6" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "common",
+    tags: ["cute", "colorful", "cozy", "cheerful"],
+    shopStock: [{ store: "luma", weight: 8 }, { store: "sable", weight: 2 }],
   },
   {
     id: "hat_sunhat",
@@ -405,7 +509,11 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "headTop",
     spineSkin: "Hats/Shader/Sunhat",
     maskRecolor: { r: "#dec575", g: "#dc995d", b: "#d9d3d9" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "common",
+    tags: ["cute", "nature", "colorful", "cheerful"],
+    // Bright/nature/sunny -- pure Luma personality fit.
+    shopStock: [{ store: "luma", weight: 9 }, { store: "sable", weight: 1 }],
   },
   {
     id: "hat_wicked",
@@ -414,7 +522,11 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "headTop",
     spineSkin: "Hats/Shader/Wicked",
     maskRecolor: { r: "#2a202a", g: "#6f975e", b: "#613661" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "uncommon",
+    tags: ["goth", "spooky", "dark"],
+    // Dark/spooky -- pure Sable personality fit, never appears at Luma's.
+    shopStock: [{ store: "sable", weight: 10 }],
   },
   {
     id: "hat_witch",
@@ -423,7 +535,11 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "headTop",
     spineSkin: "Hats/Shader/Witch",
     maskRecolor: { r: "#613661", g: "#2a202a", b: "#dec575" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "uncommon",
+    tags: ["goth", "magic", "spooky"],
+    // Belongs strongly to Sable's identity, but can rarely show up at Luma's.
+    shopStock: [{ store: "sable", weight: 9 }, { store: "luma", weight: 1 }],
   },
 
   // Shoe cosmetics - default look + purchasable designs (both feet always change together)
@@ -435,7 +551,9 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     // No maskRecolor: renders via the plain L_Shoe/R_Shoe attachment (no
     // shader material), same as it did before this feature existed, so the
     // default look doesn't pay for an always-on hue-indexed recolor draw.
-    tex: hatPackPng
+    tex: hatPackPng,
+    // Free starter item, always owned by default -- intentionally no
+    // shopStock so it never enters the restock pool.
   },
   {
     id: "shoe_cowboy_boots",
@@ -446,6 +564,9 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     maskRecolor: { r: "#865d56", g: "#2a202a", b: "#dec575" },
     tex: hatPackPng,
     recolorable: true,
+    rarity: "uncommon",
+    tags: ["rugged", "casual"],
+    shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
     palettes: [
       { id: "original", name: "Original", colors: ["#865d56", "#2a202a", "#dec575"], channelColors: { r: "#865d56", g: "#2a202a", b: "#dec575" } },
       { id: "moss", name: "Moss", colors: ["#6f975e", "#3b6b58", "#a8b164"], channelColors: { r: "#6f975e", g: "#3b6b58", b: "#a8b164" } },
@@ -465,7 +586,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "shoes",
     shoeAttachment: "Curvies",
     maskRecolor: { r: "#b6607c", g: "#d9d3d9", b: "#2a202a" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "common",
+    tags: ["casual"],
+    shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
   },
   {
     id: "shoe_deep_soles",
@@ -474,7 +598,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "shoes",
     shoeAttachment: "Deep Soles",
     maskRecolor: { r: "#2a202a", g: "#a83f48", b: "#d9d3d9" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "common",
+    tags: ["street", "edgy"],
+    shopStock: [{ store: "sable", weight: 7 }, { store: "luma", weight: 3 }],
   },
   {
     id: "shoe_dress_up",
@@ -483,7 +610,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "shoes",
     shoeAttachment: "Dress Up",
     maskRecolor: { r: "#2a202a", g: "#dec575", b: "#d9d3d9" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "uncommon",
+    tags: ["formal", "fun"],
+    shopStock: [{ store: "luma", weight: 6 }, { store: "sable", weight: 4 }],
   },
   {
     id: "shoe_ice_skates",
@@ -492,7 +622,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "shoes",
     shoeAttachment: "Ice Skates",
     maskRecolor: { r: "#5f80a6", g: "#d9d3d9", b: "#9a919b" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "uncommon",
+    tags: ["fun", "winter", "cheerful"],
+    shopStock: [{ store: "luma", weight: 7 }, { store: "sable", weight: 3 }],
   },
   {
     id: "shoe_lace_up",
@@ -501,7 +634,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "shoes",
     shoeAttachment: "Lace Up",
     maskRecolor: { r: "#865d56", g: "#d9d3d9", b: "#2a202a" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "common",
+    tags: ["casual"],
+    shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
   },
   {
     id: "shoe_oxfords",
@@ -510,7 +646,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "shoes",
     shoeAttachment: "Oxfords",
     maskRecolor: { r: "#2a202a", g: "#865d56", b: "#dec575" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "uncommon",
+    tags: ["formal"],
+    shopStock: [{ store: "sable", weight: 6 }, { store: "luma", weight: 4 }],
   },
   {
     id: "shoe_roller_skates",
@@ -519,7 +658,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "shoes",
     shoeAttachment: "Roller Skates",
     maskRecolor: { r: "#a83f48", g: "#5f80a6", b: "#d9d3d9" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "uncommon",
+    tags: ["fun", "colorful", "cheerful"],
+    shopStock: [{ store: "luma", weight: 8 }, { store: "sable", weight: 2 }],
   },
   {
     id: "shoe_runners",
@@ -528,7 +670,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "shoes",
     shoeAttachment: "Runners",
     maskRecolor: { r: "#6f975e", g: "#d9d3d9", b: "#2a202a" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "common",
+    tags: ["casual", "sporty"],
+    shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
   },
   {
     id: "shoe_sneakers",
@@ -537,7 +682,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "shoes",
     shoeAttachment: "Sneakers",
     maskRecolor: { r: "#d9d3d9", g: "#5f80a6", b: "#a83f48" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "common",
+    tags: ["casual", "sporty"],
+    shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
   },
 
   // Themed Skin Cosmetics - 4-channel recoloring for body parts
@@ -553,7 +701,11 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
       b: "#d3a092", // Lightened version of pink
       a: "#613661"  // Purple accent from palette
     },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "common",
+    tags: ["cute", "colorful", "cheerful"],
+    // Cheerful/bright -- pure Luma personality fit.
+    shopStock: [{ store: "luma", weight: 10 }],
   },
   {
     id: "skin_cyberpunk",
@@ -567,7 +719,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
       b: "#9db8c5", // Lightened version of blue
       a: "#524f73"  // Purple accent from palette
     },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "uncommon",
+    tags: ["cyberpunk", "neon", "edgy"],
+    shopStock: [{ store: "sable", weight: 7 }, { store: "luma", weight: 3 }],
   },
   {
     id: "skin_forest",
@@ -581,7 +736,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
       b: "#a8b164", // Lightened version of green
       a: "#865d56"  // Brown accent from palette
     },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "common",
+    tags: ["nature", "forest", "cheerful"],
+    shopStock: [{ store: "luma", weight: 7 }, { store: "sable", weight: 3 }],
   },
   {
     id: "skin_ocean",
@@ -595,7 +753,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
       b: "#9db8c5", // Lightened version of blue
       a: "#466f77"  // Teal accent from palette
     },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "uncommon",
+    tags: ["nature", "ocean"],
+    shopStock: [{ store: "luma", weight: 6 }, { store: "sable", weight: 4 }],
   },
   {
     id: "skin_sunset",
@@ -609,7 +770,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
       b: "#dec575", // Lightened version of orange
       a: "#d37755"  // Orange accent from palette
     },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "uncommon",
+    tags: ["colorful", "sunset", "cheerful"],
+    shopStock: [{ store: "luma", weight: 7 }, { store: "sable", weight: 3 }],
   },
 
   // Hair cosmetics - Hair styles (color selected separately)
@@ -621,6 +785,9 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     spineSkin: "default", // Uses default skin with shader for HairFront only
     tex: hatPackPng, // Placeholder thumbnail
     recolorable: true,
+    rarity: "uncommon",
+    tags: ["casual"],
+    shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
     palettes: HAIR_PALETTES,
   },
   {
@@ -631,6 +798,9 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     spineSkin: "default", // Uses default skin with shader for both HairFront and HairBack
     tex: hatPackPng, // Placeholder thumbnail
     recolorable: true,
+    rarity: "special",
+    tags: ["flowing"],
+    shopStock: [{ store: "luma", weight: 6 }, { store: "sable", weight: 4 }],
     palettes: HAIR_PALETTES,
   },
 
@@ -647,7 +817,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
       b: "#2a202a", // Dark accent from palette
       a: "#9a919b"  // Light accent from palette
     },
-    tex: hatPackPng // Placeholder thumbnail
+    tex: hatPackPng, // Placeholder thumbnail
+    rarity: "rare",
+    tags: ["bold", "colorful"],
+    shopStock: [{ store: "luma", weight: 6 }, { store: "sable", weight: 4 }],
   },
   {
     id: "motorcycle_jacket_blue_orange",
@@ -661,7 +834,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
       b: "#2a202a", // Dark accent from palette
       a: "#9a919b"  // Light accent from palette
     },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "rare",
+    tags: ["bold", "colorful"],
+    shopStock: [{ store: "luma", weight: 6 }, { store: "sable", weight: 4 }],
   },
   {
     id: "motorcycle_jacket_black_gold",
@@ -677,6 +853,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     },
     tex: hatPackPng,
     recolorable: true,
+    rarity: "special",
+    tags: ["goth", "edgy"],
+    // Classic black/gold -- pure Sable personality fit.
+    shopStock: [{ store: "sable", weight: 8 }, { store: "luma", weight: 2 }],
     palettes: [
       { id: "original", name: "Original", colors: ["#2a202a", "#dec575", "#36373d", "#9a919b"], channelColors: { r: "#2a202a", g: "#dec575", b: "#36373d", a: "#9a919b" } },
       { id: "rose", name: "Rose", colors: ["#b6607c", "#d3a092", "#524f73", "#d9d3d9"], channelColors: { r: "#b6607c", g: "#d3a092", b: "#524f73", a: "#d9d3d9" } },
@@ -701,7 +881,10 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
       b: "#2a202a", // Dark accent from palette
       a: "#9a919b"  // Light accent from palette
     },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "rare",
+    tags: ["elegant"],
+    shopStock: [{ store: "luma", weight: 6 }, { store: "sable", weight: 4 }],
   },
   {
     id: "motorcycle_jacket_forest_brown",
@@ -715,15 +898,39 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
       b: "#2a202a", // Dark accent from palette
       a: "#9a919b"  // Light accent from palette
     },
-    tex: hatPackPng
+    tex: hatPackPng,
+    rarity: "uncommon",
+    tags: ["rugged", "earthy"],
+    shopStock: [{ store: "sable", weight: 6 }, { store: "luma", weight: 4 }],
   },
 
   // Theme cosmetics - unlockable color themes
-  { id: "theme_cute", name: themeDisplayNames.cute, cost: 500, socket: "theme", themeId: "cute" },
-  { id: "theme_cyberpunk", name: themeDisplayNames.cyberpunk, cost: 750, socket: "theme", themeId: "cyberpunk" },
-  { id: "theme_forest", name: themeDisplayNames.forest, cost: 400, socket: "theme", themeId: "forest" },
-  { id: "theme_ocean", name: themeDisplayNames.ocean, cost: 450, socket: "theme", themeId: "ocean" },
-  { id: "theme_sunset", name: themeDisplayNames.sunset, cost: 550, socket: "theme", themeId: "sunset" },
+  {
+    id: "theme_cute", name: themeDisplayNames.cute, cost: 500, socket: "theme", themeId: "cute",
+    rarity: "rare", tags: ["cute", "colorful", "cheerful"],
+    // Cheerful/bright -- pure Luma personality fit.
+    shopStock: [{ store: "luma", weight: 10 }],
+  },
+  {
+    id: "theme_cyberpunk", name: themeDisplayNames.cyberpunk, cost: 750, socket: "theme", themeId: "cyberpunk",
+    rarity: "special", tags: ["cyberpunk", "edgy"],
+    shopStock: [{ store: "sable", weight: 7 }, { store: "luma", weight: 3 }],
+  },
+  {
+    id: "theme_forest", name: themeDisplayNames.forest, cost: 400, socket: "theme", themeId: "forest",
+    rarity: "uncommon", tags: ["nature"],
+    shopStock: [{ store: "luma", weight: 6 }, { store: "sable", weight: 4 }],
+  },
+  {
+    id: "theme_ocean", name: themeDisplayNames.ocean, cost: 450, socket: "theme", themeId: "ocean",
+    rarity: "uncommon", tags: ["nature"],
+    shopStock: [{ store: "luma", weight: 6 }, { store: "sable", weight: 4 }],
+  },
+  {
+    id: "theme_sunset", name: themeDisplayNames.sunset, cost: 550, socket: "theme", themeId: "sunset",
+    rarity: "rare", tags: ["colorful", "cheerful"],
+    shopStock: [{ store: "luma", weight: 7 }, { store: "sable", weight: 3 }],
+  },
 ];
 
 export const useCosmeticsStore = create<CosmeticsState>()(
