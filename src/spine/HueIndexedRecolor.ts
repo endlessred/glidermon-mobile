@@ -37,14 +37,20 @@ export type HueIndexedRecolorOptions = {
   smoothOutlineEdges?: boolean;
   // --- Plus-tier effects (see docs/superpowers/specs/2026-08-19-cosmetic-palette-tiers.md) ---
   /** Gradient mode: per-channel "light end" colors (red/green/yellow only --
-   * blue has no luma signal to repurpose, same reason it's excluded from
-   * shading below). Blended against `colors.red/green/yellow` (the "dark
-   * end") using the shader's existing shade signal as the mix factor, so
-   * gradients work on art painted for the flat system with no changes. */
+   * blue is excluded, same reason it's excluded from shading below). Mixed
+   * against `colors.red/green/yellow` (the "dark end") using a repeating
+   * diagonal band driven by UV position, not the per-pixel shading signal
+   * -- verified on real assets that guide-art brightness for a given
+   * channel is a fixed per-item baseline, not a range, so it can't drive a
+   * visible gradient. */
   gradientColors?: {
     red?: THREE.Color | string | number;
     green?: THREE.Color | string | number;
     yellow?: THREE.Color | string | number;
+    /** Repeats per unit of (vUv.x + vUv.y); higher = tighter/more frequent
+     * banding. Default 25 -- tuned to show 2-4 bands across a typical hat/
+     * jacket-sized attachment in this project's shared atlas. */
+    scale?: number;
   };
   /** Shimmer mode: an animated diagonal highlight sweep over already-
    * recolored pixels. `timeUniform` should be one shared {value:number}
@@ -103,6 +109,12 @@ export function makeHueIndexedRecolorMaterial(
   const colRB = toColorOrDefault(o.gradientColors?.red, colR.getHex());
   const colGB = toColorOrDefault(o.gradientColors?.green, colG.getHex());
   const colYB = toColorOrDefault(o.gradientColors?.yellow, colY.getHex());
+  // Higher reads safely on both large and small atlas regions -- a region
+  // that only spans a small UV footprint still gets several band cycles
+  // at this frequency, whereas a low scale (e.g. 25) showed nothing at all
+  // on smaller regions (confirmed on-device: worked on the crown's larger
+  // region, invisible on the jacket torso's smaller one).
+  const gradientScale = o.gradientColors?.scale ?? 120;
 
   const shimmerEnabled = !!o.shimmer;
   const shimmerSpeed = o.shimmer?.speed ?? 0.4;
@@ -169,11 +181,30 @@ export function makeHueIndexedRecolorMaterial(
     // Plus-tier effects (gradient / shimmer) -- see
     // docs/superpowers/specs/2026-08-19-cosmetic-palette-tiers.md
     uniform vec3 uColRB, uColGB, uColYB;
-    uniform float uGradientEnabled;
+    uniform float uGradientEnabled, uGradientScale;
     uniform float uTime, uShimmerEnabled, uShimmerSpeed, uShimmerIntensity;
     uniform vec3 uShimmerTint;
 
     varying vec2 vUv;
+
+    // Gradient mode originally reused the per-pixel shading signal (Y/refY)
+    // as the A/B mix factor -- verified on-device via a grayscale debug
+    // dump that this doesn't work: guide art brightness for a given
+    // channel is an artist-chosen *fixed baseline* per item (calibrated to
+    // look right multiplied onto one target color), not a range that spans
+    // dark-to-light within a single item's single channel, so shadeFactor
+    // pinned at one extreme of its clamp for the *entire* mesh, every time.
+    // Driven from vUv instead -- proven to carry real spatial variation
+    // (it's literally the working UV mapping), unlike shadeFactor here or
+    // uTime in the shimmer path below. A repeating diagonal triangle wave
+    // rather than one clean sweep across true 0..1, since we don't have
+    // this attachment's own UV bounding rect (it's a sub-rect of the
+    // shared atlas) -- reads as a metallic/sheen banding, which suits
+    // effects like "Chrome" thematically anyway.
+    float gradientT() {
+      float raw = fract((vUv.x + vUv.y) * uGradientScale);
+      return 1.0 - abs(raw * 2.0 - 1.0);
+    }
 
     // Diagonal sweep in atlas UV space -- an MVP simplification, not aware
     // of a given attachment's own local orientation within the atlas (see
@@ -276,14 +307,13 @@ export function makeHueIndexedRecolorMaterial(
           float shadeFactor = clamp(Y / max(refY, 1e-4), 0.4, 1.3);
           vec3 shaded;
           if (uGradientEnabled > 0.5) {
-            // Gradient mode: reuse the same shadeFactor signal as a mix
-            // parameter between two designer colors instead of a
-            // brightness multiplier on one -- works on already-painted
-            // shading with no new art.
+            // Gradient mode: driven from vUv, not shadeFactor -- see
+            // gradientT() comment above for why the shading signal doesn't
+            // work here (it's a fixed per-item baseline, not a range).
             vec3 target_srgb_B = (id==0) ? uColRB : (id==1) ? uColGB : uColYB;
             vec3 targetB = SRGBToLinear(target_srgb_B);
-            float t = clamp((shadeFactor - 0.4) / 0.9, 0.0, 1.0);
-            shaded = mix(target, targetB, t);
+            vec3 blended = mix(target, targetB, gradientT());
+            shaded = mix(blended, blended * shadeFactor, uShadeMode);
           } else {
             shaded = mix(target, target * shadeFactor, uShadeMode);
           }
@@ -426,8 +456,11 @@ export function makeHueIndexedRecolorMaterial(
           // works on already-painted shading with no new art.
           vec3 target_srgb_B = (id==0) ? uColRB : (id==1) ? uColGB : uColYB;
           vec3 targetB = SRGBToLinear(target_srgb_B);
-          float t = clamp((shadeFactor - 0.4) / 0.9, 0.0, 1.0);
-          shaded = mix(target, targetB, t);
+          // Still apply the original brightness multiply on top of the
+          // gradient-mixed base, so painted highlights/shadows still read
+          // as depth rather than a perfectly flat two-tone fill.
+          vec3 blended = mix(target, targetB, gradientT());
+          shaded = mix(blended, blended * shadeFactor, uShadeMode);
         } else {
           shaded = mix(target, target * shadeFactor, uShadeMode);
         }
@@ -471,6 +504,7 @@ export function makeHueIndexedRecolorMaterial(
       uColGB:             { value: safeColGB },
       uColYB:             { value: safeColYB },
       uGradientEnabled:   { value: gradientEnabled ? 1.0 : 0.0 },
+      uGradientScale:     { value: gradientScale },
       uTime:              timeUniform,
       uShimmerEnabled:    { value: shimmerEnabled ? 1.0 : 0.0 },
       uShimmerSpeed:      { value: shimmerSpeed },
