@@ -19,4 +19,7 @@ export { default as CraftBottomNav } from "./CraftBottomNav";
 export { default as CraftNavItem } from "./CraftNavItem";
 export { default as PaletteSwatch } from "./PaletteSwatch";
 export { default as PaletteCard } from "./PaletteCard";
+export { default as CraftCelebrationModal } from "./CraftCelebrationModal";
+export type { CelebrationVariant } from "./CraftCelebrationModal";
+export { default as FeltFlameAnimation } from "./FeltFlameAnimation";
 export * from "./tokens";
