@@ -1,0 +1,264 @@
+<h2>Check-In Flow — All 3 Moments</h2>
+<p class="subtitle">Each check-in is a short guided sequence. Tap a screen to zoom. Review the flow and let me know if any step feels off.</p>
+
+<style>
+  .flow-row { display: flex; gap: 12px; margin-bottom: 28px; align-items: flex-start; flex-wrap: wrap; }
+  .flow-label { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; color: var(--accent); margin-bottom: 10px; text-transform: uppercase; }
+  .phone { background: #1a1228; border-radius: 14px; padding: 12px; font-family: sans-serif; width: 130px; flex-shrink: 0; border: 1px solid #333; }
+  .phone-inner { background: #120d1e; border-radius: 8px; padding: 10px; min-height: 160px; }
+  .arrow { color: #555; font-size: 22px; align-self: center; padding-top: 30px; }
+  .anim-tag { background: #2d1f4a; border-radius: 4px; padding: 2px 6px; color: #b39ddb; font-size: 8px; font-family: monospace; display: inline-block; margin-bottom: 4px; }
+  .step-num { background: #4a2c6e; color: #e8d5f5; border-radius: 50%; width: 16px; height: 16px; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center; margin-bottom: 6px; }
+  .screen-title { color: #e8d5f5; font-size: 9px; font-weight: 700; margin-bottom: 6px; }
+  .bubble { background: #2d1f4a; border-radius: 6px; padding: 6px 8px; color: #c5a8e0; font-size: 8px; line-height: 1.4; margin-bottom: 6px; border-left: 2px solid #9b59b6; }
+  .pill { background: #3d2060; border-radius: 20px; padding: 4px 8px; color: #d4b8f0; font-size: 8px; display: inline-block; margin: 2px; border: 1px solid #5a3090; }
+  .pill-active { background: #9b59b6; color: #fff; border-color: #9b59b6; }
+  .btn { background: #9b59b6; border-radius: 6px; padding: 5px 10px; color: #fff; font-size: 8px; font-weight: 700; text-align: center; margin-top: 6px; }
+  .btn-ghost { background: transparent; border: 1px solid #9b59b6; border-radius: 6px; padding: 5px 10px; color: #9b59b6; font-size: 8px; font-weight: 700; text-align: center; margin-top: 4px; }
+  .xp-burst { background: linear-gradient(135deg, #4a2c6e, #2c6e4a); border-radius: 8px; padding: 8px; text-align: center; margin-top: 6px; }
+  .glucose-bar { height: 6px; border-radius: 3px; background: #1a0d2e; margin: 4px 0; overflow: hidden; }
+  .glucose-fill { height: 100%; background: linear-gradient(90deg, #4a9, #9b59b6); border-radius: 3px; }
+  .section-divider { border-top: 1px solid #2a2040; margin: 20px 0 16px; padding-top: 16px; }
+  .mood-icon { font-size: 24px; text-align: center; margin-bottom: 4px; }
+</style>
+
+<!-- MORNING -->
+<div class="flow-label">🌅 Morning Check-In</div>
+<div class="flow-row">
+
+  <!-- Step 1: Card tap -->
+  <div class="phone">
+    <div class="step-num">1</div>
+    <div class="anim-tag">home screen</div>
+    <div class="phone-inner">
+      <div style="background:linear-gradient(135deg,#3d1f5e,#1f3d5e);border-radius:8px;padding:8px;border:1.5px solid #9b59b6;box-shadow:0 0 8px #9b59b655;">
+        <div style="color:#e8d5f5;font-size:9px;font-weight:700;">✨ Morning Check-In</div>
+        <div style="color:#c5a8e0;font-size:8px;margin:3px 0 6px;">GliderMon wants to say good morning!</div>
+        <div class="btn">Let's go →</div>
+      </div>
+      <div style="color:#445;font-size:8px;margin-top:8px;text-align:center;">rest of HUD below…</div>
+    </div>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <!-- Step 2: Wake Up -->
+  <div class="phone">
+    <div class="step-num">2</div>
+    <div class="anim-tag">CheckIn/WakeUp</div>
+    <div class="phone-inner">
+      <div class="mood-icon">🦔</div>
+      <div class="bubble">"Good morning! Ready to plan a great day?"</div>
+      <div style="color:#666;font-size:8px;text-align:center;margin-top:4px;">animation plays…</div>
+      <div class="btn" style="margin-top:8px;">Let's do it!</div>
+    </div>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <!-- Step 3: Glucose goal -->
+  <div class="phone">
+    <div class="step-num">3</div>
+    <div class="anim-tag">idle</div>
+    <div class="phone-inner">
+      <div class="screen-title">🩸 Today's glucose goal</div>
+      <div style="color:#888;font-size:8px;margin-bottom:6px;">Pick what you want to focus on:</div>
+      <div><span class="pill pill-active">Stay in range 70%</span></div>
+      <div><span class="pill">No highs above 180</span></div>
+      <div><span class="pill">No lows below 70</span></div>
+      <div class="btn" style="margin-top:8px;">Next →</div>
+    </div>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <!-- Step 4: Meal goal -->
+  <div class="phone">
+    <div class="step-num">4</div>
+    <div class="anim-tag">idle</div>
+    <div class="phone-inner">
+      <div class="screen-title">🍽️ Meal goal (optional)</div>
+      <div style="color:#888;font-size:8px;margin-bottom:6px;">Pick one for today:</div>
+      <div><span class="pill pill-active">Bolus before every meal</span></div>
+      <div><span class="pill">Limit high-carb meals</span></div>
+      <div><span class="pill">Eat at regular times</span></div>
+      <div><span class="pill">No carbs after 9pm</span></div>
+      <div class="btn-ghost" style="margin-top:6px;">+ Add activity goal</div>
+      <div class="btn" style="margin-top:4px;">Confirm →</div>
+    </div>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <!-- Step 5: Cheer + XP -->
+  <div class="phone">
+    <div class="step-num">5</div>
+    <div class="anim-tag">CheckIn/Cheer</div>
+    <div class="phone-inner">
+      <div class="mood-icon">🎉</div>
+      <div class="bubble">"Great plan! I'll be rooting for you all day!"</div>
+      <div class="xp-burst">
+        <div style="color:#7deba3;font-size:10px;font-weight:700;">+50 XP</div>
+        <div style="color:#aaa;font-size:8px;">cap unlocked +400</div>
+      </div>
+      <div class="btn" style="margin-top:6px;">Done ✓</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- MIDDAY -->
+<div class="section-divider"></div>
+<div class="flow-label">☀️ Midday Check-In</div>
+<div class="flow-row">
+
+  <!-- Step 1: Card -->
+  <div class="phone">
+    <div class="step-num">1</div>
+    <div class="anim-tag">home screen</div>
+    <div class="phone-inner">
+      <div style="background:linear-gradient(135deg,#3d1f5e,#1f3d5e);border-radius:8px;padding:8px;border:1.5px solid #9b59b6;box-shadow:0 0 8px #9b59b655;">
+        <div style="color:#e8d5f5;font-size:9px;font-weight:700;">☀️ Midday Check-In</div>
+        <div style="color:#c5a8e0;font-size:8px;margin:3px 0 6px;">How's the morning going?</div>
+        <div class="btn">Check in →</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <!-- Step 2: GliderMon reacts to BG -->
+  <div class="phone">
+    <div class="step-num">2</div>
+    <div class="anim-tag">mood-based anim</div>
+    <div class="phone-inner">
+      <div style="color:#888;font-size:7px;margin-bottom:2px;">if in range → Cheer · if high → HighWorriedFace · if low → LowSadFace</div>
+      <div class="mood-icon">🦔</div>
+      <div class="bubble">"You've been in range 82% of the morning — nice work!"</div>
+    </div>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <!-- Step 3: Glucose recap -->
+  <div class="phone">
+    <div class="step-num">3</div>
+    <div class="anim-tag">idle</div>
+    <div class="phone-inner">
+      <div class="screen-title">📊 Morning glucose</div>
+      <div style="color:#888;font-size:8px;">Since 7 AM</div>
+      <div class="glucose-bar"><div class="glucose-fill" style="width:82%"></div></div>
+      <div style="color:#7deba3;font-size:9px;font-weight:700;">82% in range</div>
+      <div style="color:#888;font-size:8px;margin-top:4px;">Goal: 70% ✓</div>
+    </div>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <!-- Step 4: Lifestyle self-report -->
+  <div class="phone">
+    <div class="step-num">4</div>
+    <div class="anim-tag">idle</div>
+    <div class="phone-inner">
+      <div class="screen-title">🍽️ Bolus before every meal</div>
+      <div style="color:#888;font-size:8px;margin-bottom:8px;">Did you bolus for breakfast?</div>
+      <div style="display:flex;gap:6px;">
+        <div style="flex:1;background:#2d4a2d;border-radius:6px;padding:6px;text-align:center;border:1px solid #4a9;">
+          <div style="font-size:12px;">✓</div>
+          <div style="color:#4a9;font-size:8px;">Yes</div>
+        </div>
+        <div style="flex:1;background:#2a1f1f;border-radius:6px;padding:6px;text-align:center;border:1px solid #944;">
+          <div style="font-size:12px;">✗</div>
+          <div style="color:#944;font-size:8px;">Not yet</div>
+        </div>
+      </div>
+      <div class="btn" style="margin-top:8px;">Save →</div>
+    </div>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <!-- Step 5: Small reward -->
+  <div class="phone">
+    <div class="step-num">5</div>
+    <div class="anim-tag">CheckIn/Cheer</div>
+    <div class="phone-inner">
+      <div class="mood-icon">⭐</div>
+      <div class="bubble">"Keep it up — you're on track for a great day!"</div>
+      <div class="xp-burst">
+        <div style="color:#7deba3;font-size:10px;font-weight:700;">+30 XP</div>
+        <div style="color:#aaa;font-size:8px;">cap unlocked +400</div>
+      </div>
+      <div class="btn" style="margin-top:6px;">Done ✓</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- EVENING -->
+<div class="section-divider"></div>
+<div class="flow-label">🌙 Evening Check-In</div>
+<div class="flow-row">
+
+  <!-- Step 1: Card -->
+  <div class="phone">
+    <div class="step-num">1</div>
+    <div class="anim-tag">home screen</div>
+    <div class="phone-inner">
+      <div style="background:linear-gradient(135deg,#3d1f5e,#1f3d5e);border-radius:8px;padding:8px;border:1.5px solid #9b59b6;box-shadow:0 0 8px #9b59b655;">
+        <div style="color:#e8d5f5;font-size:9px;font-weight:700;">🌙 Evening Check-In</div>
+        <div style="color:#c5a8e0;font-size:8px;margin:3px 0 6px;">Let's see how today went!</div>
+        <div class="btn">Wrap up →</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <!-- Step 2: New evening anim -->
+  <div class="phone">
+    <div class="step-num">2</div>
+    <div class="anim-tag" style="background:#4a1f1f;color:#f0a0a0;">CheckIn/WindDown ✦ NEW</div>
+    <div class="phone-inner">
+      <div class="mood-icon">🌙</div>
+      <div class="bubble">"You made it through the day! Let's see how you did."</div>
+    </div>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <!-- Step 3: Full day recap -->
+  <div class="phone">
+    <div class="step-num">3</div>
+    <div class="anim-tag">idle</div>
+    <div class="phone-inner">
+      <div class="screen-title">📋 Today's recap</div>
+      <div class="glucose-bar"><div class="glucose-fill" style="width:76%"></div></div>
+      <div style="color:#7deba3;font-size:9px;">76% TIR all day</div>
+      <div style="color:#aaa;font-size:8px;margin-top:4px;">Goal: 70% ✓</div>
+      <div style="border-top:1px solid #2a2040;margin:6px 0;"></div>
+      <div style="color:#aaa;font-size:8px;">🍽️ Bolus goal: <span style="color:#7deba3;">✓ met</span></div>
+    </div>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <!-- Step 4: Cap reveal -->
+  <div class="phone">
+    <div class="step-num">4</div>
+    <div class="anim-tag">CheckIn/Cheer</div>
+    <div class="phone-inner">
+      <div class="mood-icon">🎊</div>
+      <div class="bubble">"Goals hit! Your acorn cap is fully boosted for today!"</div>
+      <div class="xp-burst">
+        <div style="color:#7deba3;font-size:10px;font-weight:700;">+80 XP</div>
+        <div style="color:#aaa;font-size:8px;">cap 1.5× · 3,600 max</div>
+      </div>
+      <div class="btn" style="margin-top:6px;">See you tomorrow! ✓</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="section-divider"></div>
+<p class="subtitle">Each flow is 4–5 short screens. Morning ~60 sec, Midday ~30 sec, Evening ~45 sec. The red-tagged animation is the only new Spine animation needed for this flow.</p>

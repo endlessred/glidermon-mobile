@@ -1,0 +1,122 @@
+<h2>Where do check-ins live in the app?</h2>
+<p class="subtitle">Pick the entry point that feels most natural for a time-gated daily check-in</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#1a1a2e;border-radius:12px;padding:16px;font-family:sans-serif;max-width:220px;margin:0 auto;">
+        <!-- Fake phone chrome -->
+        <div style="background:#16213e;border-radius:8px;padding:12px;margin-bottom:8px;">
+          <div style="color:#e0e0e0;font-size:11px;font-weight:700;margin-bottom:8px;letter-spacing:1px;">GLIDERMON</div>
+          <!-- Progress card -->
+          <div style="background:#0f3460;border-radius:6px;padding:8px;margin-bottom:6px;height:36px;display:flex;align-items:center;">
+            <div style="color:#aaa;font-size:9px;">🌰 Acorns · Level bar</div>
+          </div>
+          <!-- Check-in card glowing -->
+          <div style="background:linear-gradient(135deg,#4a2c6e,#2c4a6e);border-radius:8px;padding:10px;margin-bottom:6px;border:1.5px solid #9b59b6;box-shadow:0 0 10px #9b59b655;">
+            <div style="color:#e8d5f5;font-size:10px;font-weight:700;">✨ Morning Check-In</div>
+            <div style="color:#c5a8e0;font-size:9px;margin-top:3px;">GliderMon wants to plan the day!</div>
+            <div style="background:#9b59b6;border-radius:4px;padding:4px 8px;margin-top:6px;display:inline-block;">
+              <div style="color:#fff;font-size:9px;font-weight:700;">Start →</div>
+            </div>
+          </div>
+          <!-- Canvas placeholder -->
+          <div style="background:#0a1628;border-radius:6px;height:60px;display:flex;align-items:center;justify-content:center;margin-bottom:6px;">
+            <div style="color:#556;font-size:9px;">🦔 GliderMon</div>
+          </div>
+          <!-- Glucose card -->
+          <div style="background:#0f3460;border-radius:6px;padding:8px;height:32px;display:flex;align-items:center;">
+            <div style="color:#aaa;font-size:9px;">🩺 Glucose Monitor</div>
+          </div>
+        </div>
+        <!-- Tab bar -->
+        <div style="display:flex;justify-content:space-around;padding:4px 0;">
+          <div style="color:#9b59b6;font-size:8px;text-align:center">🏠<br>Home</div>
+          <div style="color:#556;font-size:8px;text-align:center">🛍️<br>Shop</div>
+          <div style="color:#556;font-size:8px;text-align:center">👕<br>Outfit</div>
+          <div style="color:#556;font-size:8px;text-align:center">🎮<br>Arcade</div>
+          <div style="color:#556;font-size:8px;text-align:center">⚙️<br>Settings</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Card on Home Screen</h3>
+      <p>A glowing card appears on the HUD when a check-in is available. Dismisses after completion. No new tab needed.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#1a1a2e;border-radius:12px;padding:16px;font-family:sans-serif;max-width:220px;margin:0 auto;">
+        <div style="background:#16213e;border-radius:8px;padding:12px;margin-bottom:8px;">
+          <div style="color:#e0e0e0;font-size:11px;font-weight:700;margin-bottom:8px;letter-spacing:1px;">CHECK-IN</div>
+          <div style="background:#0f3460;border-radius:6px;padding:10px;margin-bottom:6px;">
+            <div style="color:#c5a8e0;font-size:9px;font-weight:700;">🌅 Morning</div>
+            <div style="color:#4a9;font-size:8px;">✓ Done — 8:02 AM</div>
+          </div>
+          <div style="background:linear-gradient(135deg,#4a2c6e,#2c4a6e);border-radius:8px;padding:10px;margin-bottom:6px;border:1.5px solid #9b59b6;">
+            <div style="color:#e8d5f5;font-size:9px;font-weight:700;">☀️ Midday — Ready!</div>
+            <div style="color:#c5a8e0;font-size:8px;margin-top:3px;">How's the morning goal going?</div>
+          </div>
+          <div style="background:#0f3460;border-radius:6px;padding:10px;">
+            <div style="color:#445;font-size:9px;font-weight:700;">🌙 Evening</div>
+            <div style="color:#334;font-size:8px;">Unlocks at 7 PM</div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-around;padding:4px 0;">
+          <div style="color:#556;font-size:8px;text-align:center">🏠<br>Home</div>
+          <div style="color:#556;font-size:8px;text-align:center">🛍️<br>Shop</div>
+          <div style="color:#9b59b6;font-size:8px;text-align:center;position:relative">
+            ✨<br>Check-In
+            <div style="position:absolute;top:-2px;right:-2px;background:#e74c3c;border-radius:50%;width:8px;height:8px;font-size:6px;color:#fff;display:flex;align-items:center;justify-content:center;">1</div>
+          </div>
+          <div style="color:#556;font-size:8px;text-align:center">🎮<br>Arcade</div>
+          <div style="color:#556;font-size:8px;text-align:center">⚙️<br>Settings</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Dedicated Tab</h3>
+      <p>A "Check-In" tab in the bottom nav with a badge dot when one is ready. Shows timeline of all 3 daily check-ins.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#1a1a2e;border-radius:12px;padding:16px;font-family:sans-serif;max-width:220px;margin:0 auto;">
+        <div style="background:#16213e;border-radius:8px;padding:12px;margin-bottom:8px;">
+          <div style="color:#e0e0e0;font-size:11px;font-weight:700;margin-bottom:8px;letter-spacing:1px;">GLIDERMON</div>
+          <div style="background:#0f3460;border-radius:6px;padding:8px;margin-bottom:6px;height:36px;display:flex;align-items:center;">
+            <div style="color:#aaa;font-size:9px;">🌰 Acorns · Level bar</div>
+          </div>
+          <!-- Canvas with badge -->
+          <div style="background:#0a1628;border-radius:8px;padding:10px;margin-bottom:6px;position:relative;border:1.5px solid #9b59b6;box-shadow:0 0 10px #9b59b655;">
+            <div style="position:absolute;top:-6px;right:-6px;background:#e74c3c;border-radius:50%;width:16px;height:16px;font-size:9px;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;">!</div>
+            <div style="height:60px;display:flex;align-items:center;justify-content:center;">
+              <div style="text-align:center">
+                <div style="font-size:20px">🦔</div>
+                <div style="color:#9b59b6;font-size:8px;margin-top:4px;font-weight:700;">Tap me!</div>
+              </div>
+            </div>
+          </div>
+          <div style="background:#0f3460;border-radius:6px;padding:8px;height:32px;display:flex;align-items:center;">
+            <div style="color:#aaa;font-size:9px;">🩺 Glucose Monitor</div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-around;padding:4px 0;">
+          <div style="color:#9b59b6;font-size:8px;text-align:center">🏠<br>Home</div>
+          <div style="color:#556;font-size:8px;text-align:center">🛍️<br>Shop</div>
+          <div style="color:#556;font-size:8px;text-align:center">👕<br>Outfit</div>
+          <div style="color:#556;font-size:8px;text-align:center">🎮<br>Arcade</div>
+          <div style="color:#556;font-size:8px;text-align:center">⚙️<br>Settings</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Character-Driven</h3>
+      <p>GliderMon gets a pulsing badge and "Tap me!" prompt when a check-in is ready. Tapping the character starts the flow.</p>
+    </div>
+  </div>
+
+</div>

@@ -1,4 +1,7 @@
 {
+  "env": {
+    "ENABLE_LSP_TOOL": "1"
+  },
   "permissions": {
     "allow": [
       "Bash(pnpm expo start:*)",
@@ -35,9 +38,108 @@
       "Bash(npx tsc:*)",
       "Bash(pnpm:*)",
       "Bash(node:*)",
-      "Read(//c//**)"
+      "Read(//c//**)",
+      "Bash(mkdir -p \"c:/Projects/mobile/.claude/skills/test-on-device\")",
+      "Bash(C:/Users/watch/.claude/plugins/marketplaces/superpowers-dev/skills/brainstorming/scripts/start-server.sh --project-dir C:/Projects/mobile)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git commit *)",
+      "Bash(Select-String \"checkInStore\")",
+      "PowerShell(cd \"C:\\\\Projects\\\\mobile\"; pnpm exec tsc --noEmit 2>&1 | Where-Object { $_ -match \"GoalPicker\" })",
+      "Bash(findstr -i \"check\\\\|spec\")",
+      "Bash(ls -la \"/c/Users/watch/AppData/Local/Android/Sdk\" 2>&1 | head -30)",
+      "Read(//c/Users/watch/.android/avd/**)",
+      "Read(//c/Program Files/Android/Android Studio/jbr/**)",
+      "Bash(pnpm exec *)",
+      "Bash(pnpm config *)",
+      "Bash(reg query *)",
+      "Bash(rm -rf /c/Projects/mobile/node_modules/.pnpm/expo-modules-core*/node_modules/expo-modules-core/android/.cxx)",
+      "Bash(rm -rf /c/Projects/mobile/node_modules/.pnpm/react-native-reanimated*/node_modules/react-native-reanimated/android/.cxx)",
+      "Bash(rm -rf /c/Projects/mobile/node_modules/.pnpm/react-native-screens*/node_modules/react-native-screens/android/.cxx)",
+      "Bash(rm -rf /c/Projects/mobile/node_modules/.pnpm/react-native-worklets*/node_modules/react-native-worklets/android/.cxx)",
+      "Bash(rm -rf /c/Projects/mobile/node_modules/.pnpm/@shopify+react-native-skia*/node_modules/@shopify/react-native-skia/android/.cxx)",
+      "Bash(pnpm install *)",
+      "Bash(ls \"/c/pnpm-vs/glidermon\" 2>&1 | head -3 *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8081/status)",
+      "Bash(sleep 20 && cat /c/Users/watch/AppData/Local/Temp/claude/C--Projects-mobile/5fb1c77d-217f-45cd-aa04-e5ab93b32264/scratchpad/android-metro.log 2>&1 | tail -40)",
+      "Bash(grep -o \"headerShown:!0[^\\)]\\\\{0,80\\\\}\" /c/Users/watch/AppData/Local/Temp/claude/C--Projects-mobile/5fb1c77d-217f-45cd-aa04-e5ab93b32264/scratchpad/bundle.js)",
+      "Bash(curl -sI \"http://localhost:8081/index.bundle?platform=android&dev=true&minify=false\")",
+      "Bash(curl -s \"http://localhost:8081/index.bundle?platform=android&dev=true&minify=false\" -o /c/Users/watch/AppData/Local/Temp/claude/C--Projects-mobile/5fb1c77d-217f-45cd-aa04-e5ab93b32264/scratchpad/bundle2.js)",
+      "Bash(curl -v -s \"http://localhost:8081/index.bundle?platform=android&dev=true&minify=false\" -o /c/Users/watch/AppData/Local/Temp/claude/C--Projects-mobile/5fb1c77d-217f-45cd-aa04-e5ab93b32264/scratchpad/bundle2.js)",
+      "Bash(netstat -ano)",
+      "Bash(tasklist)",
+      "Bash(curl -s \"http://localhost:8081/index.bundle?platform=android&dev=true&minify=false\" -o /c/Users/watch/AppData/Local/Temp/claude/C--Projects-mobile/5fb1c77d-217f-45cd-aa04-e5ab93b32264/scratchpad/bundle3.js)",
+      "Bash(curl -s \"http://localhost:8081/index.bundle?platform=android&dev=true&minify=false\" -o /c/Users/watch/AppData/Local/Temp/claude/C--Projects-mobile/5fb1c77d-217f-45cd-aa04-e5ab93b32264/scratchpad/bundle4.js)",
+      "Bash(file /c/Projects/mobile/src/assets/Isometric/Ultimate_Isometric_Interior/Exports/Tables/Wood/*.png)",
+      "Bash(python3 -c ' *)",
+      "Bash(pnpm run *)",
+      "Bash(curl -s localhost:8081/status)",
+      "Bash(git push *)",
+      "Bash(adb logcat *)",
+      "Bash(adb exec-out *)",
+      "Bash(adb shell *)",
+      "Bash(curl -s -X POST http://localhost:8081/reload)",
+      "Bash(git stash *)",
+      "Bash(node -e ' *)",
+      "Bash(git checkout *)",
+      "Bash(git rm *)",
+      "Bash(grep -n -A5 \"^R_WingShader$\\\\|^L_WingShader$\\\\|^R_ArmShader$\\\\|^L_ArmShader$\" \"/c/Projects/mobile/src/assets/GliderMonSpine/skeleton.atlas\")",
+      "Bash(node -e \"console.log\\(require\\('three/package.json'\\).version\\)\")",
+      "Bash(find /c/Users/watch/AppData/Local/Temp -iname \"*.png\" -newermt \"-10 minutes\" 2>/dev/null | head -20)",
+      "Bash(python3 -c \"import PIL\")",
+      "Bash(node -e \"require.resolve\\('sharp'\\)\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" \"http://localhost:8081/index.bundle?platform=android&dev=true\" --max-time 5)",
+      "Bash(powershell -Command \"Get-Process node -ErrorAction SilentlyContinue | Select-Object Id,StartTime,Path\")",
+      "Bash(powershell -Command \"Get-NetTCPConnection -LocalPort 8081 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess\")",
+      "Bash(powershell -Command \"Stop-Process -Id 36028 -Force\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" \"http://localhost:8081/status\" --max-time 3)",
+      "Bash(pnpm add *)",
+      "Bash(mkdir -p src/assets/sfx)",
+      "Bash(curl -s -m 5 localhost:8081/status)",
+      "Bash(echo \"exit:$?\")",
+      "PowerShell(Get-Process | Where-Object { $_.ProcessName -match 'node|java|gradle|adb|qemu|emulator' } | Select-Object ProcessName, Id, StartTime | Format-Table -AutoSize)",
+      "PowerShell(Get-Process | Where-Object { $_.ProcessName -match 'node|java|gradle|cmd|expo' } | Select-Object ProcessName, Id, StartTime, CPU | Format-Table -AutoSize)",
+      "PowerShell(Get-Process | Where-Object { $_.ProcessName -match 'node|java|gradle' } | Select-Object ProcessName, Id, StartTime, CPU | Format-Table -AutoSize)",
+      "PowerShell(Get-Process | Where-Object { $_.ProcessName -match 'java|cc1plus|clang|ninja|cmake|gradle' } | Select-Object ProcessName, Id, StartTime, CPU | Sort-Object CPU -Descending | Select-Object -First 15 | Format-Table -AutoSize)",
+      "Bash(grep -n \"multiDex\\\\|minSdkVersion\\\\|multidex\" \"C:\\\\Projects\\\\mobile\\\\android\\\\app\\\\build.gradle\" *)",
+      "Bash(xargs grep -l \"spine\\\\|Spine\")",
+      "Bash(magick -version)",
+      "Bash(powershell -c 'Add-Type -AssemblyName System.Drawing; $img = [System.Drawing.Image]::FromFile\\('\\\\''src/assets/Materials/Floor/1/1.png'\\\\''\\); Write-Output \"PNG: $\\($img.Width\\)x$\\($img.Height\\)\"; $img.Dispose\\(\\); $img2 = [System.Drawing.Image]::FromFile\\('\\\\''src/assets/Materials/Floor/1/1_normal.bmp'\\\\''\\); Write-Output \"BMP normal: $\\($img2.Width\\)x$\\($img2.Height\\)\"; $img2.Dispose\\(\\)')",
+      "Bash(powershell -c 'Add-Type -AssemblyName System.Drawing; $img = [System.Drawing.Image]::FromFile\\('\\\\''src/assets/Materials/Floor/1/1_diffuseOriginal.bmp'\\\\''\\); $img.Save\\('\\\\''src/assets/Materials/Floor/1/preview_diffuse.jpg'\\\\'', [System.Drawing.Imaging.ImageFormat]::Jpeg\\); $img.Dispose\\(\\); Write-Output done')"
     ],
     "deny": [],
-    "ask": []
+    "ask": [],
+    "additionalDirectories": [
+      "c:\\Projects\\mobile\\.claude\\skills"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pnpm exec tsc --noEmit; exit 0"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"process.stdin.setEncoding('utf8');let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const f=(JSON.parse(d).tool_input||{}).file_path||'';if(/Store\\./i.test(f)){process.stderr.write('REMINDER: Never edit existing migration entries in stores - always add a new entry instead.\\n');}}catch(e){}});\""
+          }
+        ]
+      }
+    ]
+  },
+  "enabledPlugins": {
+    "superpowers@superpowers-dev": true,
+    "typescript-lsp@claude-plugins-official": true,
+    "claude-code-setup@claude-plugins-official": true
   }
 }
