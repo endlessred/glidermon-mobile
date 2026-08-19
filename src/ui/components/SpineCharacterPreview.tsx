@@ -750,12 +750,19 @@ export default function SpineCharacterPreview({
       );
 
       // Render loop
+      const shimmerStartTime = Date.now() / 1000;
       let lastTime = Date.now() / 1000;
       const renderLoop = () => {
         const now = Date.now() / 1000;
         const delta = now - lastTime;
         lastTime = now;
-        shimmerTimeRef.current.value = now;
+        // GPU uniforms are 32-bit floats -- an absolute Unix-epoch
+        // timestamp (~1.7 billion) has so little headroom left in a
+        // float32's ~24-bit mantissa that any sub-~30-second change
+        // rounds away to nothing once uploaded, even though the JS-side
+        // value keeps ticking correctly in full double precision. Feed the
+        // shader a small session-relative elapsed time instead.
+        shimmerTimeRef.current.value = now - shimmerStartTime;
 
         // Update lifelike idle system (handles eye movements, blinking, and base idle)
         idleDriver.update(delta);
