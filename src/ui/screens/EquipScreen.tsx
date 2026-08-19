@@ -8,8 +8,10 @@ import { useOutfitStore, useActiveLocalOutfit } from "../../data/stores/outfitSt
 import { useProgressionStore } from "../../data/stores/progressionStore";
 import { useToastStore } from "../../data/stores/toastStore";
 import type { CosmeticSocket } from "../../data/types/outfitTypes";
+import { resolveSelectedPalette } from "../../data/cosmetics/palette";
 import CosmeticThumbnail from "../components/CosmeticThumbnail";
 import SpineCharacterPreview from "../components/SpineCharacterPreview";
+import ColorwaySheet from "../components/ColorwaySheet";
 import {
   CraftPanel,
   CraftTab,
@@ -36,11 +38,6 @@ const skinIcon = require("../../assets/UI Assets/Icons/skin_icon.png");
 // CosmeticThumbnail's own card chrome so they sit directly on ours instead
 // of floating in a second nested box.
 const transparentThumb = { backgroundColor: "transparent", borderWidth: 0 } as const;
-
-// Hair doesn't have a color picker in this screen yet -- equip with a fixed
-// default color (matching OutfitEditor's own default) rather than build a
-// second-step color UI for now.
-const DEFAULT_HAIR_RECOLOR = { r: "#f5deb3", g: "#fff8dc", b: "#daa520", a: "#ffff00" };
 
 type CategoryId = "hats" | "hair" | "shoes" | "outfit" | "skin";
 
@@ -76,11 +73,14 @@ export default function EquipScreen() {
   // the user confirms via the Equip button -- kept as a separate id so
   // "previewing" and "actually worn" can never be confused with each other.
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [colorwaySheetOpen, setColorwaySheetOpen] = useState(false);
 
   const catalog = useCosmeticsStore(s => s.catalog);
   const owned = useCosmeticsStore(s => s.owned);
   const equipHat = useCosmeticsStore(s => s.equip);
   const unequipHat = useCosmeticsStore(s => s.unequipHead);
+  const selectedPaletteByCosmeticId = useCosmeticsStore(s => s.selectedPaletteByCosmeticId);
+  const setCosmeticPalette = useCosmeticsStore(s => s.setCosmeticPalette);
 
   const activeOutfit = useActiveLocalOutfit();
   const equipCosmetic = useOutfitStore(s => s.equipCosmetic);
@@ -149,16 +149,20 @@ export default function EquipScreen() {
   const previewOutfit = useMemo(() => {
     if (!activeOutfit || !selectedId) return activeOutfit;
     const socket = SOCKET_FOR_CATEGORY[category];
-    const entry =
-      category === "hair"
-        ? { itemId: selectedId, spineData: { skinName: "default", maskRecolor: DEFAULT_HAIR_RECOLOR } }
-        : { itemId: selectedId };
-    return { ...activeOutfit, cosmetics: { ...activeOutfit.cosmetics, [socket]: entry } };
+    return { ...activeOutfit, cosmetics: { ...activeOutfit.cosmetics, [socket]: { itemId: selectedId } } };
   }, [activeOutfit, selectedId, category]);
+
+  // The item currently being previewed (if anything's selected) or worn in
+  // this category -- drives both the palette badge on its slot and whether
+  // the "Colors" action shows in the footer.
+  const activeItemId = selectedId ?? currentEquippedId;
+  const activeItem = activeItemId ? catalog.find(c => c.id === activeItemId) : undefined;
+  const activeItemHasPalettes = !!activeItem?.recolorable && (activeItem.palettes?.length ?? 0) > 1;
 
   const goToCategory = (cat: CategoryId) => {
     setCategory(cat);
     setSelectedId(null);
+    setColorwaySheetOpen(false);
   };
 
   const handleSelectCard = (item: CosmeticItem) => {
@@ -172,10 +176,7 @@ export default function EquipScreen() {
       equipHat(itemId);
       equipCosmetic(activeOutfit.id, "headTop", itemId);
     } else if (category === "hair") {
-      equipSpineCosmetic(activeOutfit.id, "hair", itemId, {
-        skinName: "default",
-        maskRecolor: DEFAULT_HAIR_RECOLOR,
-      });
+      equipSpineCosmetic(activeOutfit.id, "hair", itemId, { skinName: "default" });
     } else if (category === "shoes") {
       equipCosmetic(activeOutfit.id, "shoes", itemId);
     } else if (category === "outfit") {
@@ -291,31 +292,49 @@ export default function EquipScreen() {
             items={items}
             keyExtractor={item => item.id}
             emptyMessage={EMPTY_MESSAGE[category]}
-            renderItem={(item, index) => (
-              <CosmeticCard
-                name={item.name}
-                state={item.id === selectedId ? "selected" : item.id === currentEquippedId ? "equipped" : "default"}
-                rotationIndex={index}
-                onPress={() => handleSelectCard(item)}
-              >
-                <CosmeticThumbnail itemId={item.id} socket={item.socket} size={64} style={transparentThumb} />
-              </CosmeticCard>
-            )}
+            renderItem={(item, index) => {
+              const cardPalette = resolveSelectedPalette(item, selectedPaletteByCosmeticId[item.id]);
+              const showPaletteBadge = !!item.recolorable && (item.palettes?.length ?? 0) > 1 && !!cardPalette;
+              return (
+                <CosmeticCard
+                  name={item.name}
+                  state={item.id === selectedId ? "selected" : item.id === currentEquippedId ? "equipped" : "default"}
+                  rotationIndex={index}
+                  onPress={() => handleSelectCard(item)}
+                  paletteSwatchColors={showPaletteBadge ? cardPalette!.colors : undefined}
+                >
+                  <CosmeticThumbnail itemId={item.id} socket={item.socket} size={64} style={transparentThumb} />
+                </CosmeticCard>
+              );
+            }}
           />
         </CorkInventoryPanel>
       </CosmeticInventorySection>
 
       {/* Footer: Equip confirms a pending selection; otherwise Unequip is
-          available for whatever's currently worn in this category. */}
-      {selectedId ? (
-        <View style={[styles.footer, { paddingHorizontal: spacing.lg }]}>
-          <CraftTab label="Equip" icon="✓" onPress={handleConfirmEquip} style={styles.removeButton} />
-        </View>
-      ) : currentEquippedId ? (
-        <View style={[styles.footer, { paddingHorizontal: spacing.lg }]}>
-          <CraftTab label="Unequip" icon="✕" onPress={handleUnequip} style={styles.removeButton} />
+          available for whatever's currently worn in this category. A
+          "Colors" action joins either button whenever the active item
+          supports alternate premade palettes. */}
+      {selectedId || currentEquippedId ? (
+        <View style={[styles.footer, styles.footerRow, { paddingHorizontal: spacing.lg }]}>
+          {activeItemHasPalettes && (
+            <CraftTab label="Colors" icon="🎨" onPress={() => setColorwaySheetOpen(true)} style={styles.footerButton} />
+          )}
+          {selectedId ? (
+            <CraftTab label="Equip" icon="✓" onPress={handleConfirmEquip} style={styles.footerButton} />
+          ) : (
+            <CraftTab label="Unequip" icon="✕" onPress={handleUnequip} style={styles.footerButton} />
+          )}
         </View>
       ) : null}
+
+      <ColorwaySheet
+        visible={colorwaySheetOpen}
+        item={activeItem}
+        selectedPaletteId={activeItem ? selectedPaletteByCosmeticId[activeItem.id] : undefined}
+        onSelectPalette={paletteId => activeItem && setCosmeticPalette(activeItem.id, paletteId)}
+        onClose={() => setColorwaySheetOpen(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -392,8 +411,12 @@ const styles = StyleSheet.create({
     paddingTop: 2,
     paddingBottom: 8,
   },
-  removeButton: {
-    alignSelf: "center",
-    minWidth: 160,
+  footerRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 12,
+  },
+  footerButton: {
+    minWidth: 130,
   },
 });

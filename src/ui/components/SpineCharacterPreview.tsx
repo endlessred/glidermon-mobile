@@ -24,6 +24,7 @@ import { normalizeMaterialForSlot } from "../../spine/SpineThree";
 import { useTheme } from "../../data/hooks/useTheme";
 import { OutfitSlot, CosmeticSocket } from "../../data/types/outfitTypes";
 import { useCosmeticsStore } from "../../data/stores/cosmeticsStore";
+import { resolveCosmeticRecolor, resolvePaletteEffect, type PaletteEffect } from "../../data/cosmetics/palette";
 import { ensureSRGBTexture } from "../../spine/HueIndexedRecolor";
 
 // Find an attachment by (slotName, attachmentName) across default skin and all named skins.
@@ -91,7 +92,12 @@ export default function SpineCharacterPreview({
   // Base textures keyed by atlas page name (e.g., "skeleton.png")
   const pageBaseTexturesRef = useRef<Record<string, THREE.Texture>>({});
 
-  const { catalog } = useCosmeticsStore();
+  // Shared shimmer time uniform -- one object reference given to every
+  // shimmer material so a single per-frame write (in the render loop below)
+  // animates all of them, instead of iterating every live shimmer material.
+  const shimmerTimeRef = useRef<{ value: number }>({ value: 0 });
+
+  const { catalog, selectedPaletteByCosmeticId } = useCosmeticsStore();
 
   const sizeConfig = {
     small: { width: 80, height: 100 },
@@ -112,27 +118,31 @@ export default function SpineCharacterPreview({
     const equippedHat = outfit.cosmetics.headTop;
     if (!equippedHat?.itemId) return null;
     const cosmeticItem = catalog.find((item) => item.id === equippedHat.itemId);
-    return cosmeticItem?.maskRecolor || null; // expected shape: { r?: string, g?: string, b?: string, a?: string }
+    return resolveCosmeticRecolor(cosmeticItem, selectedPaletteByCosmeticId[equippedHat.itemId]) || null;
   };
 
   const getSkinMaskRecolor = () => {
     const equippedSkin = outfit.cosmetics.skin;
     if (!equippedSkin?.itemId) return null;
     const cosmeticItem = catalog.find((item) => item.id === equippedSkin.itemId);
-    return cosmeticItem?.maskRecolor || null; // 4-channel recoloring for body parts
+    return resolveCosmeticRecolor(cosmeticItem, selectedPaletteByCosmeticId[equippedSkin.itemId]) || null;
   };
 
   const getHairMaskRecolor = () => {
     const equippedHair = outfit.cosmetics.hair;
     if (!equippedHair?.itemId) return null;
+    const cosmeticItem = catalog.find((item) => item.id === equippedHair.itemId);
 
-    // Check if the outfit has custom spine data with recoloring (from color selection)
+    // Recolorable hair always resolves live from the catalog + the user's
+    // selected palette, so changing colorway updates an already-equipped
+    // hairstyle immediately. Only fall back to a baked-in spineData
+    // recolor (legacy path) for hair items that predate the palette system.
+    if (cosmeticItem?.recolorable && cosmeticItem.palettes?.length) {
+      return resolveCosmeticRecolor(cosmeticItem, selectedPaletteByCosmeticId[equippedHair.itemId]) || null;
+    }
     if (equippedHair.spineData?.maskRecolor) {
       return equippedHair.spineData.maskRecolor;
     }
-
-    // Fallback to catalog item recoloring
-    const cosmeticItem = catalog.find((item) => item.id === equippedHair.itemId);
     return cosmeticItem?.maskRecolor || null;
   };
 
@@ -140,7 +150,7 @@ export default function SpineCharacterPreview({
     const equippedJacket = outfit.cosmetics.jacket;
     if (!equippedJacket?.itemId) return null;
     const cosmeticItem = catalog.find((item) => item.id === equippedJacket.itemId);
-    return cosmeticItem?.maskRecolor || null; // 4-channel recoloring for jacket parts
+    return resolveCosmeticRecolor(cosmeticItem, selectedPaletteByCosmeticId[equippedJacket.itemId]) || null;
   };
 
   const getShoeCosmeticItem = () => {
@@ -149,8 +159,57 @@ export default function SpineCharacterPreview({
     return catalog.find((item) => item.id === equippedShoe.itemId) || null;
   };
 
+  const getShoeMaskRecolor = (shoeCosmeticItem: ReturnType<typeof getShoeCosmeticItem>) => {
+    if (!shoeCosmeticItem) return null;
+    const equippedShoe = outfit.cosmetics.shoes;
+    return resolveCosmeticRecolor(shoeCosmeticItem, equippedShoe?.itemId ? selectedPaletteByCosmeticId[equippedShoe.itemId] : undefined) || null;
+  };
+
+  // ---- Plus-tier effect (gradient/shimmer) getters, paired 1:1 with the
+  // recolor getters above -- same catalog lookup, just resolving `.effect`
+  // instead of `.channelColors`. ----
+  const getHatEffect = (): PaletteEffect | undefined => {
+    const equippedHat = outfit.cosmetics.headTop;
+    if (!equippedHat?.itemId) return undefined;
+    const cosmeticItem = catalog.find((item) => item.id === equippedHat.itemId);
+    return resolvePaletteEffect(cosmeticItem, selectedPaletteByCosmeticId[equippedHat.itemId]);
+  };
+
+  const getSkinEffect = (): PaletteEffect | undefined => {
+    const equippedSkin = outfit.cosmetics.skin;
+    if (!equippedSkin?.itemId) return undefined;
+    const cosmeticItem = catalog.find((item) => item.id === equippedSkin.itemId);
+    return resolvePaletteEffect(cosmeticItem, selectedPaletteByCosmeticId[equippedSkin.itemId]);
+  };
+
+  const getHairEffect = (): PaletteEffect | undefined => {
+    const equippedHair = outfit.cosmetics.hair;
+    if (!equippedHair?.itemId) return undefined;
+    const cosmeticItem = catalog.find((item) => item.id === equippedHair.itemId);
+    return resolvePaletteEffect(cosmeticItem, selectedPaletteByCosmeticId[equippedHair.itemId]);
+  };
+
+  const getJacketEffect = (): PaletteEffect | undefined => {
+    const equippedJacket = outfit.cosmetics.jacket;
+    if (!equippedJacket?.itemId) return undefined;
+    const cosmeticItem = catalog.find((item) => item.id === equippedJacket.itemId);
+    return resolvePaletteEffect(cosmeticItem, selectedPaletteByCosmeticId[equippedJacket.itemId]);
+  };
+
+  const getShoeEffect = (shoeCosmeticItem: ReturnType<typeof getShoeCosmeticItem>): PaletteEffect | undefined => {
+    if (!shoeCosmeticItem) return undefined;
+    const equippedShoe = outfit.cosmetics.shoes;
+    return resolvePaletteEffect(shoeCosmeticItem, equippedShoe?.itemId ? selectedPaletteByCosmeticId[equippedShoe.itemId] : undefined);
+  };
+
   // ---- set/refresh material override: recolor hats, body parts, hair, and jackets ----
-  const setupMaterialOverride = (skeletonMesh: SkeletonMesh, hatRecolor: any, skinRecolor: any, hairRecolor: any, jacketRecolor: any, shoeRecolor: any, shoeAttachmentBaseName?: string) => {
+  const setupMaterialOverride = (
+    skeletonMesh: SkeletonMesh,
+    hatRecolor: any, skinRecolor: any, hairRecolor: any, jacketRecolor: any, shoeRecolor: any,
+    shoeAttachmentBaseName?: string,
+    hatEffect?: PaletteEffect, skinEffect?: PaletteEffect, hairEffect?: PaletteEffect,
+    jacketEffect?: PaletteEffect, shoeEffect?: PaletteEffect
+  ) => {
 
     // Shoes always render something (a purchased design, or the plain default
     // attachment), so this function must still run even when only shoeRecolor
@@ -386,6 +445,7 @@ export default function SpineCharacterPreview({
 
       // Determine which recolor to apply
       let recolorData = null;
+      let effectData: PaletteEffect | undefined;
       // Hats and shoes are disambiguated by which skin/attachment is active
       // (setSkin() for hats, the L_/R_ attachment switch above for shoes), not
       // by the attachment's own name ending in "Shader" like jacket/hair/skin -
@@ -396,26 +456,31 @@ export default function SpineCharacterPreview({
       // Hat example (unchanged)
       if (slotName === "Hat_Base" && hatRecolor) {
         recolorData = hatRecolor;
+        effectData = hatEffect;
         bypassShaderNameCheck = true;
       }
       // Shoes via attachment switch (not name-suffix based)
       else if (shoeSlots.includes(slotName) && shoeRecolor) {
         recolorData = shoeRecolor;
+        effectData = shoeEffect;
         bypassShaderNameCheck = true;
       }
       // Hair via shader variant
       else if (isShaderAttachment && hairRecolor && hairSlots.includes(slotName)) {
         recolorData = hairRecolor;
+        effectData = hairEffect;
       }
       // Jacket via shader variant
       else if (isShaderAttachment && jacketRecolor && jacketSlots.includes(slotName)) {
         recolorData = jacketRecolor;
+        effectData = jacketEffect;
       }
       // Skin via shader variant
       else if (isShaderAttachment && skinRecolor) {
         const baseSlotName = slotName; // shader is on the attachment, slot name stays the same
         if (skinSlots.includes(baseSlotName)) {
           recolorData = skinRecolor;
+          effectData = skinEffect;
         }
       }
       // Legacy fallback (non-shader attachment) - show info message for debugging
@@ -432,7 +497,12 @@ export default function SpineCharacterPreview({
 
       if (isShaderAttachment || bypassShaderNameCheck) {
         // Use hue-indexed recolor for shader slots
-        const key = `hue|${(baseTex as any).uuid}|${recolorData.r}|${recolorData.g}|${recolorData.b}|${recolorData.a}|${slotName}|${alphaTest}`;
+        const effectKey = effectData
+          ? effectData.kind === "gradient"
+            ? `grad|${effectData.channelColorsB.r}|${effectData.channelColorsB.g}|${effectData.channelColorsB.a}`
+            : `shim|${effectData.speed}|${effectData.intensity}|${effectData.tint}`
+          : "flat";
+        const key = `hue|${(baseTex as any).uuid}|${recolorData.r}|${recolorData.g}|${recolorData.b}|${recolorData.a}|${slotName}|${alphaTest}|${effectKey}`;
         let mat = RECOLOR_CACHE.get(key);
         if (!mat) {
           mat = makeHueIndexedRecolorMaterial(baseTex, {
@@ -442,17 +512,37 @@ export default function SpineCharacterPreview({
             satMin: 0.1,        // Lower threshold to catch more pixels
             hueCosMin: 0.75,    // More lenient angle matching (was 0.90)
             useYellow: true,    // Enable yellow detection
-            preserveDarkThreshold: 0.15,
+            // Gradient mode reads its "dark end" from the same shading
+            // signal this threshold gates -- e.g. the red channel's darkest
+            // reachable shadeFactor (0.4) corresponds to Y≈0.12, which sits
+            // *below* the default 0.15 preserve-as-outline cutoff, so the
+            // shadow pixels meant to show the gradient's dark end were
+            // being excluded from recoloring entirely before the gradient
+            // math ever ran. Lower (not remove) the floor for gradient
+            // materials only, so genuine near-black ink outlines still stay
+            // protected while shadow-toned guide art gets recolored.
+            preserveDarkThreshold: effectData?.kind === "gradient" ? 0.08 : 0.15,
             smoothOutlineEdges: false,
             colors: {
               red: recolorData.r ?? "#ff0000",
               green: recolorData.g ?? "#00ff00",
               blue: recolorData.b ?? recolorData.r ?? "#ff0000",
               yellow: recolorData.a ?? "#ffff00",
-            }
+            },
+            gradientColors: effectData?.kind === "gradient" ? {
+              red: effectData.channelColorsB.r,
+              green: effectData.channelColorsB.g,
+              yellow: effectData.channelColorsB.a,
+            } : undefined,
+            shimmer: effectData?.kind === "shimmer" ? {
+              speed: effectData.speed,
+              intensity: effectData.intensity,
+              tint: effectData.tint,
+              timeUniform: shimmerTimeRef.current,
+            } : undefined,
           });
           RECOLOR_CACHE.set(key, mat);
-          console.log(`✅ Applied ${slotName} hue-indexed recolor: R=${recolorData.r}, G=${recolorData.g}, B=${recolorData.b}, Y=${recolorData.a}`);
+          console.log(`✅ Applied ${slotName} hue-indexed recolor: R=${recolorData.r}, G=${recolorData.g}, B=${recolorData.b}, Y=${recolorData.a}${effectData ? `, effect=${effectData.kind}` : ""}`);
         }
 
         // Apply material normalization for proper render pass
@@ -479,7 +569,7 @@ export default function SpineCharacterPreview({
     const hairRecolor = getHairMaskRecolor();
     const jacketRecolor = getJacketMaskRecolor();
     const shoeCosmeticItem = getShoeCosmeticItem();
-    const shoeRecolor = shoeCosmeticItem?.maskRecolor || null;
+    const shoeRecolor = getShoeMaskRecolor(shoeCosmeticItem);
 
     if (skinName && skinName !== "default") {
       const skin = skeletonData.findSkin(skinName);
@@ -495,8 +585,11 @@ export default function SpineCharacterPreview({
       skeleton.updateWorldTransform(Physics.update);
     }
 
-    setupMaterialOverride(skeletonMesh, hatRecolor, skinRecolor, hairRecolor, jacketRecolor, shoeRecolor, shoeCosmeticItem?.shoeAttachment);
-  }, [outfit.cosmetics.headTop, outfit.cosmetics.skin, outfit.cosmetics.hair, outfit.cosmetics.jacket, outfit.cosmetics.shoes, catalog]);
+    setupMaterialOverride(
+      skeletonMesh, hatRecolor, skinRecolor, hairRecolor, jacketRecolor, shoeRecolor, shoeCosmeticItem?.shoeAttachment,
+      getHatEffect(), getSkinEffect(), getHairEffect(), getJacketEffect(), getShoeEffect(shoeCosmeticItem)
+    );
+  }, [outfit.cosmetics.headTop, outfit.cosmetics.skin, outfit.cosmetics.hair, outfit.cosmetics.jacket, outfit.cosmetics.shoes, catalog, selectedPaletteByCosmeticId]);
 
   const onContextCreate = async (gl: any) => {
     try {
@@ -651,7 +744,10 @@ export default function SpineCharacterPreview({
 
       // Initial recolor override
       const initialShoeCosmeticItem = getShoeCosmeticItem();
-      setupMaterialOverride(mesh, getHatMaskRecolor(), getSkinMaskRecolor(), getHairMaskRecolor(), getJacketMaskRecolor(), initialShoeCosmeticItem?.maskRecolor || null, initialShoeCosmeticItem?.shoeAttachment);
+      setupMaterialOverride(
+        mesh, getHatMaskRecolor(), getSkinMaskRecolor(), getHairMaskRecolor(), getJacketMaskRecolor(), getShoeMaskRecolor(initialShoeCosmeticItem), initialShoeCosmeticItem?.shoeAttachment,
+        getHatEffect(), getSkinEffect(), getHairEffect(), getJacketEffect(), getShoeEffect(initialShoeCosmeticItem)
+      );
 
       // Render loop
       let lastTime = Date.now() / 1000;
@@ -659,6 +755,7 @@ export default function SpineCharacterPreview({
         const now = Date.now() / 1000;
         const delta = now - lastTime;
         lastTime = now;
+        shimmerTimeRef.current.value = now;
 
         // Update lifelike idle system (handles eye movements, blinking, and base idle)
         idleDriver.update(delta);

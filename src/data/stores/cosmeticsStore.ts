@@ -3,6 +3,9 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { themeDisplayNames } from "../../styles/themeVariations";
+import type { CosmeticPalette } from "../cosmetics/palette";
+
+export type { CosmeticPalette, PaletteTier, PaletteEffect } from "../cosmetics/palette";
 
 // Assets for list thumbnails (RN <Image /> supports module ids or URIs)
 const leafPng = require("../../assets/GliderMonLeafHat.png");
@@ -28,6 +31,8 @@ export type CosmeticItem = {
     b?: string;           // Color for blue channel
     a?: string;           // Color for alpha channel
   };
+  recolorable?: boolean;  // Does this item offer alternate premade palettes?
+  palettes?: CosmeticPalette[]; // Designer-made colorway options (no free-form color picker)
 };
 
 type Equipped = {
@@ -49,6 +54,17 @@ type CosmeticsState = {
 
   equipped: Equipped;
 
+  // Which premade colorway the user picked for each recolorable cosmetic,
+  // kept separate from the catalog definition itself so selecting a palette
+  // never mutates shared catalog data. Missing entry = "original".
+  selectedPaletteByCosmeticId: Record<string, string>;
+
+  // Whether the user has the Plus tier (gates palettes with tier:"plus").
+  // No real entitlement/IAP layer exists yet -- see
+  // docs/superpowers/specs/2026-08-19-cosmetic-palette-tiers.md. This is a
+  // placeholder flag until that's built, flipped only via devSetPlus.
+  hasPlus: boolean;
+
   // actions the screens call:
   loadCatalog: () => void;
   buy: (id: string) => boolean;   // mark as owned (you already deduct acorns in progression store)
@@ -57,11 +73,32 @@ type CosmeticsState = {
   equipHair: (id: string) => void;
   unequipHead: () => void;
   unequipHair: () => void;
+  setCosmeticPalette: (cosmeticId: string, paletteId: string) => void;
+
+  // dev-only: flips the Plus entitlement placeholder for testing.
+  devSetPlus: (value: boolean) => void;
 
   // extras/dev
   grant: (id: string) => void;
   reset: () => void;
 };
+
+// Shared premade colorways for the two hair styles -- same designer palette
+// either way, since both are the same hair "material", just different cuts.
+// "Original" matches the recolor every hair item shipped with before this
+// system existed, so existing equipped hair doesn't change look by default.
+const HAIR_PALETTES: CosmeticPalette[] = [
+  { id: "original", name: "Original", colors: ["#f5deb3", "#daa520", "#fff8dc"], channelColors: { r: "#f5deb3", g: "#fff8dc", b: "#daa520", a: "#ffff00" } },
+  { id: "midnight", name: "Midnight", colors: ["#4A312C", "#2a202a", "#7C5A4A"], channelColors: { r: "#4A312C", g: "#7C5A4A", b: "#2a202a", a: "#9a919b" } },
+  { id: "honey", name: "Honey", colors: ["#dc995d", "#dec575", "#865d56"], channelColors: { r: "#dc995d", g: "#dec575", b: "#865d56", a: "#d9d3d9" } },
+  { id: "rose", name: "Rose", colors: ["#b6607c", "#d3a092", "#613661"], channelColors: { r: "#b6607c", g: "#d3a092", b: "#613661", a: "#d9d3d9" } },
+  {
+    id: "starlight", name: "Starlight", tier: "plus",
+    colors: ["#6B7A99", "#2C3648", "#A8B8D1"],
+    channelColors: { r: "#6B7A99", g: "#2C3648", b: "#A8B8D1", a: "#D8E4F0" },
+    effect: { kind: "shimmer", speed: 0.45, intensity: 0.5, tint: "#BFE8FF" },
+  },
+];
 
 const DEFAULT_CATALOG: CosmeticItem[] = [
   // Spine-based Hat Cosmetics - Baseball Caps (using mask recoloring)
@@ -144,7 +181,20 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "headTop",
     spineSkin: "Hats/Shader/Beret",
     maskRecolor: { r: "#a83f48", g: "#2a202a", b: "#d9d3d9" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    recolorable: true,
+    palettes: [
+      { id: "original", name: "Original", colors: ["#a83f48", "#2a202a", "#d9d3d9"], channelColors: { r: "#a83f48", g: "#2a202a", b: "#d9d3d9" } },
+      { id: "forest", name: "Forest", colors: ["#6f975e", "#3b6b58", "#dec575"], channelColors: { r: "#6f975e", g: "#3b6b58", b: "#dec575" } },
+      { id: "midnight", name: "Midnight", colors: ["#2a202a", "#5f80a6", "#9db8c5"], channelColors: { r: "#2a202a", g: "#5f80a6", b: "#9db8c5" } },
+      { id: "sunset", name: "Sunset", colors: ["#dc995d", "#c55650", "#dec575"], channelColors: { r: "#dc995d", g: "#c55650", b: "#dec575" } },
+      {
+        id: "ember", name: "Ember", tier: "plus",
+        colors: ["#8B2E2E", "#2A1010", "#D9D3D9"],
+        channelColors: { r: "#8B2E2E", g: "#2A1010", b: "#D9D3D9" },
+        effect: { kind: "shimmer", speed: 0.5, intensity: 0.55, tint: "#FFF3D6" },
+      },
+    ],
   },
   {
     id: "hat_bonnett",
@@ -180,7 +230,20 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "headTop",
     spineSkin: "Hats/Shader/Crown",
     maskRecolor: { r: "#dec575", g: "#613661", b: "#a83f48" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    recolorable: true,
+    palettes: [
+      { id: "original", name: "Original", colors: ["#dec575", "#613661", "#a83f48"], channelColors: { r: "#dec575", g: "#613661", b: "#a83f48" } },
+      { id: "berry", name: "Berry", colors: ["#b6607c", "#613661", "#524f73"], channelColors: { r: "#b6607c", g: "#613661", b: "#524f73" } },
+      { id: "ocean", name: "Ocean", colors: ["#5f80a6", "#2d494b", "#9db8c5"], channelColors: { r: "#5f80a6", g: "#2d494b", b: "#9db8c5" } },
+      { id: "honey", name: "Honey", colors: ["#dec575", "#dc995d", "#865d56"], channelColors: { r: "#dec575", g: "#dc995d", b: "#865d56" } },
+      {
+        id: "aurora", name: "Aurora", tier: "plus",
+        colors: ["#4B2E5E", "#F4D97A", "#8B5FBF"],
+        channelColors: { r: "#4B2E5E", g: "#241830", b: "#8B5FBF" },
+        effect: { kind: "gradient", channelColorsB: { r: "#F4D97A", g: "#DEC575" } },
+      },
+    ],
   },
   {
     id: "hat_durag",
@@ -381,7 +444,19 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     socket: "shoes",
     shoeAttachment: "Cowboy Boots",
     maskRecolor: { r: "#865d56", g: "#2a202a", b: "#dec575" },
-    tex: hatPackPng
+    tex: hatPackPng,
+    recolorable: true,
+    palettes: [
+      { id: "original", name: "Original", colors: ["#865d56", "#2a202a", "#dec575"], channelColors: { r: "#865d56", g: "#2a202a", b: "#dec575" } },
+      { id: "moss", name: "Moss", colors: ["#6f975e", "#3b6b58", "#a8b164"], channelColors: { r: "#6f975e", g: "#3b6b58", b: "#a8b164" } },
+      { id: "frost", name: "Frost", colors: ["#9db8c5", "#6c9ba7", "#d9d3d9"], channelColors: { r: "#9db8c5", g: "#6c9ba7", b: "#d9d3d9" } },
+      {
+        id: "gilded", name: "Gilded", tier: "plus",
+        colors: ["#4A3320", "#DEC575", "#8B6F3D"],
+        channelColors: { r: "#4A3320", g: "#1A1210", b: "#DEC575" },
+        effect: { kind: "gradient", channelColorsB: { r: "#DEC575", g: "#8B6F3D" } },
+      },
+    ],
   },
   {
     id: "shoe_curvies",
@@ -544,7 +619,9 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     cost: 400,
     socket: "hair",
     spineSkin: "default", // Uses default skin with shader for HairFront only
-    tex: hatPackPng // Placeholder thumbnail
+    tex: hatPackPng, // Placeholder thumbnail
+    recolorable: true,
+    palettes: HAIR_PALETTES,
   },
   {
     id: "windswept_long",
@@ -552,7 +629,9 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
     cost: 600,
     socket: "hair",
     spineSkin: "default", // Uses default skin with shader for both HairFront and HairBack
-    tex: hatPackPng // Placeholder thumbnail
+    tex: hatPackPng, // Placeholder thumbnail
+    recolorable: true,
+    palettes: HAIR_PALETTES,
   },
 
   // Jacket cosmetics - Motorcycle jacket with multiple color variants
@@ -596,7 +675,19 @@ const DEFAULT_CATALOG: CosmeticItem[] = [
       b: "#36373d", // Dark accent from palette
       a: "#9a919b"  // Light accent from palette
     },
-    tex: hatPackPng
+    tex: hatPackPng,
+    recolorable: true,
+    palettes: [
+      { id: "original", name: "Original", colors: ["#2a202a", "#dec575", "#36373d", "#9a919b"], channelColors: { r: "#2a202a", g: "#dec575", b: "#36373d", a: "#9a919b" } },
+      { id: "rose", name: "Rose", colors: ["#b6607c", "#d3a092", "#524f73", "#d9d3d9"], channelColors: { r: "#b6607c", g: "#d3a092", b: "#524f73", a: "#d9d3d9" } },
+      { id: "midnight", name: "Midnight", colors: ["#2d494b", "#5f80a6", "#2a202a", "#9db8c5"], channelColors: { r: "#2d494b", g: "#5f80a6", b: "#2a202a", a: "#9db8c5" } },
+      {
+        id: "chrome", name: "Chrome", tier: "plus",
+        colors: ["#1A1A1D", "#D8DCE0", "#4A4A50", "#9AA0A6"],
+        channelColors: { r: "#1A1A1D", g: "#4A4A50", b: "#0D0D0F", a: "#2E2E33" },
+        effect: { kind: "gradient", channelColorsB: { r: "#D8DCE0", g: "#EDEFF2", a: "#9AA0A6" } },
+      },
+    ],
   },
   {
     id: "motorcycle_jacket_white_purple",
@@ -662,6 +753,9 @@ export const useCosmeticsStore = create<CosmeticsState>()(
       // start with White Baseball Cap equipped (Spine-based)
       equipped: { headTop: "white_baseball_cap", hat: "white_baseball_cap" },
 
+      selectedPaletteByCosmeticId: {},
+      hasPlus: false,
+
       loadCatalog: () => {
         // Always load the latest catalog to ensure new items are available
         set({ catalog: DEFAULT_CATALOG });
@@ -706,6 +800,21 @@ export const useCosmeticsStore = create<CosmeticsState>()(
       unequipHead: () => set((s) => ({ equipped: { ...s.equipped, headTop: undefined, hat: undefined } })),
       unequipHair: () => set((s) => ({ equipped: { ...s.equipped, hair: undefined } })),
 
+      setCosmeticPalette: (cosmeticId, paletteId) => {
+        const item = get().catalog.find((c) => c.id === cosmeticId);
+        const palette = item?.palettes?.find((p) => p.id === paletteId);
+        if (!item?.recolorable || !palette) return;
+        // Belt-and-suspenders: the UI already blocks tapping a locked
+        // palette, but the store shouldn't trust that -- a Plus palette
+        // can never actually be selected without the entitlement.
+        if (palette.tier === "plus" && !get().hasPlus) return;
+        set((s) => ({
+          selectedPaletteByCosmeticId: { ...s.selectedPaletteByCosmeticId, [cosmeticId]: paletteId },
+        }));
+      },
+
+      devSetPlus: (value) => set({ hasPlus: value }),
+
       grant: (id) => set((s) => ({ owned: { ...s.owned, [id]: true } })),
 
       reset: () =>
@@ -731,12 +840,14 @@ export const useCosmeticsStore = create<CosmeticsState>()(
           },
           points: 0,
           equipped: { headTop: "white_baseball_cap", hat: "white_baseball_cap" },
+          selectedPaletteByCosmeticId: {},
+          hasPlus: false,
         }),
     }),
     {
       name: "cosmetics_store_v4",
       storage: createJSONStorage(() => AsyncStorage),
-      version: 11,
+      version: 14,
       migrate: (state: any, from) => {
         const s = state ?? {};
         // Always update catalog to latest version to include new hats
@@ -769,8 +880,14 @@ export const useCosmeticsStore = create<CosmeticsState>()(
           motorcycle_jacket_red_green: true,
           motorcycle_jacket_blue_orange: true,
           motorcycle_jacket_black_gold: true,
-          shoe_classic: true
+          shoe_classic: true,
+          hat_beret: true,        // for testing premade colorways
+          hat_crown: true,        // for testing premade colorways
+          shoe_cowboy_boots: true // for testing premade colorways
         };
+
+        s.selectedPaletteByCosmeticId ??= {};
+        s.hasPlus ??= false;
 
         s.points = typeof s.points === "number" ? s.points : 0;
         s.equipped ??= {};

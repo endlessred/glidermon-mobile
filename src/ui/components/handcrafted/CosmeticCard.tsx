@@ -4,6 +4,7 @@ import { Pressable, View, Text, StyleSheet, LayoutChangeEvent } from "react-nati
 import Svg, { Path, G } from "react-native-svg";
 import CheckBadge from "./CheckBadge";
 import CardBacking from "./CardBacking";
+import PaletteSwatch from "./PaletteSwatch";
 import { wobblyRoundedRectPath } from "./wobblyPath";
 import {
   INK,
@@ -30,6 +31,10 @@ type CosmeticCardProps = {
   onPress?: () => void;
   disabled?: boolean;
   children?: React.ReactNode; // thumbnail
+  /** When present, shows a small non-interactive colorway badge in the
+   * card's upper-right corner reflecting the currently-selected palette.
+   * Omit entirely for cosmetics that aren't recolorable. */
+  paletteSwatchColors?: string[];
 };
 
 const STROKE_BY_STATE: Record<CosmeticCardState, string> = {
@@ -58,6 +63,7 @@ export default function CosmeticCard({
   onPress,
   disabled,
   children,
+  paletteSwatchColors,
 }: CosmeticCardProps) {
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   const cardSeed = seed ?? rotationIndex;
@@ -129,6 +135,9 @@ export default function CosmeticCard({
         </View>
       )}
       {isEquipped && <CheckBadge size={18} style={styles.badge} />}
+      {paletteSwatchColors && paletteSwatchColors.length > 0 && (
+        <PaletteSwatch colors={paletteSwatchColors} max={3} style={styles.paletteBadge} />
+      )}
       {isLocked && (
         <View style={styles.lockOverlay}>
           <Text style={styles.lockIcon}>🔒</Text>
@@ -199,6 +208,12 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: -6,
     right: -6,
+    zIndex: 2,
+  },
+  paletteBadge: {
+    position: "absolute",
+    top: 7,
+    right: 7,
     zIndex: 2,
   },
   lockOverlay: {

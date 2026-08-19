@@ -13,12 +13,15 @@ import { makeHueIndexedRecolorMaterial } from "./HueIndexedRecolor";
 import { LifelikeIdleNoMix } from "../game/view/lifelikeIdle_noMix";
 import { OutfitSlot } from "../data/types/outfitTypes";
 import { CosmeticItem } from "../data/stores/cosmeticsStore";
+import { resolveCosmeticRecolor, resolvePaletteEffect, type PaletteEffect } from "../data/cosmetics/palette";
 import { applySubtleWindGusts } from "../../utils/spinePhysics";
 
 export type SpineCharacterControllerOptions = {
   animation?: string;
   outfit?: OutfitSlot;
   catalog: CosmeticItem[];
+  /** Which premade colorway is selected per recolorable cosmetic id. */
+  selectedPaletteByCosmeticId?: Record<string, string>;
   characterBoneName?: string;
   shaderSlotRegex?: RegExp;
   recolorCache?: Map<string, THREE.ShaderMaterial>;
@@ -34,6 +37,9 @@ export type SpineCharacterController = {
   setAnimation(name: string, loop?: boolean): void;
   playReaction(name: string): void;
   applyOutfit(outfit?: OutfitSlot): void;
+  /** Updates the active colorway selection and re-applies the last outfit
+   * so an already-equipped recolorable cosmetic re-renders immediately. */
+  setSelectedPalettes(selectedPaletteByCosmeticId: Record<string, string>): void;
   getFeetLocalPosition(): { x: number; y: number };
 };
 
@@ -163,10 +169,22 @@ export async function createSpineCharacterController(
     animation = "idle",
     outfit,
     catalog,
+    selectedPaletteByCosmeticId: initialSelectedPalettes,
     characterBoneName = DEFAULT_CHARACTER_BONE,
     shaderSlotRegex = DEFAULT_SHADER_SLOT_REGEX,
     recolorCache = new Map<string, THREE.ShaderMaterial>(),
   } = options;
+
+  // Mutable so setSelectedPalettes() can update it after creation without
+  // rebuilding the whole controller -- applyOutfitInternal always reads the
+  // current value via closure.
+  let selectedPalettes: Record<string, string> = initialSelectedPalettes ?? {};
+  let lastAppliedOutfit: OutfitSlot | undefined = outfit;
+
+  // Shared shimmer time uniform -- one object reference given to every
+  // shimmer material so a single per-frame write in update() (below)
+  // animates all of them, instead of iterating every live shimmer material.
+  const shimmerTimeUniform = { value: 0 };
 
   if (__DEV__) {
     console.log("Spine controller opts", { hasOutfit: !!outfit, catalogSize: catalog?.length ?? 0, animation });
@@ -350,7 +368,10 @@ export async function createSpineCharacterController(
     updateWorldXform(skeleton, 0);
   }
 
-  function configureMaterialOverride(hatRecolor?: RecolorData, skinRecolor?: RecolorData, hairRecolor?: RecolorData, jacketRecolor?: RecolorData, shoeRecolor?: RecolorData) {
+  function configureMaterialOverride(
+    hatRecolor?: RecolorData, skinRecolor?: RecolorData, hairRecolor?: RecolorData, jacketRecolor?: RecolorData, shoeRecolor?: RecolorData,
+    hatEffect?: PaletteEffect, skinEffect?: PaletteEffect, hairEffect?: PaletteEffect, jacketEffect?: PaletteEffect, shoeEffect?: PaletteEffect
+  ) {
     if (!hatRecolor && !skinRecolor && !hairRecolor && !jacketRecolor && !shoeRecolor) {
       mesh.materialOverride = undefined;
       return;
@@ -364,6 +385,7 @@ export async function createSpineCharacterController(
       const isShaderAttachment = shaderSlotRegex.test(attachmentName);
 
       let recolor: RecolorData | undefined;
+      let effect: PaletteEffect | undefined;
       // Hats and shoes are disambiguated by which skin/attachment is active
       // (setSkin() for hats, configureShoeSwitches() for shoes), not by the
       // attachment's own name ending in "Shader" like jacket/hair/skin - each
@@ -372,16 +394,21 @@ export async function createSpineCharacterController(
       let bypassShaderNameCheck = false;
       if (slotName === "Hat_Base" && hatRecolor) {
         recolor = hatRecolor;
+        effect = hatEffect;
         bypassShaderNameCheck = true;
       } else if (SHOE_SLOTS.includes(slotName) && shoeRecolor) {
         recolor = shoeRecolor;
+        effect = shoeEffect;
         bypassShaderNameCheck = true;
       } else if (isShaderAttachment && hairRecolor && HAIR_SLOTS.includes(slotName)) {
         recolor = hairRecolor;
+        effect = hairEffect;
       } else if (isShaderAttachment && jacketRecolor && JACKET_SLOTS.includes(slotName)) {
         recolor = jacketRecolor;
+        effect = jacketEffect;
       } else if (isShaderAttachment && skinRecolor && SKIN_SLOTS.includes(slotName)) {
         recolor = skinRecolor;
+        effect = skinEffect;
       } else if (!isShaderAttachment && skinRecolor && SKIN_SLOTS.includes(slotName)) {
         return null;
       }
@@ -392,7 +419,12 @@ export async function createSpineCharacterController(
       const alphaTest = isPupil ? 0.0 : 0.0015;
       if (!isShaderAttachment && !bypassShaderNameCheck) return null;
 
-      const key = `hue|${(baseTex as any).uuid}|${recolor.r}|${recolor.g}|${recolor.b}|${recolor.a}|${slotName}|${attachmentName}|${alphaTest}`;
+      const effectKey = effect
+        ? effect.kind === "gradient"
+          ? `grad|${effect.channelColorsB.r}|${effect.channelColorsB.g}|${effect.channelColorsB.a}`
+          : `shim|${effect.speed}|${effect.intensity}|${effect.tint}`
+        : "flat";
+      const key = `hue|${(baseTex as any).uuid}|${recolor.r}|${recolor.g}|${recolor.b}|${recolor.a}|${slotName}|${attachmentName}|${alphaTest}|${effectKey}`;
       let material = recolorCache.get(key);
       if (!material) {
         material = makeHueIndexedRecolorMaterial(baseTex, {
@@ -402,7 +434,10 @@ export async function createSpineCharacterController(
           satMin: 0.1,
           hueCosMin: 0.75,
           useYellow: true,
-          preserveDarkThreshold: 0.15,
+          // See matching comment in SpineCharacterPreview.tsx -- gradient
+          // mode's dark end lands below the default outline-preserve floor,
+          // so it needs a lower floor to actually become visible.
+          preserveDarkThreshold: effect?.kind === "gradient" ? 0.08 : 0.15,
           smoothOutlineEdges: false,
           colors: {
             red: recolor.r ?? "#ff0000",
@@ -410,6 +445,17 @@ export async function createSpineCharacterController(
             blue: recolor.b ?? recolor.r ?? "#ff0000",
             yellow: recolor.a ?? "#ffff00",
           },
+          gradientColors: effect?.kind === "gradient" ? {
+            red: effect.channelColorsB.r,
+            green: effect.channelColorsB.g,
+            yellow: effect.channelColorsB.a,
+          } : undefined,
+          shimmer: effect?.kind === "shimmer" ? {
+            speed: effect.speed,
+            intensity: effect.intensity,
+            tint: effect.tint,
+            timeUniform: shimmerTimeUniform,
+          } : undefined,
         });
         recolorCache.set(key, material);
       }
@@ -433,14 +479,25 @@ export async function createSpineCharacterController(
     const jacketCosmetic = findCosmetic(outfitToApply.cosmetics?.jacket?.itemId);
     const shoeCosmetic = findCosmetic(outfitToApply.cosmetics?.shoes?.itemId);
 
-    const hatRecolor = hatCosmetic?.maskRecolor;
-    const skinRecolor = skinCosmetic?.maskRecolor;
-    const jacketRecolor = jacketCosmetic?.maskRecolor;
-    const shoeRecolor = shoeCosmetic?.maskRecolor;
+    const hatRecolor = resolveCosmeticRecolor(hatCosmetic, hatCosmetic && selectedPalettes[hatCosmetic.id]);
+    const skinRecolor = resolveCosmeticRecolor(skinCosmetic, skinCosmetic && selectedPalettes[skinCosmetic.id]);
+    const jacketRecolor = resolveCosmeticRecolor(jacketCosmetic, jacketCosmetic && selectedPalettes[jacketCosmetic.id]);
+    const shoeRecolor = resolveCosmeticRecolor(shoeCosmetic, shoeCosmetic && selectedPalettes[shoeCosmetic.id]);
 
-    // For hair, check if the outfit has spine data with custom recoloring
-    let hairRecolor = hairCosmetic?.maskRecolor;
-    if (outfitToApply.cosmetics?.hair?.spineData?.maskRecolor) {
+    const hatEffect = resolvePaletteEffect(hatCosmetic, hatCosmetic && selectedPalettes[hatCosmetic.id]);
+    const skinEffect = resolvePaletteEffect(skinCosmetic, skinCosmetic && selectedPalettes[skinCosmetic.id]);
+    const jacketEffect = resolvePaletteEffect(jacketCosmetic, jacketCosmetic && selectedPalettes[jacketCosmetic.id]);
+    const shoeEffect = resolvePaletteEffect(shoeCosmetic, shoeCosmetic && selectedPalettes[shoeCosmetic.id]);
+    const hairEffect = resolvePaletteEffect(hairCosmetic, hairCosmetic && selectedPalettes[hairCosmetic.id]);
+
+    // Recolorable hair always resolves live from the catalog + selected
+    // palette (so changing colorway updates already-equipped hair
+    // immediately); only fall back to a baked-in spineData recolor for
+    // hair items that predate the palette system.
+    let hairRecolor = hairCosmetic?.recolorable && hairCosmetic.palettes?.length
+      ? resolveCosmeticRecolor(hairCosmetic, selectedPalettes[hairCosmetic.id])
+      : hairCosmetic?.maskRecolor;
+    if (!(hairCosmetic?.recolorable && hairCosmetic.palettes?.length) && outfitToApply.cosmetics?.hair?.spineData?.maskRecolor) {
       hairRecolor = outfitToApply.cosmetics.hair.spineData.maskRecolor;
     }
 
@@ -466,7 +523,7 @@ export async function createSpineCharacterController(
     configureHairSwitches(hairRecolor, outfitToApply.cosmetics?.hair?.itemId);
     configureJacketSwitches(jacketRecolor);
     configureShoeSwitches(shoeCosmetic?.shoeAttachment);
-    configureMaterialOverride(hatRecolor, skinRecolor, hairRecolor, jacketRecolor, shoeRecolor);
+    configureMaterialOverride(hatRecolor, skinRecolor, hairRecolor, jacketRecolor, shoeRecolor, hatEffect, skinEffect, hairEffect, jacketEffect, shoeEffect);
   }
 
   applyOutfitInternal(outfit);
@@ -508,6 +565,7 @@ export async function createSpineCharacterController(
       // Apply wind gusts to make physics visible
       const currentTime = performance.now() / 1000; // Convert to seconds
       applySubtleWindGusts(skeleton, currentTime);
+      shimmerTimeUniform.value = currentTime;
 
       updateWorldXform(skeleton, deltaSeconds);
       mesh.refreshMeshes();
@@ -520,7 +578,13 @@ export async function createSpineCharacterController(
       idleDriver.playReaction(name as Parameters<LifelikeIdleNoMix["playReaction"]>[0]);
     },
     applyOutfit(outfitToApply?: OutfitSlot) {
+      lastAppliedOutfit = outfitToApply;
       applyOutfitInternal(outfitToApply);
+      mesh.refreshMeshes();
+    },
+    setSelectedPalettes(nextSelectedPalettes: Record<string, string>) {
+      selectedPalettes = nextSelectedPalettes;
+      applyOutfitInternal(lastAppliedOutfit);
       mesh.refreshMeshes();
     },
     getFeetLocalPosition() {

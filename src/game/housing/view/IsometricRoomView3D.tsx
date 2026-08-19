@@ -140,6 +140,7 @@ export default function IsometricRoomView3D({
   zoomedIn = false,
 }: IsometricRoomView3DProps) {
   const catalog = useCosmeticsStore((state) => state.catalog);
+  const selectedPaletteByCosmeticId = useCosmeticsStore((state) => state.selectedPaletteByCosmeticId);
   const roomSizeTier = useHousingStore((s) => s.roomSizeTier);
   const activeFloorPatternId = useHousingStore((s) => s.activeFloorPatternId);
   const activeWallPatternId = useHousingStore((s) => s.activeWallPatternId);
@@ -308,6 +309,13 @@ export default function IsometricRoomView3D({
     outfitRef.current = outfit ?? undefined;
     if (spineRef.current) spineRef.current.applyOutfit(outfitRef.current);
   }, [outfit]);
+
+  // Re-applies the currently-equipped outfit so an equipped recolorable
+  // cosmetic (e.g. a hat) picks up a new colorway chosen on the Outfit
+  // screen without needing to re-equip it.
+  useEffect(() => {
+    if (spineRef.current) spineRef.current.setSelectedPalettes(selectedPaletteByCosmeticId);
+  }, [selectedPaletteByCosmeticId]);
 
   const updateCameraForZoom = useCallback((camera: THREE.OrthographicCamera, zoomedIn: boolean) => {
     const { w: glW, h: glH } = glSizeRef.current;
@@ -553,6 +561,7 @@ export default function IsometricRoomView3D({
         animation: animationRef.current,
         outfit: outfitRef.current,
         catalog,
+        selectedPaletteByCosmeticId,
       });
       controller.mesh.frustumCulled = false;
 

@@ -17,4 +17,6 @@ export { default as CurrencyChip } from "./CurrencyChip";
 export { default as CheckBadge } from "./CheckBadge";
 export { default as CraftBottomNav } from "./CraftBottomNav";
 export { default as CraftNavItem } from "./CraftNavItem";
+export { default as PaletteSwatch } from "./PaletteSwatch";
+export { default as PaletteCard } from "./PaletteCard";
 export * from "./tokens";

@@ -35,6 +35,28 @@ export type HueIndexedRecolorOptions = {
   // only after checking full-body silhouette edges, not just the specific
   // detail that motivated turning it on.
   smoothOutlineEdges?: boolean;
+  // --- Plus-tier effects (see docs/superpowers/specs/2026-08-19-cosmetic-palette-tiers.md) ---
+  /** Gradient mode: per-channel "light end" colors (red/green/yellow only --
+   * blue has no luma signal to repurpose, same reason it's excluded from
+   * shading below). Blended against `colors.red/green/yellow` (the "dark
+   * end") using the shader's existing shade signal as the mix factor, so
+   * gradients work on art painted for the flat system with no changes. */
+  gradientColors?: {
+    red?: THREE.Color | string | number;
+    green?: THREE.Color | string | number;
+    yellow?: THREE.Color | string | number;
+  };
+  /** Shimmer mode: an animated diagonal highlight sweep over already-
+   * recolored pixels. `timeUniform` should be one shared {value:number}
+   * object reused across every shimmer material (see SpineCharacterPreview
+   * / createSpineCharacterController) so a single per-frame write updates
+   * them all, rather than iterating every live shimmer material. */
+  shimmer?: {
+    speed?: number;
+    intensity?: number;
+    tint?: THREE.Color | string | number;
+    timeUniform?: { value: number };
+  };
 };
 
 function toColorOrDefault(c: any, defaultValue: number): THREE.Color {
@@ -76,6 +98,17 @@ export function makeHueIndexedRecolorMaterial(
   const colG = toColorOrDefault(o.colors!.green, 0x00ff00);
   const colB = toColorOrDefault(o.colors!.blue, 0x0000ff);
   const colY = toColorOrDefault(o.colors!.yellow, 0xffff00);
+
+  const gradientEnabled = !!o.gradientColors;
+  const colRB = toColorOrDefault(o.gradientColors?.red, colR.getHex());
+  const colGB = toColorOrDefault(o.gradientColors?.green, colG.getHex());
+  const colYB = toColorOrDefault(o.gradientColors?.yellow, colY.getHex());
+
+  const shimmerEnabled = !!o.shimmer;
+  const shimmerSpeed = o.shimmer?.speed ?? 0.4;
+  const shimmerIntensity = o.shimmer?.intensity ?? 0.5;
+  const shimmerTint = toColorOrDefault(o.shimmer?.tint, 0xffffff);
+  const timeUniform = o.shimmer?.timeUniform ?? { value: 0 };
 
   ensureSRGBTexture(baseMap);
 
@@ -133,7 +166,24 @@ export function makeHueIndexedRecolorMaterial(
     uniform float uAlphaTest, uStrength, uSatMin, uHueCosMin;
     uniform float uUseYellow, uShadeMode, uGlobalAlpha, uPreserveDark;
 
+    // Plus-tier effects (gradient / shimmer) -- see
+    // docs/superpowers/specs/2026-08-19-cosmetic-palette-tiers.md
+    uniform vec3 uColRB, uColGB, uColYB;
+    uniform float uGradientEnabled;
+    uniform float uTime, uShimmerEnabled, uShimmerSpeed, uShimmerIntensity;
+    uniform vec3 uShimmerTint;
+
     varying vec2 vUv;
+
+    // Diagonal sweep in atlas UV space -- an MVP simplification, not aware
+    // of a given attachment's own local orientation within the atlas (see
+    // spec doc). Applied identically in both shader variants below.
+    vec3 applyShimmer(vec3 base) {
+      if (uShimmerEnabled <= 0.5) return base;
+      float phase = fract(vUv.x + vUv.y - uTime * uShimmerSpeed);
+      float band = smoothstep(0.0, 0.08, phase) * (1.0 - smoothstep(0.08, 0.16, phase));
+      return mix(base, uShimmerTint, band * uShimmerIntensity);
+    }
 
     float lumaLinear(vec3 c){ return dot(c, vec3(0.299,0.587,0.114)); }
 
@@ -224,7 +274,19 @@ export function makeHueIndexedRecolorMaterial(
           // classification color -- see the non-smooth path below for why.
           float refY = (id == 0) ? 0.299 : (id == 1) ? 0.587 : 0.886;
           float shadeFactor = clamp(Y / max(refY, 1e-4), 0.4, 1.3);
-          vec3 shaded = mix(target, target * shadeFactor, uShadeMode);
+          vec3 shaded;
+          if (uGradientEnabled > 0.5) {
+            // Gradient mode: reuse the same shadeFactor signal as a mix
+            // parameter between two designer colors instead of a
+            // brightness multiplier on one -- works on already-painted
+            // shading with no new art.
+            vec3 target_srgb_B = (id==0) ? uColRB : (id==1) ? uColGB : uColYB;
+            vec3 targetB = SRGBToLinear(target_srgb_B);
+            float t = clamp((shadeFactor - 0.4) / 0.9, 0.0, 1.0);
+            shaded = mix(target, targetB, t);
+          } else {
+            shaded = mix(target, target * shadeFactor, uShadeMode);
+          }
           recolored = mix(texRGB, shaded, uStrength);
         }
 
@@ -265,6 +327,8 @@ export function makeHueIndexedRecolorMaterial(
         float alphaConfidence = smoothstep(0.5, 0.97, tex.a);
         outLinear = mix(texRGB, recolored, classifyConfidence * darkFade * satFade * alphaConfidence);
       }
+
+      if (id != -1) outLinear = applyShimmer(outLinear);
 
       gl_FragColor = vec4( LinearToSRGB(outLinear), 1.0 );
     }
@@ -355,9 +419,22 @@ export function makeHueIndexedRecolorMaterial(
         // still modulates it.
         float refY = (id == 0) ? 0.299 : (id == 1) ? 0.587 : 0.886; // red / green / yellow
         float shadeFactor = clamp(Y / max(refY, 1e-4), 0.4, 1.3);
-        vec3 shaded = mix(target, target * shadeFactor, uShadeMode);
+        vec3 shaded;
+        if (uGradientEnabled > 0.5) {
+          // Gradient mode: reuse shadeFactor as a mix parameter between two
+          // designer colors instead of a brightness multiplier on one --
+          // works on already-painted shading with no new art.
+          vec3 target_srgb_B = (id==0) ? uColRB : (id==1) ? uColGB : uColYB;
+          vec3 targetB = SRGBToLinear(target_srgb_B);
+          float t = clamp((shadeFactor - 0.4) / 0.9, 0.0, 1.0);
+          shaded = mix(target, targetB, t);
+        } else {
+          shaded = mix(target, target * shadeFactor, uShadeMode);
+        }
         outLinear = mix(texRGB, shaded, uStrength);
       }
+
+      outLinear = applyShimmer(outLinear);
 
       // Encode to output color space
       gl_FragColor = vec4( LinearToSRGB(outLinear), 1.0 );
@@ -369,6 +446,10 @@ export function makeHueIndexedRecolorMaterial(
   const safeColG = new THREE.Color(colG.getHex());
   const safeColB = new THREE.Color(colB.getHex());
   const safeColY = new THREE.Color(colY.getHex());
+  const safeColRB = new THREE.Color(colRB.getHex());
+  const safeColGB = new THREE.Color(colGB.getHex());
+  const safeColYB = new THREE.Color(colYB.getHex());
+  const safeShimmerTint = new THREE.Color(shimmerTint.getHex());
 
   const material = new THREE.ShaderMaterial({
     uniforms: {
@@ -385,6 +466,16 @@ export function makeHueIndexedRecolorMaterial(
       uUseYellow:   { value: o.useYellow ? 1.0 : 0.0 },
       uPreserveDark:{ value: o.preserveDarkThreshold },
       uGlobalAlpha: { value: 1.0 },
+      // Plus-tier effects
+      uColRB:            { value: safeColRB },
+      uColGB:             { value: safeColGB },
+      uColYB:             { value: safeColYB },
+      uGradientEnabled:   { value: gradientEnabled ? 1.0 : 0.0 },
+      uTime:              timeUniform,
+      uShimmerEnabled:    { value: shimmerEnabled ? 1.0 : 0.0 },
+      uShimmerSpeed:      { value: shimmerSpeed },
+      uShimmerIntensity:  { value: shimmerIntensity },
+      uShimmerTint:       { value: safeShimmerTint },
     },
     vertexShader: vert,
     fragmentShader: frag,
