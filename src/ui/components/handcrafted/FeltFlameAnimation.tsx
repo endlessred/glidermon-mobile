@@ -15,12 +15,12 @@ import { useTheme } from "../../../data/hooks/useTheme";
 const PAGE_SOURCE = require("../../../assets/UI Assets/FeltFlame/FeltFlameExpandAndContract/FeltFlame.png");
 
 // The atlas's untrimmed canvas size, constant across every frame (see
-// FeltFlame.atlas's "offsets: ...,246,312" on every region). Each frame is
+// FeltFlame.atlas's "offsets: ...,244,293" on every region). Each frame is
 // tightly trimmed to a different bounding box, so frames are repositioned at
 // their recorded offset within this fixed canvas -- otherwise the flame
 // would jump around instead of visibly expanding/contracting from one place.
-const CANVAS_W = 246;
-const CANVAS_H = 312;
+const CANVAS_W = 244;
+const CANVAS_H = 293;
 
 type FrameDef = {
   /** Physical top-left of this region on the page. */
@@ -41,21 +41,21 @@ type FrameDef = {
 // One full expand-then-contract loop, frames 00 -> 14, hand-transcribed from
 // FeltFlame.atlas.
 const FRAMES: FrameDef[] = [
-  { x: 2, y: 492, w: 231, h: 282, ox: 7, oy: 6, rotated: true }, // _00
-  { x: 286, y: 491, w: 232, h: 286, ox: 7, oy: 5, rotated: true }, // _01
-  { x: 863, y: 489, w: 234, h: 289, ox: 6, oy: 5, rotated: true }, // _02
-  { x: 1154, y: 489, w: 234, h: 293, ox: 6, oy: 4, rotated: true }, // _03
-  { x: 2, y: 253, w: 236, h: 297, ox: 5, oy: 3, rotated: true }, // _04
-  { x: 595, y: 249, w: 238, h: 300, ox: 4, oy: 3, rotated: true }, // _05
-  { x: 1196, y: 248, w: 239, h: 304, ox: 4, oy: 2, rotated: true }, // _06
-  { x: 2, y: 9, w: 241, h: 306, ox: 3, oy: 2, rotated: true }, // _07
-  { x: 614, y: 4, w: 243, h: 309, ox: 2, oy: 1, rotated: true }, // _08 (fullest bloom)
-  { x: 1234, y: 2, w: 244, h: 310, ox: 2, oy: 1, rotated: true }, // _09
-  { x: 925, y: 3, w: 243, h: 307, ox: 2, oy: 1, rotated: true }, // _10
-  { x: 310, y: 6, w: 241, h: 302, ox: 3, oy: 2, rotated: true }, // _11
-  { x: 897, y: 249, w: 238, h: 297, ox: 4, oy: 3, rotated: true }, // _12
-  { x: 301, y: 252, w: 236, h: 292, ox: 5, oy: 4, rotated: true }, // _13
-  { x: 574, y: 490, w: 233, h: 287, ox: 6, oy: 5, rotated: true }, // _14
+  { x: 288, y: 483, w: 231, h: 282, ox: 7, oy: 6, rotated: true }, // _00
+  { x: 2, y: 484, w: 230, h: 284, ox: 7, oy: 5, rotated: true }, // _01
+  { x: 572, y: 482, w: 232, h: 284, ox: 6, oy: 5, rotated: true }, // _02
+  { x: 858, y: 482, w: 232, h: 286, ox: 6, oy: 4, rotated: true }, // _03
+  { x: 2, y: 247, w: 234, h: 287, ox: 5, oy: 3, rotated: true }, // _04
+  { x: 291, y: 246, w: 234, h: 288, ox: 5, oy: 3, rotated: true }, // _05
+  { x: 869, y: 244, w: 236, h: 289, ox: 4, oy: 2, rotated: true }, // _06
+  { x: 2, y: 7, w: 237, h: 290, ox: 4, oy: 2, rotated: true }, // _07
+  { x: 586, y: 4, w: 238, h: 291, ox: 3, oy: 1, rotated: true }, // _08 (fullest bloom)
+  { x: 1172, y: 2, w: 240, h: 291, ox: 2, oy: 1, rotated: true }, // _09
+  { x: 879, y: 3, w: 239, h: 291, ox: 3, oy: 1, rotated: true }, // _10
+  { x: 294, y: 7, w: 237, h: 290, ox: 4, oy: 2, rotated: true }, // _11
+  { x: 1160, y: 244, w: 236, h: 288, ox: 4, oy: 3, rotated: true }, // _12
+  { x: 581, y: 246, w: 234, h: 286, ox: 5, oy: 4, rotated: true }, // _13
+  { x: 1146, y: 482, w: 232, h: 284, ox: 6, oy: 5, rotated: true }, // _14
 ];
 
 // Fullest-bloom frame, used as the static pose when motion is reduced.

@@ -25,9 +25,6 @@ interface ShadedShopViewportProps {
 
 type CameraFraming = { x: number; y: number; zoomFactor: number };
 
-// How far down from the top of the FULL render a shopping-mode character
-// should sit -- tuned so they land within the visible band above a bottom
-// panel that covers ~65-70% of the screen (see ShopScreen's panel height).
 // ShopScreen's merchandise panel covers the bottom ~68% of the screen, so
 // only the top ~32% of this viewport's full-height render is ever actually
 // visible. Center the character+counter within THAT visible band (not the
@@ -40,6 +37,18 @@ const SHOPPING_FRAME_FRACTION = VISIBLE_BAND_FRACTION / 2;
 const SHOPPING_ZOOM_FACTOR = 2.0;
 // Seconds -- exponential smoothing time-constant for camera reframes.
 const CAMERA_EASE_TAU = 0.22;
+
+// One-shot "wind gust hit the sign" animations added to the ShadedShop
+// skeleton -- each moves a different part (ribbons, left/right sign board),
+// so they're independent and safe to occasionally overlap, but read best
+// triggered one at a time rather than all together. `Sign/Branch` (also
+// present in the file) is left out of the rotation since it reads as the
+// branch itself moving rather than a gust hitting the sign -- easy to add
+// back to this list if that's wanted too.
+const SIGN_WIND_ANIMATIONS = ['Sign/DarkRibbon', 'Sign/Ribbon', 'Sign/Sign Left', 'Sign/Sign Right'];
+const SIGN_WIND_TRACK = 0; // the main ShadedShop skeleton's `state` has no other animation on any track
+const SIGN_WIND_MIN_DELAY_MS = 2800; // 5x more frequent than the original 14-32s range
+const SIGN_WIND_MAX_DELAY_MS = 6400;
 
 // Given a character's resolved world anchor (same point used for tap
 // detection) and the viewport's pixel height, computes the camera framing
@@ -151,6 +160,7 @@ export default function ShadedShopViewport({
   const cameraPresetsRef = useRef<Partial<Record<ShopCameraTarget, CameraFraming>>>({});
   const cameraCurrentRef = useRef<CameraFraming | null>(null);
   const cameraDesiredKeyRef = useRef<ShopCameraTarget>(cameraTarget);
+  const signWindTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     cameraDesiredKeyRef.current = cameraTarget;
@@ -248,7 +258,6 @@ export default function ShadedShopViewport({
       // matches the hardcoded position/zoom set just above.
       cameraPresetsRef.current.overview = { x: 0, y: 1000, zoomFactor };
       cameraCurrentRef.current = { x: 0, y: 1000, zoomFactor };
-      console.log('[camera] overview preset', { w, h, zoomFactor });
 
       // Load ShadedShop spine scene
       const { skeleton, state, resolveTexture } = await loadShadedShopSpine();
@@ -265,6 +274,25 @@ export default function ShadedShopViewport({
       // Create the skeleton mesh using the existing SkeletonMesh
       const skeletonMesh = new SkeletonMesh(skeleton, state, resolveTexture);
       skeletonMesh.frustumCulled = false;
+
+      // Occasionally play a single one-shot "wind gust" animation on the
+      // hanging sign, picked at random from SIGN_WIND_ANIMATIONS -- mirrors
+      // Sable's self-rescheduling blink timer below, just on a much longer/
+      // more occasional cadence and on the main scene skeleton's own track
+      // (which nothing else animates).
+      const availableSignWindAnimations = SIGN_WIND_ANIMATIONS.filter((name) => skeleton.data.findAnimation(name));
+      if (availableSignWindAnimations.length === 0) {
+        console.warn('None of the configured Sign wind animations were found in the ShadedShop skeleton');
+      } else {
+        const triggerSignWind = () => {
+          const name = availableSignWindAnimations[Math.floor(Math.random() * availableSignWindAnimations.length)];
+          state.setAnimation(SIGN_WIND_TRACK, name, false); // one-shot, no loop
+          const nextDelay = SIGN_WIND_MIN_DELAY_MS + Math.random() * (SIGN_WIND_MAX_DELAY_MS - SIGN_WIND_MIN_DELAY_MS);
+          signWindTimeoutRef.current = setTimeout(triggerSignWind, nextDelay);
+        };
+        const initialDelay = 800 + Math.random() * 1200;
+        signWindTimeoutRef.current = setTimeout(triggerSignWind, initialDelay);
+      }
 
       // Load Sable character
       const sableResult = await loadSableCharacter();
@@ -669,6 +697,10 @@ export default function ShadedShopViewport({
       if (rafRef.current != null) {
         cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
+      }
+      if (signWindTimeoutRef.current != null) {
+        clearTimeout(signWindTimeoutRef.current);
+        signWindTimeoutRef.current = null;
       }
       rendererRef.current?.dispose();
     };
