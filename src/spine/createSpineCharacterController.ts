@@ -100,6 +100,16 @@ const SHOE_SLOTS: string[] = [
   "R_Shoe",
 ];
 
+// Hand slots - like shoes, whichever hand-pose attachment is currently
+// active (plain, *Shader, or one of the gesture poses like L_HandThumbsUp)
+// should recolor to match the equipped/default skin, not just the one
+// attachment literally named "*Shader". See the bypass in
+// configureMaterialOverride below.
+const HAND_SLOTS: string[] = [
+  "L_Hand",
+  "R_Hand",
+];
+
 const SLOT_TO_SHADER: Record<string, string> = {
   Tail: "NewTailShader",
   R_Wing: "R_WingShader",
@@ -162,6 +172,19 @@ function getAttachmentFromAnySkin(
 
 type RecolorData = CosmeticItem["maskRecolor"];
 
+// Default (no skin cosmetic equipped) recolor -- reproduces GliderMon's
+// original hand-painted color scheme through the same hue-indexed shader
+// pipeline used by purchasable skins, instead of showing the raw baked
+// atlas colors for the "default" look. Starting values sampled by eye from
+// the reference art (brown fur, tan face/belly, blue-grey ears/wings/
+// stripe/shoes) -- tune against a fresh screenshot, see src/game/CLAUDE.md.
+const DEFAULT_SKIN_RECOLOR: RecolorData = {
+  r: "#B19170", // main fur brown (lightened from #9B7248 -- was reading too dark)
+  g: "#8C725B", // shadow / darker fur tone (lightened from #6B4A2C)
+  b: "#EBD6AE", // tan/cream belly, face mask, muzzle (lightened from #E8CFA0)
+  a: "#94AAB4", // blue-grey ears, wing membrane, head stripe, shoes (lightened from #7C97A3)
+};
+
 export async function createSpineCharacterController(
   options: SpineCharacterControllerOptions
 ): Promise<SpineCharacterController> {
@@ -196,12 +219,13 @@ export async function createSpineCharacterController(
   const textureModule2 = require("../assets/GliderMonSpine/skeleton_2.png");
   const textureModule3 = require("../assets/GliderMonSpine/skeleton_3.png");
   const textureModule4 = require("../assets/GliderMonSpine/skeleton_4.png");
+  const textureModule5 = require("../assets/GliderMonSpine/skeleton_5.png");
 
   if (__DEV__) console.log("Spine controller: loading assets");
   const { skeleton, resolveTexture } = await loadSpineFromExpoAssets({
     atlasModule,
     jsonModule,
-    textureModules: [textureModule, textureModule2, textureModule3, textureModule4],
+    textureModules: [textureModule, textureModule2, textureModule3, textureModule4, textureModule5],
   });
 
   skeleton.x = 0;
@@ -212,7 +236,7 @@ export async function createSpineCharacterController(
 
   const skeletonData = skeleton.data;
   const stateData = new AnimationStateData(skeletonData);
-  const idleDriver = new LifelikeIdleNoMix(stateData);
+  const idleDriver = new LifelikeIdleNoMix(stateData, skeleton);
   const state = idleDriver.animationState;
 
   skeleton.setupPose();
@@ -286,7 +310,7 @@ export async function createSpineCharacterController(
     updateWorldXform(skeleton, 0);
   }
 
-  function configureHairSwitches(hairRecolor: RecolorData | undefined, hairStyle?: string) {
+  function configureHairSwitches(hairRecolor: RecolorData | undefined, hairSlots?: CosmeticItem["hairSlots"]) {
     // First, clear both hair slots to prevent bugs
     for (const slotName of HAIR_SLOTS) {
       const slot = skeleton.findSlot(slotName);
@@ -295,24 +319,22 @@ export async function createSpineCharacterController(
       }
     }
 
-    if (!hairRecolor || !hairStyle) return;
+    if (!hairRecolor || !hairSlots) return;
 
-    // Determine which slots to activate based on hair style
-    let slotsToActivate: string[] = [];
-    if (hairStyle === "windswept_short") {
-      slotsToActivate = ["HairFront"]; // Short hair only uses front
-    } else if (hairStyle === "windswept_long") {
-      slotsToActivate = ["HairFront", "HairBack"]; // Long hair uses both
-    }
-
-    for (const slotName of slotsToActivate) {
-      const shaderName = SLOT_TO_SHADER[slotName];
-      if (!shaderName) continue;
+    // Activate whichever slots this hairstyle uses, with its own attachment
+    // name per slot -- most styles are HairFront-only; Windswept Long also
+    // keys HairBack. The attachment name comes straight from the catalog
+    // item, not a shared SLOT_TO_SHADER lookup, since most new hairstyles
+    // are their own uniquely-named mesh rather than a "*Shader" variant
+    // (recolor still applies via the HAIR_SLOTS bypass in
+    // configureMaterialOverride, same pattern as hats/shoes/hand poses).
+    for (const [slotName, attachmentName] of Object.entries(hairSlots)) {
+      if (!attachmentName) continue;
       const slot = skeleton.findSlot(slotName);
       if (!slot) continue;
-      const shaderAttachment = getAttachmentFromAnySkin(skeletonData, slotName, shaderName);
-      if (shaderAttachment) {
-        slot.pose.setAttachment(shaderAttachment);
+      const attachment = getAttachmentFromAnySkin(skeletonData, slotName, attachmentName);
+      if (attachment) {
+        slot.pose.setAttachment(attachment);
       }
     }
 
@@ -400,9 +422,23 @@ export async function createSpineCharacterController(
         recolor = shoeRecolor;
         effect = shoeEffect;
         bypassShaderNameCheck = true;
-      } else if (isShaderAttachment && hairRecolor && HAIR_SLOTS.includes(slotName)) {
+      } else if (HAND_SLOTS.includes(slotName) && skinRecolor) {
+        // Gesture-pose attachments (L_HandThumbsUp etc.) aren't named
+        // "*Shader" like the rest of the recolorable body, so without this
+        // bypass they'd fall through to the "!isShaderAttachment" branch
+        // below and render with their own flat baked colors instead of
+        // matching the equipped/default skin.
+        recolor = skinRecolor;
+        effect = skinEffect;
+        bypassShaderNameCheck = true;
+      } else if (HAIR_SLOTS.includes(slotName) && hairRecolor) {
+        // Most hairstyles are their own uniquely-named mesh (e.g. "Breezy
+        // Crop") rather than a "*Shader" variant like the original
+        // Windswept style -- bypassed the same way as hats/shoes/hands so
+        // any equipped hairstyle recolors, not just Windswept.
         recolor = hairRecolor;
         effect = hairEffect;
+        bypassShaderNameCheck = true;
       } else if (isShaderAttachment && jacketRecolor && JACKET_SLOTS.includes(slotName)) {
         recolor = jacketRecolor;
         effect = jacketEffect;
@@ -467,7 +503,8 @@ export async function createSpineCharacterController(
 
   function applyOutfitInternal(outfitToApply?: OutfitSlot) {
     if (!outfitToApply) {
-      configureMaterialOverride(undefined, undefined, undefined, undefined, undefined);
+      configureSkinSwitches(DEFAULT_SKIN_RECOLOR);
+      configureMaterialOverride(undefined, DEFAULT_SKIN_RECOLOR, undefined, undefined, undefined);
       configureJacketSwitches(undefined);
       configureShoeSwitches(undefined);
       return;
@@ -480,7 +517,9 @@ export async function createSpineCharacterController(
     const shoeCosmetic = findCosmetic(outfitToApply.cosmetics?.shoes?.itemId);
 
     const hatRecolor = resolveCosmeticRecolor(hatCosmetic, hatCosmetic && selectedPalettes[hatCosmetic.id]);
-    const skinRecolor = resolveCosmeticRecolor(skinCosmetic, skinCosmetic && selectedPalettes[skinCosmetic.id]);
+    // No skin cosmetic equipped -> fall back to the new default look (still
+    // shader-recolored) instead of leaving the base body unrecolored.
+    const skinRecolor = resolveCosmeticRecolor(skinCosmetic, skinCosmetic && selectedPalettes[skinCosmetic.id]) ?? DEFAULT_SKIN_RECOLOR;
     const jacketRecolor = resolveCosmeticRecolor(jacketCosmetic, jacketCosmetic && selectedPalettes[jacketCosmetic.id]);
     const shoeRecolor = resolveCosmeticRecolor(shoeCosmetic, shoeCosmetic && selectedPalettes[shoeCosmetic.id]);
 
@@ -520,7 +559,7 @@ export async function createSpineCharacterController(
     }
 
     configureSkinSwitches(skinRecolor);
-    configureHairSwitches(hairRecolor, outfitToApply.cosmetics?.hair?.itemId);
+    configureHairSwitches(hairRecolor, hairCosmetic?.hairSlots);
     configureJacketSwitches(jacketRecolor);
     configureShoeSwitches(shoeCosmetic?.shoeAttachment);
     configureMaterialOverride(hatRecolor, skinRecolor, hairRecolor, jacketRecolor, shoeRecolor, hatEffect, skinEffect, hairEffect, jacketEffect, shoeEffect);

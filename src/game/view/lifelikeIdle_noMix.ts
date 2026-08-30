@@ -1,5 +1,6 @@
 // src/anim/lifelikeIdle_noMix.ts
-import { AnimationState, AnimationStateData } from "@esotericsoftware/spine-core";
+import { AnimationState, AnimationStateData, Skeleton } from "@esotericsoftware/spine-core";
+import type { Attachment } from "@esotericsoftware/spine-core";
 
 // ---------------------------------------------------------------------------
 // Track allocation
@@ -22,6 +23,13 @@ import { AnimationState, AnimationStateData } from "@esotericsoftware/spine-core
 // 5: tail
 // 6: ears
 // 7: wings
+// 8: shoulders (new Slider primitives -- shrug etc; forearm/reach Sliders
+//    reuse track 3 since they key the same L Arm/R Arm bones as the
+//    existing ARM catalog and are never meant to play at the same time)
+// 9: wrists
+// 10: head/neck tilt
+// 11: left leg (thigh/shin/foot Sliders)
+// 12: right leg
 // ---------------------------------------------------------------------------
 const TRACK_IDLE_CARRIER = 0;
 const TRACK_BLINK = 1;
@@ -31,6 +39,11 @@ const TRACK_OVERLAY = 4;
 const TRACK_TAIL = 5;
 const TRACK_EARS = 6;
 const TRACK_WINGS = 7;
+const TRACK_SHOULDER = 8;
+const TRACK_WRIST = 9;
+const TRACK_HEAD = 10;
+const TRACK_LEFT_LEG = 11;
+const TRACK_RIGHT_LEG = 12;
 
 const IDLE = "Idle/Idle";
 const BLINK = "Eyes/Blink";
@@ -53,19 +66,24 @@ const IDLE_DUR_SEC = 40 / 30; // 1.333...
 type Range = [number, number];
 
 /** A primitive's in/loop-or-hold/out triad. `single` is for primitives that
- * are a single self-contained clip with no separate in/out phase. */
-type Triad = { in?: string; loop?: string; single?: string; out?: string };
+ * are a single self-contained clip with no separate in/out phase. `slider`
+ * is for a clip authored as one extreme pose (e.g. a 90-degree elbow bend)
+ * that should be played to a partial point (an `intensity` 0-1 fraction of
+ * its duration) and held there, then reverse-played back to rest -- see
+ * TrackSequencer's sliderIn/sliderOut phases. */
+type Triad = { in?: string; loop?: string; single?: string; out?: string; slider?: string };
 
 // ---------------------------------------------------------------------------
 // Primitive clip catalog (from the Spine primitives library)
 // ---------------------------------------------------------------------------
 const ARM = {
   raise: { in: "Primitives/Arms/ArmsRaiseIn", loop: "Primitives/Arms/ArmsRaise", out: "Primitives/Arms/ArmsRaiseOut" } as Triad,
-  leftRaise: { in: "Primitives/Arms/LeftArm/LeftArmRaiseIn", loop: "Primitives/Arms/LeftArm/LeftArmRaise", out: "Primitives/Arms/LeftArm/LeftArmRaiseOut" } as Triad,
-  rightRaise: { in: "Primitives/Arms/RightArm/RightArmRaiseIn", loop: "Primitives/Arms/RightArm/RightArmRaise", out: "Primitives/Arms/RightArm/RightArmRaiseOut" } as Triad,
-  reachLeft: { in: "Primitives/Arms/LeftArm/ReachLeftIn", loop: "Primitives/Arms/LeftArm/ReachLeft", out: "Primitives/Arms/LeftArm/ReachLeftOut" } as Triad,
-  reachRight: { in: "Primitives/Arms/RightArm/ReachRightIn", loop: "Primitives/Arms/RightArm/ReachRight", out: "Primitives/Arms/RightArm/ReachRightOut" } as Triad,
-  scratchChin: { in: "Primitives/Arms/RightArm/RightArmScratchChinIn", loop: "Primitives/Arms/RightArm/RightArmScratchChin", out: "Primitives/Arms/RightArm/RightArmScratchChinOut" } as Triad,
+  // NOTE: the new export renamed these folders LeftArm/RightArm -> LeftArmFull/RightArmFull (leaf clip names unchanged).
+  leftRaise: { in: "Primitives/Arms/LeftArmFull/LeftArmRaiseIn", loop: "Primitives/Arms/LeftArmFull/LeftArmRaise", out: "Primitives/Arms/LeftArmFull/LeftArmRaiseOut" } as Triad,
+  rightRaise: { in: "Primitives/Arms/RightArmFull/RightArmRaiseIn", loop: "Primitives/Arms/RightArmFull/RightArmRaise", out: "Primitives/Arms/RightArmFull/RightArmRaiseOut" } as Triad,
+  reachLeft: { in: "Primitives/Arms/LeftArmFull/ReachLeftIn", loop: "Primitives/Arms/LeftArmFull/ReachLeft", out: "Primitives/Arms/LeftArmFull/ReachLeftOut" } as Triad,
+  reachRight: { in: "Primitives/Arms/RightArmFull/ReachRightIn", loop: "Primitives/Arms/RightArmFull/ReachRight", out: "Primitives/Arms/RightArmFull/ReachRightOut" } as Triad,
+  scratchChin: { in: "Primitives/Arms/RightArmFull/RightArmScratchChinIn", loop: "Primitives/Arms/RightArmFull/RightArmScratchChin", out: "Primitives/Arms/RightArmFull/RightArmScratchChinOut" } as Triad,
 };
 
 const BODY = {
@@ -84,7 +102,78 @@ const FACE = {
   smile: { in: "Primitives/Face/SmileIn", loop: "Primitives/Face/Smile", out: "Primitives/Face/SmileOut" } as Triad,
   nod: { single: "Primitives/Face/Nod" } as Triad,
   wiggleNose: { single: "Primitives/Face/WiggleNose" } as Triad,
+  openMouth: { slider: "Primitives/Face/OpenMouthSlider" } as Triad,
 };
+
+// Forearm bends key the same L Arm/R Arm bones as ARM's raise/reach/
+// scratchChin clips above, so these play on the same TRACK_ARMS via
+// armsSeq -- they're an alternative way to pose the same bones, never
+// meant to run at the same time as an ARM triad.
+const FOREARM = {
+  leftLower: { slider: "Primitives/Arms/Forearms/LeftForearmLowerSlider" } as Triad,
+  leftRaise: { slider: "Primitives/Arms/Forearms/LeftForearmRaiseSlider" } as Triad,
+  rightLower: { slider: "Primitives/Arms/Forearms/RightForearmLowerSlider" } as Triad,
+  rightRaise: { slider: "Primitives/Arms/Forearms/RightForearmRaiseSlider" } as Triad,
+};
+
+// NOTE: the exported clip set is still asymmetric -- there's a shrug Slider
+// for both shoulders but only a "raise" Slider for the left one, and a
+// duplicate-looking "LefttShoulderRaiseSlider" (typo preserved verbatim
+// from the Spine export) that's deliberately not wired up here. Worth a
+// pass in the Spine project to export a matching right-side raise.
+const SHOULDER = {
+  leftShrug: { slider: "Primitives/Arms/Shoulders/LeftShoulderShrugSlider" } as Triad,
+  rightShrug: { slider: "Primitives/Arms/Shoulders/RightShoulderShrugSlider" } as Triad,
+  leftRaise: { slider: "Primitives/Arms/Shoulders/LeftShoulderRaiseSlider" } as Triad,
+};
+
+const WRIST = {
+  leftLower: { slider: "Primitives/Arms/Wrists/LeftWristLowerSlider" } as Triad,
+  leftRaise: { slider: "Primitives/Arms/Wrists/LeftWristRaiseSlider" } as Triad,
+  rightLower: { slider: "Primitives/Arms/Wrists/RightWristLowerSlider" } as Triad,
+  rightRaise: { slider: "Primitives/Arms/Wrists/RightWristRaiseSlider" } as Triad,
+};
+
+const HEAD = {
+  tiltLeft: { slider: "Primitives/Head/HeadTiltLeftSlider" } as Triad,
+  tiltRight: { slider: "Primitives/Head/HeadTiltRightSlider" } as Triad,
+  eyelidsHalfDown: { slider: "Primitives/Head/EyelidsHalfDownSlider" } as Triad,
+};
+
+// Left/right thigh, shin, and foot Sliders are independently authored per
+// bone -- unlike ARM.raise (one clip moves both arms), there's no combined
+// clip here, so a symmetric pose (squat, weight shift) needs the left and
+// right side played on their own tracks (leftLegSeq/rightLegSeq).
+const LEG = {
+  leftThighLeft: { slider: "Primitives/Legs/LeftThighLeftSlider" } as Triad,
+  leftThighRight: { slider: "Primitives/Legs/LeftThighRightSlider" } as Triad,
+  leftShinLeft: { slider: "Primitives/Legs/LeftShinLeftSlider" } as Triad,
+  leftShinRight: { slider: "Primitives/Legs/LeftShinRightSlider" } as Triad,
+  leftFootUp: { slider: "Primitives/Legs/LeftFootUpSlider" } as Triad,
+  leftFootDown: { slider: "Primitives/Legs/LeftFootDownSlider" } as Triad,
+  rightThighLeft: { slider: "Primitives/Legs/RightThighLeftSlider" } as Triad,
+  rightThighRight: { slider: "Primitives/Legs/RightThighRightSlider" } as Triad,
+  rightShinLeft: { slider: "Primitives/Legs/RightShinLeftSlider" } as Triad,
+  rightShinRight: { slider: "Primitives/Legs/RightShinRightSlider" } as Triad,
+  rightFootUp: { slider: "Primitives/Legs/RightFootUpSlider" } as Triad,
+  rightFootDown: { slider: "Primitives/Legs/RightFootDownSlider" } as Triad,
+};
+
+// Not Sliders (no partial-intensity control, per the artist's own naming
+// convention) -- plain single-clip lean poses, played to completion like
+// BODY.jump.
+const TORSO = {
+  lowerLeft: { single: "Primitives/Torso/LowerTorsoLeft" } as Triad,
+  lowerRight: { single: "Primitives/Torso/LowerTorsoRight" } as Triad,
+  upperLeft: { single: "Primitives/Torso/UpperTorsoLeft" } as Triad,
+  upperRight: { single: "Primitives/Torso/UpperTorsoRight" } as Triad,
+};
+
+/** Default partial-bend intensity for Slider primitives when a composite
+ * doesn't specify its own -- "in between", not the full authored extreme
+ * (e.g. a forearm Slider's ~90-110 degree bend becomes a natural ~40-55
+ * degree elbow bend at this default). Tune per-primitive once rendering. */
+const DEFAULT_SLIDER_INTENSITY = 0.5;
 
 const TAIL = {
   flick: { single: "Primitives/Tail/FlickTail" } as Triad,
@@ -108,11 +197,12 @@ const WINGS = {
 // `out`, then returns the track to idle and reports completion.
 // ---------------------------------------------------------------------------
 class TrackSequencer {
-  private phase: "idle" | "in" | "hold" | "out" = "idle";
+  private phase: "idle" | "in" | "hold" | "out" | "sliderIn" | "sliderOut" = "idle";
   private holdTimer = 0;
   private holdFor = 0;
   private clip: Triad | null = null;
   private onDone?: () => void;
+  private sliderIntensity = 1;
 
   constructor(private state: AnimationState, private track: number) {}
 
@@ -120,13 +210,17 @@ class TrackSequencer {
     return this.phase !== "idle";
   }
 
-  play(clip: Triad, holdSeconds = 0, onDone?: () => void) {
+  play(clip: Triad, holdSeconds = 0, onDone?: () => void, intensity = 1) {
     this.clip = clip;
     this.holdFor = holdSeconds;
     this.holdTimer = 0;
     this.onDone = onDone;
+    this.sliderIntensity = Math.max(0, Math.min(1, intensity));
 
-    if (clip.in) {
+    if (clip.slider) {
+      this.phase = "sliderIn";
+      this.state.setAnimation(this.track, clip.slider, false);
+    } else if (clip.in) {
       this.phase = "in";
       this.state.setAnimation(this.track, clip.in, false);
     } else if (clip.loop) {
@@ -157,17 +251,46 @@ class TrackSequencer {
           this.finish();
         }
       }
+    } else if (this.phase === "sliderIn") {
+      // Let trackTime advance naturally (timeScale is still 1 here), then
+      // freeze it the instant it reaches the target intensity fraction of
+      // the clip's authored duration -- e.g. 0.5 holds at a natural
+      // half-bend instead of the full authored extreme.
+      if (current) {
+        const target = current.animationEnd * this.sliderIntensity;
+        if (current.trackTime >= target) {
+          current.trackTime = target;
+          current.timeScale = 0;
+          this.phase = "hold";
+          this.holdTimer = 0;
+        }
+      }
     } else if (this.phase === "hold") {
       this.holdTimer += dt;
       if (this.holdTimer >= this.holdFor) {
-        if (this.clip.out) {
+        if (this.clip.slider) {
+          // Play the same clip back in reverse from wherever it was held,
+          // rather than a separately-authored `out` clip -- trackTime keeps
+          // counting up regardless of `reverse` (spine-core samples
+          // `duration - animationTime` when reverse is set), so mirroring
+          // the held time around the clip's duration and resuming normal
+          // playback lands smoothly back at the rest pose, then
+          // isComplete() fires correctly with no special-casing needed.
+          if (current) {
+            const heldTime = current.trackTime;
+            current.trackTime = current.animationEnd - heldTime;
+            current.reverse = true;
+            current.timeScale = 1;
+          }
+          this.phase = "sliderOut";
+        } else if (this.clip.out) {
           this.state.setAnimation(this.track, this.clip.out, false);
           this.phase = "out";
         } else {
           this.finish();
         }
       }
-    } else if (this.phase === "out") {
+    } else if (this.phase === "out" || this.phase === "sliderOut") {
       if (current && current.isComplete()) {
         this.finish();
       }
@@ -204,10 +327,28 @@ type Composite = {
   body?: Triad; // plays on the overlay track, above the permanent idle carrier
   face?: Triad;
   arms?: Triad;
+  /** Partial-bend intensity (0-1) when `arms` is a Slider-type triad (e.g.
+   * FOREARM.*). Ignored for non-slider arms triads. Defaults to
+   * DEFAULT_SLIDER_INTENSITY. */
+  armsIntensity?: number;
   tail?: Triad;
   ears?: Triad;
   earsThen?: Triad; // plays right after `ears` completes, e.g. flick left then right
   wings?: Triad;
+  /** Attachment names to swap onto L_Hand/R_Hand for the duration of `arms`
+   * (e.g. "L_HandThumbsUp"), reverted automatically when the arms sequence
+   * finishes. Only meaningful alongside an `arms` triad. */
+  handPose?: { left?: string; right?: string };
+  shoulder?: Triad;
+  shoulderIntensity?: number;
+  wrist?: Triad;
+  wristIntensity?: number;
+  head?: Triad;
+  headIntensity?: number;
+  leftLeg?: Triad;
+  leftLegIntensity?: number;
+  rightLeg?: Triad;
+  rightLegIntensity?: number;
   holdRange?: Range; // default hold duration for looping/held components
 };
 
@@ -233,6 +374,15 @@ const AMBIENT_FIDGETS: Record<string, Composite> = {
   noseWiggle: { face: FACE.wiggleNose },
   reachAndWonderLeft: { arms: ARM.reachLeft, face: FACE.lookLeft, holdRange: [1.0, 1.4] }, // ReachLeft loop is ~1.0s
   reachAndWonderRight: { arms: ARM.reachRight, face: FACE.lookRight, holdRange: [1.0, 1.4] }, // ReachRight loop is ~1.0s
+  // New Slider-driven fidgets. headTiltLeft/RightSlider rotate the Head bone
+  // ~80-98 degrees at full extreme; DEFAULT_SLIDER_INTENSITY (0.5) lands
+  // around a natural curious tilt.
+  headTiltCuriousLeft: { head: HEAD.tiltLeft, holdRange: [1, 1.8] },
+  headTiltCuriousRight: { head: HEAD.tiltRight, holdRange: [1, 1.8] },
+  // Shrug Sliders translate one shoulder bone at a time (no combined
+  // both-shoulders clip exported) -- a single-shoulder shrug reads as a
+  // quick "hm?" accent rather than a full two-shoulder shrug.
+  shoulderShrugSmall: { shoulder: SHOULDER.leftShrug, holdRange: [0.8, 1.2] },
 };
 
 /** Ambient body composites: occupy the overlay track, join the same exclusive pool as
@@ -242,6 +392,22 @@ const AMBIENT_BODY_COMPOSITES: Record<string, Composite> = {
   lookoutPerch: { body: BODY.sit, holdRange: [5, 8] },
   shyLean: { body: BODY.leanLeft, face: FACE.lookDown, holdRange: [1.5, 2.5] },
   nervousAnticipation: { body: BODY.leanRight, tail: TAIL.flick, holdRange: [1.2, 1.8] },
+  // Cozy wind-down stretch using the new OpenMouthSlider/EyelidsHalfDownSlider
+  // primitives -- a general ambient composite (not the same thing as the
+  // standalone "CheckIn/WindDown" Spine clip CheckInFlowModal looks up by
+  // name; that's a dedicated check-in animation tag, still ❌ per
+  // src/game/CLAUDE.md, and would need either its own exported clip or
+  // CheckInFlowModal switched over to call playReaction("stretchAndYawn")).
+  // headIntensity is high (not the 0.5 default) because the clip's own
+  // authored extreme already represents "half down" per its name -- playing
+  // only half of that would be too subtle to read.
+  stretchAndYawn: { body: BODY.leanLeft, arms: ARM.raise, face: FACE.openMouth, head: HEAD.eyelidsHalfDown, headIntensity: 0.9, holdRange: [1.5, 2] },
+  // Subtle weight-shift sway using the new per-leg thigh Sliders, at low
+  // intensity since the authored extremes are ~90-108 degree bends -- this
+  // is meant to read as a gentle idle sway, not a squat. Which Left/Right
+  // variant reads as "sway toward camera-left" vs "away" isn't confirmed
+  // from the exported keyframe data alone; tune visually on-device.
+  weightShiftSway: { leftLeg: LEG.leftThighLeft, rightLeg: LEG.rightThighRight, leftLegIntensity: 0.15, rightLegIntensity: 0.15, holdRange: [2.5, 4] },
 };
 
 /** Named one-shot / composite reactions, playable via playReaction(). Some
@@ -256,11 +422,16 @@ const REACTIONS: Record<string, Composite> = {
   proudCheerPlus: { arms: ARM.raise, wings: WINGS.raise, holdRange: [1, 1.4] },
   warmGreetingPlus: { face: FACE.smile, wings: WINGS.raise, holdRange: [1, 1.4] },
   worriedFidgetPlus: { arms: ARM.scratchChin, face: FACE.frown, holdRange: [1.3, 1.8] }, // ScratchChin loop is ~1.233s
-  pointAndLookLeft: { arms: ARM.reachLeft, face: FACE.lookLeft, holdRange: [1.0, 1.4] }, // ReachLeft loop is ~1.0s
-  pointAndLookRight: { arms: ARM.reachRight, face: FACE.lookRight, holdRange: [1.0, 1.4] }, // ReachRight loop is ~1.0s
+  // handPose swaps in a gesture-specific hand attachment for the duration of
+  // `arms`, reverted automatically when it finishes -- see
+  // applyHandPose/revertHandPose.
+  pointAndLookLeft: { arms: ARM.reachLeft, face: FACE.lookLeft, handPose: { left: "L_HandPoint" }, holdRange: [1.0, 1.4] }, // ReachLeft loop is ~1.0s
+  pointAndLookRight: { arms: ARM.reachRight, face: FACE.lookRight, handPose: { right: "R_HandPoint" }, holdRange: [1.0, 1.4] }, // ReachRight loop is ~1.0s
   thinkingPause: { arms: ARM.scratchChin, face: FACE.lookUp, holdRange: [1.5, 2.5] },
   happyWiggle: { face: FACE.smile, tail: TAIL.wag, holdRange: [1.5, 2] }, // TailWagLoop is ~1.033s
   alertEarsUp: { ears: EARS.flickLeft, earsThen: EARS.flickRight, face: FACE.lookUp, holdRange: [0.9, 0.9] },
+  wavingHello: { arms: ARM.rightRaise, handPose: { right: "R_OpenHand" }, face: FACE.smile, holdRange: [1, 1.4] }, // RightArmRaise loop is ~1.0s
+  thumbsUpCheer: { arms: ARM.rightRaise, handPose: { right: "R_HandThumbsUp" }, tail: TAIL.wag, face: FACE.smile, holdRange: [1, 1.4] },
 };
 
 enum BehaviorState {
@@ -279,6 +450,14 @@ enum ReadingPhase {
 
 export class LifelikeIdleNoMix {
   private state: AnimationState;
+  private skeleton?: Skeleton;
+
+  // Snapshot of whatever the hand slots were showing before a handPose
+  // gesture swapped them, so it can be restored exactly (plain hand,
+  // *Shader recolor, or a future equipped glove) rather than a hardcoded
+  // default name.
+  private leftHandPrevAttachment: Attachment | null = null;
+  private rightHandPrevAttachment: Attachment | null = null;
 
   // Tuning knobs (seconds)
   private blinkRange: Range = [2, 6];
@@ -311,11 +490,17 @@ export class LifelikeIdleNoMix {
   private tailSeq: TrackSequencer;
   private earsSeq: TrackSequencer;
   private wingsSeq: TrackSequencer;
+  private shoulderSeq: TrackSequencer;
+  private wristSeq: TrackSequencer;
+  private headSeq: TrackSequencer;
+  private leftLegSeq: TrackSequencer;
+  private rightLegSeq: TrackSequencer;
 
   // Behavior
   public snapToIdleBoundary = true; // set false to start one-shots immediately
 
-  constructor(stateData: AnimationStateData) {
+  constructor(stateData: AnimationStateData, skeleton?: Skeleton) {
+    this.skeleton = skeleton;
     // No extra easing — your clips are self-contained
     stateData.defaultMix = 0;
     stateData.setMix(IDLE, BLINK, 0);
@@ -344,6 +529,11 @@ export class LifelikeIdleNoMix {
     this.tailSeq = new TrackSequencer(this.state, TRACK_TAIL);
     this.earsSeq = new TrackSequencer(this.state, TRACK_EARS);
     this.wingsSeq = new TrackSequencer(this.state, TRACK_WINGS);
+    this.shoulderSeq = new TrackSequencer(this.state, TRACK_SHOULDER);
+    this.wristSeq = new TrackSequencer(this.state, TRACK_WRIST);
+    this.headSeq = new TrackSequencer(this.state, TRACK_HEAD);
+    this.leftLegSeq = new TrackSequencer(this.state, TRACK_LEFT_LEG);
+    this.rightLegSeq = new TrackSequencer(this.state, TRACK_RIGHT_LEG);
 
     // Arm first randomized triggers
     this.nextBlinkAt = randIn(this.blinkRange);
@@ -370,6 +560,11 @@ export class LifelikeIdleNoMix {
     this.tailSeq.update(dt);
     this.earsSeq.update(dt);
     this.wingsSeq.update(dt);
+    this.shoulderSeq.update(dt);
+    this.wristSeq.update(dt);
+    this.headSeq.update(dt);
+    this.leftLegSeq.update(dt);
+    this.rightLegSeq.update(dt);
 
     // Handle blink scheduling (works during idle and FootLook behaviors)
     if (this.currentBehavior === BehaviorState.IDLE || this.currentBehavior === BehaviorState.FOOT_LOOK) {
@@ -412,8 +607,44 @@ export class LifelikeIdleNoMix {
     }
   }
 
+  /** Swap in a composite's requested hand attachments, snapshotting whatever
+   * was there first so revertHandPose() can restore it exactly. */
+  private applyHandPose(handPose?: Composite["handPose"]) {
+    if (!handPose || !this.skeleton) return;
+    if (handPose.left) {
+      const slot = this.skeleton.findSlot("L_Hand");
+      if (slot) {
+        this.leftHandPrevAttachment = slot.pose.getAttachment();
+        const attachment = this.skeleton.getAttachment("L_Hand", handPose.left);
+        if (attachment) slot.pose.setAttachment(attachment);
+      }
+    }
+    if (handPose.right) {
+      const slot = this.skeleton.findSlot("R_Hand");
+      if (slot) {
+        this.rightHandPrevAttachment = slot.pose.getAttachment();
+        const attachment = this.skeleton.getAttachment("R_Hand", handPose.right);
+        if (attachment) slot.pose.setAttachment(attachment);
+      }
+    }
+  }
+
+  /** Restore whatever the hand slots were showing before applyHandPose(). */
+  private revertHandPose(handPose?: Composite["handPose"]) {
+    if (!handPose || !this.skeleton) return;
+    if (handPose.left) {
+      const slot = this.skeleton.findSlot("L_Hand");
+      if (slot) slot.pose.setAttachment(this.leftHandPrevAttachment);
+    }
+    if (handPose.right) {
+      const slot = this.skeleton.findSlot("R_Hand");
+      if (slot) slot.pose.setAttachment(this.rightHandPrevAttachment);
+    }
+  }
+
   private secondaryTracksFree() {
-    return !this.faceSeq.busy && !this.armsSeq.busy && !this.tailSeq.busy && !this.earsSeq.busy && !this.wingsSeq.busy;
+    return !this.faceSeq.busy && !this.armsSeq.busy && !this.tailSeq.busy && !this.earsSeq.busy && !this.wingsSeq.busy
+      && !this.shoulderSeq.busy && !this.wristSeq.busy && !this.headSeq.busy && !this.leftLegSeq.busy && !this.rightLegSeq.busy;
   }
 
   /** Fire a composite's secondary-track components (face/arms/tail/ears/wings),
@@ -422,10 +653,18 @@ export class LifelikeIdleNoMix {
     const [lo, hi] = c.holdRange ?? [0.8, 1.2];
     const hold = lo + Math.random() * (hi - lo);
     if (c.face) this.faceSeq.play(c.face, hold);
-    if (c.arms) this.armsSeq.play(c.arms, hold);
+    if (c.arms) {
+      this.applyHandPose(c.handPose);
+      this.armsSeq.play(c.arms, hold, () => this.revertHandPose(c.handPose), c.armsIntensity ?? DEFAULT_SLIDER_INTENSITY);
+    }
     if (c.tail) this.tailSeq.play(c.tail, hold);
     if (c.ears) this.playEars(c.ears, c.earsThen);
     if (c.wings) this.wingsSeq.play(c.wings, hold);
+    if (c.shoulder) this.shoulderSeq.play(c.shoulder, hold, undefined, c.shoulderIntensity ?? DEFAULT_SLIDER_INTENSITY);
+    if (c.wrist) this.wristSeq.play(c.wrist, hold, undefined, c.wristIntensity ?? DEFAULT_SLIDER_INTENSITY);
+    if (c.head) this.headSeq.play(c.head, hold, undefined, c.headIntensity ?? DEFAULT_SLIDER_INTENSITY);
+    if (c.leftLeg) this.leftLegSeq.play(c.leftLeg, hold, undefined, c.leftLegIntensity ?? DEFAULT_SLIDER_INTENSITY);
+    if (c.rightLeg) this.rightLegSeq.play(c.rightLeg, hold, undefined, c.rightLegIntensity ?? DEFAULT_SLIDER_INTENSITY);
   }
 
   /** Play an ears primitive, optionally chaining a second one right after
@@ -546,10 +785,18 @@ export class LifelikeIdleNoMix {
     const hold = lo + Math.random() * (hi - lo);
 
     if (c.face) this.faceSeq.play(c.face, hold);
-    if (c.arms) this.armsSeq.play(c.arms, hold);
+    if (c.arms) {
+      this.applyHandPose(c.handPose);
+      this.armsSeq.play(c.arms, hold, () => this.revertHandPose(c.handPose), c.armsIntensity ?? DEFAULT_SLIDER_INTENSITY);
+    }
     if (c.tail) this.tailSeq.play(c.tail, hold);
     if (c.ears) this.playEars(c.ears, c.earsThen);
     if (c.wings) this.wingsSeq.play(c.wings, hold);
+    if (c.shoulder) this.shoulderSeq.play(c.shoulder, hold, undefined, c.shoulderIntensity ?? DEFAULT_SLIDER_INTENSITY);
+    if (c.wrist) this.wristSeq.play(c.wrist, hold, undefined, c.wristIntensity ?? DEFAULT_SLIDER_INTENSITY);
+    if (c.head) this.headSeq.play(c.head, hold, undefined, c.headIntensity ?? DEFAULT_SLIDER_INTENSITY);
+    if (c.leftLeg) this.leftLegSeq.play(c.leftLeg, hold, undefined, c.leftLegIntensity ?? DEFAULT_SLIDER_INTENSITY);
+    if (c.rightLeg) this.rightLegSeq.play(c.rightLeg, hold, undefined, c.rightLegIntensity ?? DEFAULT_SLIDER_INTENSITY);
 
     if (c.body.in) {
       this.state.setAnimation(TRACK_OVERLAY, c.body.in, false);

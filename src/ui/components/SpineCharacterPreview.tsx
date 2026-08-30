@@ -294,13 +294,9 @@ export default function SpineCharacterPreview({
       }
     }
 
-    // Switch hair slots to their shader variants when hair recoloring is enabled
+    // Switch hair slots to whichever attachment the equipped hairstyle uses,
+    // when hair recoloring is enabled
     if (hairRecolor) {
-      const hairToShaderMap: Record<string, string> = {
-        "HairFront": "WindsweptShader",
-        "HairBack": "WindsweptShader"
-      };
-
       const skeleton = skeletonRef.current;
       if (skeleton) {
         // First, clear both hair slots to prevent bugs
@@ -311,30 +307,29 @@ export default function SpineCharacterPreview({
           }
         }
 
-        // Determine which slots to activate based on hair style
+        // Per-slot attachment name comes from the catalog item itself, not a
+        // shared shader-name map -- most hairstyles are their own uniquely-
+        // named mesh (e.g. "Breezy Crop") rather than a "*Shader" variant
+        // like the original Windswept style. See cosmeticsStore.ts's
+        // CosmeticItem["hairSlots"] and createSpineCharacterController.ts's
+        // configureHairSwitches (same pattern, kept in sync here).
         const hairStyle = outfit.cosmetics.hair?.itemId;
-        let slotsToActivate: string[] = [];
-        if (hairStyle === "windswept_short") {
-          slotsToActivate = ["HairFront"]; // Short hair only uses front
-        } else if (hairStyle === "windswept_long") {
-          slotsToActivate = ["HairFront", "HairBack"]; // Long hair uses both
-        }
+        const hairCosmeticItem = catalog.find((item) => item.id === hairStyle);
+        const hairAttachmentSlots = hairCosmeticItem?.hairSlots ?? {};
 
-        for (const baseSlotName of slotsToActivate) {
-          const shaderAttachmentName = hairToShaderMap[baseSlotName];
-          if (shaderAttachmentName) {
-            const slot = skeleton.findSlot(baseSlotName);
-            if (slot) {
-              const shaderAttachment = getAttachmentFromAnySkin(skeletonDataRef.current, baseSlotName, shaderAttachmentName);
-              if (shaderAttachment) {
-                slot.pose.setAttachment(shaderAttachment);
-                console.log(`✅ Preview: Switched ${baseSlotName} slot to shader variant: ${shaderAttachmentName}`);
-              } else {
-                console.warn(`⚠️ Preview: Could not find shader attachment: ${shaderAttachmentName} for slot: ${baseSlotName}`);
-              }
+        for (const [baseSlotName, attachmentName] of Object.entries(hairAttachmentSlots)) {
+          if (!attachmentName) continue;
+          const slot = skeleton.findSlot(baseSlotName);
+          if (slot) {
+            const attachment = getAttachmentFromAnySkin(skeletonDataRef.current, baseSlotName, attachmentName);
+            if (attachment) {
+              slot.pose.setAttachment(attachment);
+              console.log(`✅ Preview: Switched ${baseSlotName} slot to: ${attachmentName}`);
             } else {
-              console.warn(`⚠️ Preview: Could not find slot: ${baseSlotName}`);
+              console.warn(`⚠️ Preview: Could not find hair attachment: ${attachmentName} for slot: ${baseSlotName}`);
             }
+          } else {
+            console.warn(`⚠️ Preview: Could not find slot: ${baseSlotName}`);
           }
         }
 
@@ -465,10 +460,12 @@ export default function SpineCharacterPreview({
         effectData = shoeEffect;
         bypassShaderNameCheck = true;
       }
-      // Hair via shader variant
-      else if (isShaderAttachment && hairRecolor && hairSlots.includes(slotName)) {
+      // Hair via attachment switch (not name-suffix based -- most hairstyles
+      // are their own uniquely-named mesh, same as shoes above)
+      else if (hairSlots.includes(slotName) && hairRecolor) {
         recolorData = hairRecolor;
         effectData = hairEffect;
+        bypassShaderNameCheck = true;
       }
       // Jacket via shader variant
       else if (isShaderAttachment && jacketRecolor && jacketSlots.includes(slotName)) {
@@ -615,6 +612,7 @@ export default function SpineCharacterPreview({
       const basePageRequire2 = require("../../assets/GliderMonSpine/skeleton_2.png");
       const basePageRequire3 = require("../../assets/GliderMonSpine/skeleton_3.png");
       const basePageRequire4 = require("../../assets/GliderMonSpine/skeleton_4.png");
+      const basePageRequire5 = require("../../assets/GliderMonSpine/skeleton_5.png");
 
       const skeletonJsonData = jsonRequire; // Metro-parsed JSON
       const atlasAsset = Asset.fromModule(atlasRequire);
@@ -658,6 +656,14 @@ export default function SpineCharacterPreview({
         ensureSRGBTexture(baseTex4);
         baseTex4.needsUpdate = true;
         pageBaseTextures["skeleton_4.png"] = baseTex4;
+
+        // Load skeleton_5.png
+        const baseTex5: THREE.Texture = await loadAsync(basePageRequire5);
+        baseTex5.flipY = false;
+        baseTex5.generateMipmaps = false;
+        ensureSRGBTexture(baseTex5);
+        baseTex5.needsUpdate = true;
+        pageBaseTextures["skeleton_5.png"] = baseTex5;
       } catch (e) {
         console.error("Failed to load base atlas page:", e);
         // Fallback: simple solid texture
@@ -671,6 +677,7 @@ export default function SpineCharacterPreview({
         pageBaseTextures["skeleton_2.png"] = fallback;
         pageBaseTextures["skeleton_3.png"] = fallback;
         pageBaseTextures["skeleton_4.png"] = fallback;
+        pageBaseTextures["skeleton_5.png"] = fallback;
       }
 
       // Hue-indexed recolor system doesn't need mask textures

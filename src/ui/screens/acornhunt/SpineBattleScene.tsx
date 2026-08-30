@@ -219,14 +219,15 @@ export function SpineBattleScene({
       console.log(`🦎 Loading Spine character: ${characterName}`);
 
       // Map character names to asset paths
-      const assetMap: Record<string, { atlas: any; json: any; texture: any; texture2?: any; texture3?: any; texture4?: any }> = {
+      const assetMap: Record<string, { atlas: any; json: any; texture: any; texture2?: any; texture3?: any; texture4?: any; texture5?: any }> = {
         'Glider': {
           atlas: require('../../../assets/GliderMonSpine/skeleton.atlas'),
           json: require('../../../assets/GliderMonSpine/skeleton.json'),
           texture: require('../../../assets/GliderMonSpine/skeleton.png'),
           texture2: require('../../../assets/GliderMonSpine/skeleton_2.png'),
           texture3: require('../../../assets/GliderMonSpine/skeleton_3.png'),
-          texture4: require('../../../assets/GliderMonSpine/skeleton_4.png')
+          texture4: require('../../../assets/GliderMonSpine/skeleton_4.png'),
+          texture5: require('../../../assets/GliderMonSpine/skeleton_5.png')
         },
         'Luma': {
           atlas: require('../../../assets/Luma/Luma.atlas'),
@@ -256,6 +257,9 @@ export function SpineBattleScene({
       }
       if (assets.texture4) {
         textureModules.push(assets.texture4);
+      }
+      if (assets.texture5) {
+        textureModules.push(assets.texture5);
       }
 
       const result = await loadSpineFromExpoAssets({
