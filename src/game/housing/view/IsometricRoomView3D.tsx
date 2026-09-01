@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { Physics } from '@esotericsoftware/spine-core';
 import { GLView } from 'expo-gl';
 import { Renderer } from 'expo-three';
-import { useHousingStore, ROOM_SIZE_TIERS, GridTile } from '../../../data/stores/housingStore';
+import { useHousingStore, ROOM_SIZE_TIERS } from '../../../data/stores/housingStore';
 import { useCosmeticsStore } from '../../../data/stores/cosmeticsStore';
 import { useCharacterReactionStore } from '../../../data/stores/characterReactionStore';
 import { OutfitSlot } from '../../../data/types/outfitTypes';
@@ -22,7 +22,7 @@ import { gridToWorld, TILE_SIZE } from '../render/grid3D';
 import { createSkyTexture, getSkyPalette, paintSky, rgbToHex } from '../render/sky3D';
 import { createTreetopBackdrop3D } from '../render/treetopBackdrop3D';
 import { getSlotsForTier } from '../types/roomSlots';
-import { getWalkableTiles } from '../render/walkableTiles';
+import { getWanderDestinations } from '../render/walkableTiles';
 
 interface IsometricRoomView3DProps {
   width?: number;
@@ -36,16 +36,66 @@ interface IsometricRoomView3DProps {
   zoomedIn?: boolean;
 }
 
-// Glidermon teleports (Tamagotchi-style, no walk cycle) to a random empty
-// floor tile at a random interval in this range.
+// Glidermon teleports (Tamagotchi-style, no walk cycle) to a weighted-random
+// wander destination at a random interval in this range. Destinations are
+// authored character slots (higher weight, may carry furniture interactions)
+// plus every plain open floor tile -- see getWanderDestinations.
 const WANDER_INTERVAL_RANGE_MS: [number, number] = [30_000, 180_000];
 // If a "big" idle behavior (reading, a body-composite fidget, a reaction) is
 // mid-playback when the wander timer fires, teleporting would cut it off
 // jarringly -- wait this long and check again instead of skipping the cycle.
 const WANDER_RETRY_DELAY_MS = 5_000;
+// Roughly how often an eligible wander tick becomes a furniture interaction
+// rather than a plain relocation. The rest are plain relocations. (A third
+// "special / contextual" bucket is intentionally left for later, once an
+// actual special behavior exists -- see chooseWanderActivity.)
+const INTERACT_ACTIVITY_CHANCE = 0.3;
+// How many recently-used furniture slots to avoid re-picking when other
+// interaction options exist, so GliderMon doesn't operate the same item
+// over and over.
+const RECENT_FURNITURE_MEMORY = 3;
+
+// --- DEV: furniture-interaction tuning aid --------------------------------
+// When non-null, wandering is disabled and GliderMon is parked permanently in
+// this interaction so the anchor/flip below can be dialed in with Fast Refresh
+// (editing this file remounts the view). Once it looks right, copy
+// DEBUG_INTERACTION_ANCHOR into the matching furniture entry's
+// `interaction.interactionAnchor` in furnitureCatalog.ts, set
+// `characterFlipX` to DEBUG_INTERACTION_FLIP_X, and set this back to null.
+const DEBUG_FORCE_INTERACTION: { furnitureSlotId: string; behaviorKey: string } | null = null;
+// e.g. { furnitureSlotId: 'seating', behaviorKey: 'sit' }
+// +x/+z = toward the camera (down-screen), -y = lower. Once dialed in, copy
+// these into the furniture entry's interaction.interactionAnchor in
+// furnitureCatalog.ts and set DEBUG_FORCE_INTERACTION back to null.
+const DEBUG_INTERACTION_ANCHOR = { xOffset: 0.06, yOffset: -0.05, zOffset: 0.17 };
+const DEBUG_INTERACTION_FLIP_X = true;
+// -----------------------------------------------------------------------
 
 function randInMs([min, max]: [number, number]): number {
   return min + Math.random() * (max - min);
+}
+
+type WanderActivity = 'idle' | 'interact';
+
+// Extensible choke point for wander behavior selection -- later this can fold
+// in time of day, trust level, glucose state, personality, etc. (return type
+// deliberately a union so a 'special' bucket can be added without callers
+// changing shape).
+function chooseWanderActivity(canInteract: boolean): WanderActivity {
+  if (canInteract && Math.random() < INTERACT_ACTIVITY_CHANCE) return 'interact';
+  return 'idle';
+}
+
+function pickWeighted<T>(items: T[], weightOf: (item: T) => number): T | null {
+  if (items.length === 0) return null;
+  const total = items.reduce((sum, item) => sum + Math.max(0, weightOf(item)), 0);
+  if (total <= 0) return items[(Math.random() * items.length) | 0];
+  let r = Math.random() * total;
+  for (const item of items) {
+    r -= Math.max(0, weightOf(item));
+    if (r < 0) return item;
+  }
+  return items[items.length - 1];
 }
 
 const DEFAULT_CHARACTER_SCALE = 1;
@@ -109,24 +159,43 @@ function clearGroup(group: THREE.Group) {
 // so buying/applying furniture in the shop is reflected without requiring a
 // full app reload (the GL context itself is only ever created once; see
 // `handleContextCreate`'s `initializedRef` guard).
+//
+// Build-then-swap: every new billboard is built first (texture loads await),
+// and only once they're all ready is the old set cleared and the new one
+// added, in a single synchronous step. Clearing first would leave the group
+// empty across those awaits, blinking all furniture out for a few frames --
+// visible when GliderMon sits/stands (which triggers a reclassify rebuild).
 async function populateFurnitureGroup(
   group: THREE.Group,
   roomSizeTier: number,
   activeFurnitureBySlot: Record<string, { furnitureId: string; variantId: string }>,
   dims: { width: number; height: number },
   billboardQuaternion: THREE.Quaternion,
-  characterWorldPos: { x: number; z: number }
+  characterWorldPos: { x: number; z: number },
+  /** Slot ids to force in front of the character (the seat he's sitting in). */
+  forceInFrontSlotIds?: Set<string>
 ): Promise<Array<(dt: number) => void>> {
-  clearGroup(group);
-  const updaters: Array<(dt: number) => void> = [];
+  const built: Array<{ group: THREE.Group; update?: (dt: number) => void }> = [];
   for (const slot of getSlotsForTier(roomSizeTier)) {
     const occupant = activeFurnitureBySlot[slot.slotId];
     if (!occupant) continue;
-    const built3 = await buildFurnitureSlotBillboard(slot, occupant.furnitureId, occupant.variantId, dims, billboardQuaternion, characterWorldPos);
-    if (built3) {
-      group.add(built3.group);
-      if (built3.update) updaters.push(built3.update);
-    }
+    const built3 = await buildFurnitureSlotBillboard(
+      slot,
+      occupant.furnitureId,
+      occupant.variantId,
+      dims,
+      billboardQuaternion,
+      characterWorldPos,
+      forceInFrontSlotIds?.has(slot.slotId) ?? false
+    );
+    if (built3) built.push(built3);
+  }
+
+  clearGroup(group);
+  const updaters: Array<(dt: number) => void> = [];
+  for (const b of built) {
+    group.add(b.group);
+    if (b.update) updaters.push(b.update);
   }
   return updaters;
 }
@@ -193,6 +262,29 @@ export default function IsometricRoomView3D({
   // characterTile effect can move it after the initial scene build.
   const characterGroupRef = useRef<THREE.Group | null>(null);
 
+  // Furniture-interaction wander state (see the wander scheduler + characterTile
+  // effect below). `pendingInteractionRef` is set by the scheduler when it
+  // decides a relocation should end in a furniture interaction; the
+  // characterTile effect consumes it once Glidermon has been repositioned.
+  // `interactingRef` blocks further wandering until the interaction ends.
+  // `recentFurnitureRef` is a small ring buffer for anti-repeat.
+  const pendingInteractionRef = useRef<
+    | {
+        behaviorKey: string;
+        furnitureSlotId: string;
+        anchor?: { xOffset: number; yOffset: number; zOffset?: number };
+        flipX?: boolean;
+      }
+    | null
+  >(null);
+  const interactingRef = useRef(false);
+  const recentFurnitureRef = useRef<string[]>([]);
+  // While an anchored/flipped interaction is active, the render loop re-asserts
+  // this transform on the character group every frame -- so a stray effect
+  // re-run (StrictMode, a furniture change) can't knock him off the seat.
+  // null => the character group is positioned normally by the characterTile effect.
+  const interactionTransformRef = useRef<{ x: number; y: number; z: number; scaleX: number } | null>(null);
+
   const scaleRef = useRef(characterScale);
   useEffect(() => {
     scaleRef.current = characterScale;
@@ -242,6 +334,7 @@ export default function IsometricRoomView3D({
 
     const { x: charX, z: charZ } = gridToWorld(characterTile.row, characterTile.col, dims);
     characterGroup.position.set(charX, 0, charZ);
+    characterGroup.scale.x = 1; // clear any interaction flip from a previous tile
     characterWorldPosRef.current = { x: charX, z: charZ };
     characterTargetRef.current.set(charX, characterHeightRef.current / 2, charZ);
 
@@ -256,39 +349,183 @@ export default function IsometricRoomView3D({
       cameraLookAtRef.current.copy(characterTargetRef.current);
     }
 
+    // Consume a furniture interaction queued by the wander scheduler now that
+    // Glidermon has been repositioned onto the interaction tile. The idle
+    // driver owns the behavior + its duration; `onEnd` fires on BOTH natural
+    // completion and any interruption (reaction, forceIdle), so render-position
+    // cleanup and the `interactingRef` reset always run.
     let cancelled = false;
-    populateFurnitureGroup(furnitureGroup, roomSizeTier, activeFurnitureBySlot, dims, billboardQuaternion, { x: charX, z: charZ }).then((updaters) => {
-      if (!cancelled) furnitureUpdatersRef.current = updaters;
-    });
+    // (Re)build furniture billboards classified against `charPos` for
+    // in-front/behind-the-character renderOrder. While seated, `forceInFront`
+    // pins the seat's own billboard in front of GliderMon so its seat/back
+    // draw over his legs -- independent of his world position.
+    const rebuildFurniture = (charPos: { x: number; z: number }, forceInFront?: Set<string>) => {
+      populateFurnitureGroup(
+        furnitureGroup,
+        roomSizeTier,
+        activeFurnitureBySlot,
+        dims,
+        billboardQuaternion,
+        charPos,
+        forceInFront
+      ).then((updaters) => {
+        if (!cancelled) furnitureUpdatersRef.current = updaters;
+      });
+    };
+
+    // Point the zoomed-in camera at a world x/z (character mid-height) --
+    // smoothly if already zoomed in, snap the unseen look-at otherwise. Used
+    // to follow GliderMon onto a seat anchor and back off again.
+    const aimCameraAt = (ax: number, az: number) => {
+      characterTargetRef.current.set(ax, characterHeightRef.current / 2, az);
+      if (isZoomedInRef.current) {
+        cameraPanFromRef.current.copy(cameraLookAtRef.current);
+        cameraPanElapsedRef.current = 0;
+      } else {
+        cameraLookAtRef.current.copy(characterTargetRef.current);
+      }
+    };
+
+    const pending = pendingInteractionRef.current;
+    pendingInteractionRef.current = null;
+    let furniturePos = { x: charX, z: charZ };
+    // Force set stays undefined for the plain chair (its tall backrest would
+    // then draw over his torso). Kept plumbed for a future layered seat asset.
+    const forceInFrontSlots: Set<string> | undefined = undefined;
+    if (pending) {
+      const driver = spineRef.current?.idleDriver;
+      const started =
+        driver?.startInteraction(pending.behaviorKey, undefined, (reason) => {
+          interactingRef.current = false;
+          interactionTransformRef.current = null;
+          characterGroup.position.set(charX, 0, charZ);
+          characterGroup.scale.x = 1;
+          characterWorldPosRef.current = { x: charX, z: charZ };
+          if (!cancelled) {
+            rebuildFurniture({ x: charX, z: charZ });
+            aimCameraAt(charX, charZ); // pan back off the seat when he stands
+          }
+          if (__DEV__) console.log(`[housing3D] interaction "${pending.behaviorKey}" ended (${reason})`);
+        }) ?? false;
+      if (started) {
+        interactingRef.current = true;
+        // Seating-style anchor: offset from the furniture's own world origin
+        // (NOT this tile), plus an optional horizontal mirror (to face into a
+        // chair). Held every frame by the render loop via
+        // interactionTransformRef so a stray effect re-run can't knock him off.
+        // DoubleSide materials => the flip won't backface-cull.
+        let x = charX;
+        let z = charZ;
+        if (pending.anchor) {
+          const furnitureSlot = getSlotsForTier(roomSizeTier).find((s) => s.slotId === pending.furnitureSlotId);
+          if (furnitureSlot) {
+            const seat = gridToWorld(furnitureSlot.row, furnitureSlot.col, dims, furnitureSlot.footprint);
+            x = seat.x + pending.anchor.xOffset;
+            z = seat.z + (pending.anchor.zOffset ?? 0);
+          }
+        }
+        const y = pending.anchor?.yOffset ?? 0;
+        const scaleX = pending.flipX ? -1 : 1;
+        if (pending.anchor || pending.flipX) {
+          interactionTransformRef.current = { x, y, z, scaleX };
+          characterGroup.position.set(x, y, z);
+          characterGroup.scale.x = scaleX;
+          characterWorldPosRef.current = { x, z };
+          furniturePos = { x, z };
+          aimCameraAt(x, z); // follow him onto the seat, not the approach tile
+        }
+      }
+    }
+
+    rebuildFurniture(furniturePos, forceInFrontSlots);
     return () => {
       cancelled = true;
     };
   }, [characterTile, roomSizeTier, activeFurnitureBySlot]);
 
-  // Wander scheduler: every 30s-180s, if Glidermon isn't mid-way through a
-  // "big" idle behavior, teleport him to a random empty floor tile. Runs on
-  // a plain setTimeout chain (not the rAF render loop) since this cadence
-  // doesn't need per-frame precision.
+  // Wander scheduler: at each WANDER_INTERVAL_RANGE_MS tick, if Glidermon
+  // isn't mid-behavior or mid-interaction, pick a weighted-random wander
+  // destination (authored character slots + plain open tiles) and either just
+  // relocate there or, ~30% of eligible ticks, relocate + start a furniture
+  // interaction. Runs on a plain setTimeout chain (not the rAF render loop)
+  // since this cadence doesn't need per-frame precision.
   useEffect(() => {
     if (!isLoaded) return;
+    // DEV: parked-interaction tuning mode disables wandering entirely.
+    if (DEBUG_FORCE_INTERACTION) return;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
     let cancelled = false;
+
+    const scheduleNext = () => {
+      timeoutId = setTimeout(attemptWander, randInMs(WANDER_INTERVAL_RANGE_MS));
+    };
 
     const attemptWander = () => {
       if (cancelled) return;
       const idleDriver = spineRef.current?.idleDriver;
-      if (idleDriver && idleDriver.getCurrentBehavior() !== 'idle') {
+      // Don't teleport out of an in-progress behavior or a furniture
+      // interaction -- retry shortly instead of skipping the cycle.
+      if (interactingRef.current || (idleDriver && idleDriver.getCurrentBehavior() !== 'idle')) {
         timeoutId = setTimeout(attemptWander, WANDER_RETRY_DELAY_MS);
         return;
       }
       const { roomSizeTier: tier, activeFurnitureBySlot: occupied, characterTile: current, setCharacterTile } =
         useHousingStore.getState();
-      const candidates = getWalkableTiles(tier, occupied).filter((t) => t.row !== current.row || t.col !== current.col);
-      if (candidates.length > 0) {
-        const next: GridTile = candidates[(Math.random() * candidates.length) | 0];
-        setCharacterTile(next);
+
+      const destinations = getWanderDestinations(tier, occupied).filter(
+        (d) => d.tile.row !== current.row || d.tile.col !== current.col
+      );
+      if (destinations.length === 0) {
+        scheduleNext();
+        return;
       }
-      timeoutId = setTimeout(attemptWander, randInMs(WANDER_INTERVAL_RANGE_MS));
+
+      // Interaction candidates, preferring furniture not used recently (fall
+      // back to allowing repeats only if that leaves nothing).
+      const withInteraction = destinations.filter((d) => d.interactions.length > 0);
+      const fresh = withInteraction.filter((d) =>
+        d.interactions.some((i) => !recentFurnitureRef.current.includes(i.furnitureSlotId))
+      );
+      const interactionPool = fresh.length > 0 ? fresh : withInteraction;
+
+      if (chooseWanderActivity(interactionPool.length > 0) === 'interact') {
+        const dest = pickWeighted(interactionPool, (d) => d.weight);
+        const chosen =
+          dest?.interactions.find((i) => !recentFurnitureRef.current.includes(i.furnitureSlotId)) ??
+          dest?.interactions[0];
+        if (dest && chosen) {
+          recentFurnitureRef.current = [chosen.furnitureSlotId, ...recentFurnitureRef.current].slice(
+            0,
+            RECENT_FURNITURE_MEMORY
+          );
+          pendingInteractionRef.current = {
+            behaviorKey: chosen.behavior,
+            furnitureSlotId: chosen.furnitureSlotId,
+            anchor: chosen.interactionAnchor,
+            flipX: chosen.characterFlipX,
+          };
+          if (__DEV__) {
+            console.log(
+              `[housing3D] wander -> interact "${chosen.behavior}" @ ${chosen.furnitureSlotId}, tile (${dest.tile.row},${dest.tile.col})`
+            );
+          }
+          setCharacterTile(dest.tile);
+          scheduleNext();
+          return;
+        }
+      }
+
+      // Plain relocation (authored slots weighted higher, plain tiles still in play).
+      const dest = pickWeighted(destinations, (d) => d.weight) ?? destinations[0];
+      if (__DEV__) {
+        console.log(
+          `[housing3D] wander -> idle tile (${dest.tile.row},${dest.tile.col})${
+            dest.characterSlotId ? ` [${dest.characterSlotId}]` : ''
+          }`
+        );
+      }
+      setCharacterTile(dest.tile);
+      scheduleNext();
     };
 
     timeoutId = setTimeout(attemptWander, randInMs(WANDER_INTERVAL_RANGE_MS));
@@ -298,10 +535,81 @@ export default function IsometricRoomView3D({
     };
   }, [isLoaded]);
 
+  // DEV: when DEBUG_FORCE_INTERACTION is set, park Glidermon in that
+  // interaction indefinitely with the tuning anchor/flip constants above --
+  // applied directly (not via the wander/characterTile path) so editing the
+  // constants and letting Fast Refresh remount the view re-applies them.
+  useEffect(() => {
+    if (!DEBUG_FORCE_INTERACTION || !isLoaded) return;
+    const characterGroup = characterGroupRef.current;
+    const dims = roomDimsRef.current;
+    const driver = spineRef.current?.idleDriver;
+    if (!characterGroup || !dims || !driver) return;
+
+    const { furnitureSlotId, behaviorKey } = DEBUG_FORCE_INTERACTION;
+    const furnitureSlot = getSlotsForTier(roomSizeTier).find((s) => s.slotId === furnitureSlotId);
+    if (!furnitureSlot) {
+      if (__DEV__) console.warn(`[housing3D] DEBUG_FORCE_INTERACTION: no furniture slot "${furnitureSlotId}"`);
+      return;
+    }
+    const seat = gridToWorld(furnitureSlot.row, furnitureSlot.col, dims, furnitureSlot.footprint);
+    const a = DEBUG_INTERACTION_ANCHOR;
+    const x = seat.x + a.xOffset;
+    const y = a.yOffset;
+    const z = seat.z + a.zOffset;
+    const scaleX = DEBUG_INTERACTION_FLIP_X ? -1 : 1;
+    interactionTransformRef.current = { x, y, z, scaleX };
+    characterGroup.position.set(x, y, z);
+    characterGroup.scale.x = scaleX;
+    characterWorldPosRef.current = { x, z };
+    characterTargetRef.current.set(x, characterHeightRef.current / 2, z);
+    cameraLookAtRef.current.copy(characterTargetRef.current);
+
+    interactingRef.current = true;
+    driver.forceIdle();
+    const ok = driver.startInteraction(behaviorKey, 1e9);
+
+    // Re-classify furniture renderOrder against the seated position so the
+    // chair front can render over his legs.
+    const furnitureGroup = furnitureGroupRef.current;
+    const billboardQuaternion = billboardQuaternionRef.current;
+    if (furnitureGroup && billboardQuaternion) {
+      populateFurnitureGroup(
+        furnitureGroup,
+        roomSizeTier,
+        useHousingStore.getState().activeFurnitureBySlot,
+        dims,
+        billboardQuaternion,
+        { x, z }
+      ).then((updaters) => {
+        furnitureUpdatersRef.current = updaters;
+      });
+    }
+
+    if (__DEV__) {
+      console.log(
+        `[housing3D] DEBUG park "${behaviorKey}" @ ${furnitureSlotId} slot=(${furnitureSlot.row},${furnitureSlot.col}) dims=${dims.width}x${dims.height} seat=(${seat.x.toFixed(2)},${seat.z.toFixed(2)}) charPos=(${characterGroup.position.x.toFixed(2)},${characterGroup.position.y.toFixed(2)},${characterGroup.position.z.toFixed(2)}) anchor=${JSON.stringify(a)} flipX=${DEBUG_INTERACTION_FLIP_X} started=${ok}`
+      );
+    }
+    // Anchor/flip constants in deps so Fast Refresh re-applies them without a
+    // full reload while tuning.
+  }, [isLoaded, roomSizeTier, DEBUG_INTERACTION_ANCHOR.xOffset, DEBUG_INTERACTION_ANCHOR.yOffset, DEBUG_INTERACTION_ANCHOR.zOffset, DEBUG_INTERACTION_FLIP_X]);
+
   const animationRef = useRef(animation);
   useEffect(() => {
     animationRef.current = animation;
-    if (spineRef.current) spineRef.current.setAnimation(animation, true);
+    // 'idle' is the sentinel default meaning "let the lifelike idle driver
+    // run" -- it isn't a real Spine clip name (the controller maps it to
+    // Idle/Idle at creation), so forwarding it verbatim to state.setAnimation
+    // throws "Animation not found: idle". Skip the sentinel; guard the rest so
+    // a bad name can't red-box the whole room (also protects against Fast
+    // Refresh re-running this effect after the controller already exists).
+    if (!spineRef.current || !animation || animation === 'idle') return;
+    try {
+      spineRef.current.setAnimation(animation, true);
+    } catch (err) {
+      if (__DEV__) console.warn(`[housing3D] setAnimation("${animation}") failed:`, err);
+    }
   }, [animation]);
 
   const outfitRef = useRef<OutfitSlot | undefined>(outfit ?? undefined);
@@ -630,6 +938,14 @@ export default function IsometricRoomView3D({
           // else in the room shell was built once above.
           controller.update(deltaSeconds);
           for (const update of furnitureUpdatersRef.current) update(deltaSeconds);
+
+          // Pin the character onto an interaction anchor/flip for the duration,
+          // overriding any effect that repositioned him this frame.
+          const it = interactionTransformRef.current;
+          if (it) {
+            characterGroup.position.set(it.x, it.y, it.z);
+            characterGroup.scale.x = it.scaleX;
+          }
 
           // Re-aim every frame while zoomed in (not just on toggle) so the
           // camera tracks Glidermon live -- this is what makes the zoomed-in

@@ -1,5 +1,11 @@
 # Room Configuration System
 
+> ⚠️ LEGACY. These JSON room files feed the `legacy`/`quad` renderers (fallbacks).
+> The live `primitive3d` renderer (`IsometricRoomView3D`) has no JSON room files —
+> its layout is code: fixed slots per size-tier in `../types/roomSlots.ts`,
+> procedural floor/wall patterns, and `housingStore.activeFurnitureBySlot`. See
+> `../CLAUDE.md`.
+
 This directory contains JSON configuration files that define room layouts for the isometric housing system. Each JSON file describes a complete room with floors, walls, and furniture.
 
 ## Room JSON Structure

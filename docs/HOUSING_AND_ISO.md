@@ -1,3 +1,8 @@
+> ⚠️ HISTORICAL DESIGN NOTE. The live housing renderer is `primitive3d` /
+> `IsometricRoomView3D` (real Three.js primitives, not this tileset/sprite
+> design). See `src/game/housing/CLAUDE.md` for the current system —
+> room shell, furniture slots, and the character/furniture interaction system.
+
 0) Goals (what this delivers)
 
 Isometric room(s) rendered from a tileset + furniture sprites.

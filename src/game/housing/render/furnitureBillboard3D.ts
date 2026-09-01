@@ -72,7 +72,11 @@ export async function buildFurnitureSlotBillboard(
   variantId: string,
   dims: RoomDims3D,
   billboardQuaternion: THREE.Quaternion,
-  characterWorldPos: { x: number; z: number }
+  characterWorldPos: { x: number; z: number },
+  /** Force this slot's billboard to render in front of the character
+   * regardless of depth score -- used while GliderMon is sitting in it, so the
+   * seat/back render over his legs instead of him overlapping the chair. */
+  forceInFront = false
 ): Promise<BuiltFurnitureBillboard | null> {
   const def = getFurnitureDef(furnitureId);
   const variant = def?.variants.find((v) => v.id === variantId);
@@ -116,7 +120,9 @@ export async function buildFurnitureSlotBillboard(
   const slotDepthScore = slotWorldPos.x + slotWorldPos.y + slotWorldPos.z;
   const characterDepthScore = characterWorldPos.x + characterWorldPos.z;
   const layerRenderOrder =
-    slotDepthScore > characterDepthScore ? RENDER_ORDER_IN_FRONT_OF_CHARACTER : RENDER_ORDER_BEHIND_CHARACTER;
+    forceInFront || slotDepthScore > characterDepthScore
+      ? RENDER_ORDER_IN_FRONT_OF_CHARACTER
+      : RENDER_ORDER_BEHIND_CHARACTER;
 
   const group = new THREE.Group();
   const updaters: Array<(dt: number) => void> = [];

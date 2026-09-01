@@ -1,5 +1,8 @@
 # Isometric Housing + Spine Character Integration
 
+> ⚠️ LEGACY. Describes the `legacy`/`quad` renderers. The live renderer is
+> `primitive3d` / `IsometricRoomView3D` — see `src/game/housing/CLAUDE.md`.
+
 This document describes how to integrate a Spine character with the isometric housing system for movement, positioning, and camera following.
 
 ## Current System Overview

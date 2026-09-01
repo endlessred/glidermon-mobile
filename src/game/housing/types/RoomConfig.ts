@@ -140,6 +140,39 @@ export interface FurnitureVariantLayer {
   fps?: number;
 }
 
+/**
+ * Describes what happens when GliderMon interacts with a piece of furniture
+ * from an adjacent character slot (see roomSlots.ts' CharacterSlotDef). The
+ * furniture -- not the room logic -- owns this metadata, so new furniture can
+ * be added without touching the room/behavior code. An unsupported `behavior`
+ * (not in SUPPORTED_INTERACTION_BEHAVIORS, lifelikeIdle_noMix.ts) is not an
+ * error: the character slot simply stays a plain idle position.
+ */
+export interface FurnitureInteractionDef {
+  /** Behavior key, e.g. 'sit' | 'dance' | 'campfire' | 'sleep'. Resolved
+   * against the behavior registry in lifelikeIdle_noMix.ts. */
+  behavior: string;
+  /** Optional hint into the behavior registry / future dedicated clip. */
+  animation?: string;
+  /** Authoring hint for which side the character stands on ('front' | 'back'
+   * | 'left' | 'right'). Not enforced -- the character stays front-facing. */
+  interactionSide?: string;
+  /** Mirror the character horizontally (scale.x *= -1) while the interaction
+   * behavior is active -- e.g. so he faces into a chair whose art points the
+   * other way. Purely a left/right flip, still front-facing (no back-facing
+   * art needed). Cleared automatically when the interaction ends. */
+  characterFlipX?: boolean;
+  /**
+   * Character render-position offset applied while the interaction behavior is
+   * active, relative to the FURNITURE object's world origin
+   * (gridToWorld(slot.row, slot.col, dims, slot.footprint) in grid3D.ts) --
+   * NOT the character slot's tile. World units (TILE_SIZE = 1). Lets seating
+   * (chairs/couches/benches/hammocks) snap the character onto the seat.
+   * Expected to be tuned per variant.
+   */
+  interactionAnchor?: { xOffset: number; yOffset: number; zOffset?: number };
+}
+
 export interface FurnitureVariant {
   /** Variant identifier */
   id: string;
@@ -149,6 +182,12 @@ export interface FurnitureVariant {
   skin?: string;
   /** Optional tint color for this variant */
   tint?: string;
+  /**
+   * Per-variant interaction override. Shallow-merged over the FurnitureDef's
+   * `interaction` by getFurnitureInteraction() -- a variant can override just
+   * `interactionAnchor` (seat position differs per chair model) while
+   * inheriting the shared `behavior`. */
+  interaction?: FurnitureInteractionDef;
   /**
    * Source filename stem (from the Exports/ asset pack, e.g.
    * "1x1_WoodChair_Front_Green") for this variant's idle rest-pose art.
@@ -212,6 +251,12 @@ export interface FurnitureDef {
   occlusion: "none" | "footboard" | "tall";
   /** Available variants for this furniture */
   variants: FurnitureVariant[];
+  /**
+   * Default interaction for every variant of this furniture type. A variant's
+   * own `interaction` is shallow-merged over this (see getFurnitureInteraction
+   * in furnitureCatalog.ts). Omit for furniture that can't be interacted with.
+   */
+  interaction?: FurnitureInteractionDef;
   /** Whether this furniture supports facing direction (uses FlipX animation) */
   supportsFacing?: boolean;
   /** Default facing direction */

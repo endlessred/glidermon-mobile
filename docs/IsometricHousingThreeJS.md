@@ -1,5 +1,9 @@
 # IsometricHousingThreeJS Usage
 
+> ⚠️ LEGACY. `IsometricHousingThreeJS` is the `legacy` renderer, now a fallback.
+> The live renderer is `primitive3d` / `IsometricRoomView3D` — see
+> `src/game/housing/CLAUDE.md`.
+
 `IsometricHousingThreeJS` renders the apartment scene and the Spine character using Three.js. This guide explains how to consume the component and how the positioning/scaling props behave.
 
 ## Import
@@ -26,7 +30,7 @@ The component is re-exported from `src/game/housing/index.ts`, so most screens c
 
 ### Coordinate systems
 
-- `gridColumn`/`gridRow` are the recommended inputs. They describe an 8�8 Cartesian grid. The component clamps them into range and converts them into the diagonal isometric axes internally.
+- `gridColumn`/`gridRow` are the recommended inputs. They describe an 8�8 Cartesian grid. The component clamps them into range and converts them into the diagonal isometric axes internally.
 - `characterX`/`characterY` remain for backwards compatibility. They directly map onto the two diagonals of the diamond (south-east and south-west). They are harder to reason about, so prefer the grid props where possible.
 - When both sets are supplied, the grid props win. Omitting them preserves the old behaviour based on `characterX`/`characterY`.
 

@@ -226,3 +226,29 @@ The implementation follows this pattern:
 5. Update loop: state → skeleton → refreshMeshes → render
 
 This approach provides optimal performance while maintaining compatibility with Expo's asset system and React Native's rendering constraints.
+
+## Lifelike idle driver (`lifelikeIdle_noMix.ts`)
+
+`LifelikeIdleNoMix` is the centralized behavior/animation state machine every
+GliderMon controller runs (`createSpineCharacterController` exposes it as
+`controller.idleDriver`). It layers idle behaviors on a permanent `Idle/Idle`
+carrier (track 0) using per-body-part track sequencers, driven from a catalog
+of "primitive" clips (`Primitives/Arms/*`, `Primitives/Body/*`, sliders, …).
+
+- **Ambient**: blinks, eye-looks, one-shot fidgets, and larger body composites
+  (`FootLook`, the reading sequence, `AMBIENT_BODY_COMPOSITES`).
+- **`playReaction(name)`**: named one-shots (`REACTIONS`) — fired from anywhere
+  via `characterReactionStore`.
+- **`startInteraction(behaviorKey, holdSeconds?, onDone?)`**: furniture
+  interactions. `INTERACTION_BEHAVIORS` is the registry;
+  `SUPPORTED_INTERACTION_BEHAVIORS` (exported) is what the housing eligibility
+  check consults. Returns `false` (does nothing) if not idle or the key is
+  unknown. `onDone(reason)` fires **exactly once** — `'completed'` on natural
+  end, `'interrupted'` on `forceIdle()` / a body `playReaction()` that pre-empts
+  it. Reuses the body-composite machinery, so no separate duration bookkeeping.
+
+To add an interaction behavior (`paint`, `telescope`, a real `dance`): add a
+`Composite` to `INTERACTION_BEHAVIORS` (assemble from the primitive catalog, or
+a dedicated exported clip). Housing (`src/game/housing/`) then just points a
+furniture item's `interaction.behavior` at the key — see that directory's
+`CLAUDE.md`.

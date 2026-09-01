@@ -1,3 +1,7 @@
+> ⚠️ LEGACY. Describes the `legacy` Spine-room-skeleton renderer. The live
+> renderer is `primitive3d` / `IsometricRoomView3D` — see
+> `src/game/housing/CLAUDE.md`.
+
 0) assumptions (align with what you built)
 
 Spine room skeleton contains:

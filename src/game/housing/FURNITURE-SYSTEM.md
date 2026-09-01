@@ -1,5 +1,12 @@
 # Furniture System Documentation
 
+> ⚠️ **LEGACY.** This describes the `legacy` Spine-room-skeleton renderer
+> (`IsometricHousingThreeJS`) — JSON room files, `room.mesh`, painterly
+> renderOrder, `FurnitureLoader.ts`. That renderer is now only a fallback.
+> The **live** renderer is `primitive3d` / `IsometricRoomView3D` — see
+> [`CLAUDE.md`](./CLAUDE.md) in this directory for the slot system, furniture
+> catalog, and the character/furniture interaction system.
+
 ## Overview
 
 The furniture system extends the apartment housing system to support placing furniture items using JSON-based room files. It integrates with the existing isometric housing rendering and follows the same painterly rendering approach as characters.

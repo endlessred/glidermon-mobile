@@ -434,6 +434,39 @@ const REACTIONS: Record<string, Composite> = {
   thumbsUpCheer: { arms: ARM.rightRaise, handPose: { right: "R_HandThumbsUp" }, tail: TAIL.wag, face: FACE.smile, holdRange: [1, 1.4] },
 };
 
+/**
+ * Furniture-interaction behaviors: named body composites GliderMon can be
+ * asked to perform when he relocates to a character slot adjacent to a piece
+ * of furniture (see roomSlots.ts / IsometricRoomView3D.tsx). Furniture items
+ * declare a `behavior` key (furnitureCatalog.ts); only keys present here are
+ * actually performed -- an unsupported key gracefully falls back to normal
+ * idle (the caller checks SUPPORTED_INTERACTION_BEHAVIORS first).
+ *
+ * These reuse the existing body-composite machinery (startBodyComposite),
+ * so no separate duration/timeout bookkeeping is introduced.
+ */
+const INTERACTION_BEHAVIORS: Record<string, Composite> = {
+  // Real: BODY.sit already exists and is used by lookoutPerch. Longer hold
+  // than the ambient perch since this is a deliberate "sit and stay a while".
+  sit: { body: BODY.sit, holdRange: [8, 16] },
+  // Placeholder "dance" assembled from existing primitives until a dedicated
+  // Dance clip is exported -- a held sway with raised wings, wagging tail and a
+  // smile. Uses a looping body triad (LeanRight) so it sustains for the whole
+  // hold rather than ending after a single one-shot.
+  dance: { body: BODY.leanRight, wings: WINGS.raise, tail: TAIL.wag, face: FACE.smile, holdRange: [4, 7] },
+};
+
+/** Behavior keys startInteraction() will actually perform. Callers treat a
+ * furniture `behavior` outside this set as "no interaction available". */
+export const SUPPORTED_INTERACTION_BEHAVIORS: ReadonlySet<string> = new Set(
+  Object.keys(INTERACTION_BEHAVIORS)
+);
+
+/** Why an interaction body-composite ended -- passed to startInteraction()'s
+ * onDone so the caller can always run cleanup (restore render position etc.),
+ * whether GliderMon finished naturally or was interrupted. */
+export type InteractionEndReason = "completed" | "interrupted";
+
 enum BehaviorState {
   IDLE = "idle",
   FOOT_LOOK = "footLook",
@@ -482,6 +515,11 @@ export class LifelikeIdleNoMix {
   private nextTurnPageAt = 0;
   private readingTimer = 0;
   private bodyComposite: Composite | null = null;
+  // Set by startInteraction(); fired exactly once (with 'completed' or
+  // 'interrupted') when the current body composite ends, then cleared. The
+  // room view relies on this to always restore GliderMon's render position
+  // and clear its "interacting" flag -- it is never dropped silently.
+  private bodyCompositeOnDone: ((reason: InteractionEndReason) => void) | null = null;
 
   // Secondary-track sequencers, shared by ambient fidgets, body composites,
   // and reactions -- whichever track a composite doesn't use is left alone.
@@ -857,6 +895,40 @@ export class LifelikeIdleNoMix {
     this.currentBehavior = BehaviorState.IDLE;
     this.state.clearTrack(TRACK_OVERLAY); // idle carrier already shows through underneath
     this.resetLookTimer();
+    this.fireBodyCompositeDone("completed");
+  }
+
+  /** Fire (once) and clear the startInteraction() completion callback. Called
+   * from both the natural-completion path (finishBodyComposite) and every
+   * interruption path (forceIdle, a body reaction pre-empting an interaction). */
+  private fireBodyCompositeDone(reason: InteractionEndReason) {
+    const cb = this.bodyCompositeOnDone;
+    this.bodyCompositeOnDone = null;
+    cb?.(reason);
+  }
+
+  /**
+   * Perform a named furniture-interaction behavior (see
+   * INTERACTION_BEHAVIORS). Returns false -- and does nothing -- when the
+   * driver isn't currently idle or `behaviorKey` isn't supported, so the
+   * caller can just leave GliderMon in a normal idle at that position.
+   * `onDone` always fires exactly once (see bodyCompositeOnDone).
+   */
+  startInteraction(
+    behaviorKey: string,
+    holdSeconds?: number,
+    onDone?: (reason: InteractionEndReason) => void
+  ): boolean {
+    if (this.currentBehavior !== BehaviorState.IDLE) return false;
+    const spec = INTERACTION_BEHAVIORS[behaviorKey];
+    if (!spec || !spec.body) return false;
+    // currentBehavior === IDLE guarantees no composite is running, so there's
+    // no stale callback to fire first.
+    this.bodyCompositeOnDone = onDone ?? null;
+    const composite: Composite =
+      holdSeconds != null ? { ...spec, holdRange: [holdSeconds, holdSeconds] } : spec;
+    this.startBodyComposite(composite);
+    return true;
   }
 
   /** Returns true if a non-complete entry exists on the given track */
@@ -924,6 +996,7 @@ export class LifelikeIdleNoMix {
   forceIdle() {
     this.currentBehavior = BehaviorState.IDLE;
     this.bodyComposite = null;
+    this.fireBodyCompositeDone("interrupted");
     this.state.clearTrack(TRACK_OVERLAY); // idle carrier (track 0) is never touched -- always running
     this.faceSeq.stop();
     this.armsSeq.stop();
@@ -948,7 +1021,10 @@ export class LifelikeIdleNoMix {
 
     if (reaction.body) {
       // Full-body reactions go through the same body-composite machinery as
-      // ambient behaviors, interrupting FootLook/Reading/whatever is active.
+      // ambient behaviors, interrupting FootLook/Reading/whatever is active --
+      // including an in-progress furniture interaction, whose cleanup callback
+      // must still run.
+      this.fireBodyCompositeDone("interrupted");
       this.currentBehavior = BehaviorState.IDLE; // reset so startBodyComposite is allowed
       this.startBodyComposite(reaction);
     } else {

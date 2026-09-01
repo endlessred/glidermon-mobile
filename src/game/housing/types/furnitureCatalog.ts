@@ -1,4 +1,4 @@
-import { FurnitureCatalog, FurnitureDef } from './RoomConfig';
+import { FurnitureCatalog, FurnitureDef, FurnitureInteractionDef } from './RoomConfig';
 import { SlotType } from './roomSlots';
 import type { Rarity, ShopStockConfig } from '../../../data/shop/shopTypes';
 
@@ -18,6 +18,22 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
     occlusion: "none",
     supportsFacing: true,
     defaultFacing: "left",
+    // Sit is a real behavior today (BODY.sit in lifelikeIdle_noMix.ts). The
+    // chair art points the opposite way to GliderMon's rest pose, so he's
+    // mirrored while seated. Anchor offsets are relative to the chair's world
+    // origin -- tuned on-device via DEBUG_FORCE_INTERACTION in
+    // IsometricRoomView3D.tsx; expected to differ per seating variant.
+    interaction: {
+      behavior: "sit",
+      animation: "sit",
+      interactionSide: "front",
+      characterFlipX: true,
+      // Offset from the chair's world origin: +x/+z = toward the camera, -y =
+      // lower. Tuned on-device via DEBUG_FORCE_INTERACTION in
+      // IsometricRoomView3D.tsx to centre him on the seat. GliderMon is much
+      // larger than the chair so it mostly sits behind him -- refine per variant.
+      interactionAnchor: { xOffset: 0.06, yOffset: -0.05, zOffset: 0.17 },
+    },
     variants: [
       {
         id: "wood_chair_green", cost: 150, skin: "WoodChair_Green", restPoseAsset: "1x1_WoodChair_Front_Green",
@@ -40,6 +56,10 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
     supportsLayers: ["mid", "over"],
     occlusion: "footboard",
     desiredTileHeight: 1.5,
+    // 'sleep' isn't a supported behavior yet -- the bedside character slot
+    // stays a plain idle position until a sleep clip exists. Declared now so
+    // the architecture (and the eligibility check) is exercised.
+    interaction: { behavior: "sleep", animation: "sleep" },
     variants: [
       {
         id: "bed_single_wood",
@@ -188,6 +208,10 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
     anchors: { dx: 0, dy: 0 },
     supportsLayers: ["mid"],
     occlusion: "tall",
+    // Both starter variants (record player, piano) map to 'dance' for now --
+    // 'dance' is a placeholder composite (no dedicated clip yet). A variant
+    // can override this later (e.g. an easel -> 'paint').
+    interaction: { behavior: "dance", animation: "dance", interactionSide: "front" },
     variants: [
       {
         id: "hobby_piano", cost: 200, skin: "Piano_Brown", restPoseAsset: "1x1_Piano_Brown",
@@ -209,6 +233,9 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
     anchors: { dx: 0, dy: 0 },
     supportsLayers: ["mid"],
     occlusion: "tall",
+    // 'campfire' isn't a supported behavior yet -- the byFire character slot
+    // stays a plain idle position until a campfire idle clip exists.
+    interaction: { behavior: "campfire", animation: "campfireIdle", interactionSide: "front" },
     variants: [
       {
         id: "feature_fireplace",
@@ -302,6 +329,26 @@ export const FURNITURE_SHOP_CATALOG: FurnitureShopItem[] = Object.values(FURNITU
 // Helper function to get furniture definition by ID
 export function getFurnitureDef(furnitureId: string): FurnitureDef | undefined {
   return FURNITURE_CATALOG[furnitureId];
+}
+
+/**
+ * Resolves the effective interaction metadata for a furniture item: the
+ * FurnitureDef's `interaction` shallow-merged with the variant's own
+ * `interaction` (variant wins per-key, so a variant can override just the
+ * `interactionAnchor` while inheriting `behavior`). Returns undefined when
+ * neither declares one -- callers treat that as "not interactable".
+ */
+export function getFurnitureInteraction(
+  furnitureId: string,
+  variantId: string
+): FurnitureInteractionDef | undefined {
+  const def = getFurnitureDef(furnitureId);
+  if (!def) return undefined;
+  const variant = def.variants.find((v) => v.id === variantId);
+  const base = def.interaction;
+  const override = variant?.interaction;
+  if (!base && !override) return undefined;
+  return { ...(base ?? {}), ...(override ?? {}) } as FurnitureInteractionDef;
 }
 
 // Helper function to get all available variants for a furniture type
