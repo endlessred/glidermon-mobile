@@ -18,6 +18,10 @@ interface SpineCharacterProps {
   scale?: number;
   animation?: string;
   outfit?: OutfitSlot | null;
+  /** When false, suppress the lifelike idle driver's ambient behaviors
+   * (eye-looks, fidgets, reading, body composites) so the character plays
+   * only the animation it's given. Defaults to true (full ambient life). */
+  ambientIdle?: boolean;
 }
 
 const DEFAULT_WIDTH = 200;
@@ -32,6 +36,7 @@ export default function SpineCharacter({
   scale = DEFAULT_SCALE,
   animation = 'idle',
   outfit,
+  ambientIdle = true,
 }: SpineCharacterProps) {
   const catalog = useCosmeticsStore((state) => state.catalog);
 
@@ -45,6 +50,7 @@ export default function SpineCharacter({
   const scaleRef = useRef(scale);
   const animationRef = useRef(animation);
   const outfitRef = useRef<OutfitSlot | undefined>(outfit ?? undefined);
+  const ambientIdleRef = useRef(ambientIdle);
 
   useEffect(() => {
     targetRef.current = { x: x ?? width / 2, y: y ?? height * 0.25 };
@@ -67,6 +73,11 @@ export default function SpineCharacter({
       controllerRef.current.applyOutfit(outfitRef.current);
     }
   }, [outfit]);
+
+  useEffect(() => {
+    ambientIdleRef.current = ambientIdle;
+    controllerRef.current?.idleDriver.setAmbientBehaviorsEnabled(ambientIdle);
+  }, [ambientIdle]);
 
   useEffect(() => () => {
     if (rafRef.current !== null) {
@@ -125,6 +136,7 @@ export default function SpineCharacter({
 
       rendererRef.current = renderer;
       controllerRef.current = controller;
+      controller.idleDriver.setAmbientBehaviorsEnabled(ambientIdleRef.current);
       lastTimeRef.current = null;
 
       const render = () => {

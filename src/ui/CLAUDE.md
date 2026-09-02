@@ -55,13 +55,21 @@ Navigation structure and routing logic.
 - **Integration**: Reads from `checkInStore`; `onPress` opens `CheckInFlowModal`
 
 #### `CheckInFlowModal.tsx`
-- **Purpose**: Multi-step guided check-in flow driven by GliderMon dialogue and animations, presented as a page-sheet modal
-- **Features**: Whichever check-in happens first that day runs `GoalSettingFlow` (set a glucose goal for the next 5 hours + optional meal/activity goals); later check-ins that day run `GradingFlow` (glucose recap + 3-way self-report: Yes/Partly/No). Both end on a shared `RewardStep` showing the real XP+acorns for that slot, dismissed explicitly (doesn't auto-close).
+- **Purpose**: Multi-step guided check-in flow driven by GliderMon dialogue and animations, presented as a page-sheet modal. Rebuilt on the hand-crafted `components/checkin/` kit (see below) — warm cream paper full-screen surface, dark-brown ink, felt CTAs — so the ritual matches Home/Outfit/Shop rather than the old white-surface/purple-button look.
+- **Features**: Whichever check-in happens first that day runs `GoalSettingFlow` (3 stops: greeting → one grouped goal surface [glucose goal, grouped Time-in-range/Highs/Lows, + optional meal/activity] → completion); later check-ins run `GradingFlow` (greeting → glucose recap bar → per-goal Yes/Partly/No self-report → completion). Both end on the shared `CheckInCompleteStep` (`CheckInDialogueCard` + `CheckInRewardCard` + "Done"), dismissed explicitly. XP is no longer shown here (leveling is being phased out — same call as Home); the store still grants it. `completeCheckIn` / acorn-spawn / session-freeze timing are unchanged from the pre-redesign flow.
 - **Props**: `{ visible: boolean; slot: CheckInSlot | null; onClose: () => void }`
-- **Integration**: Calls `checkInStore.completeCheckIn(slot, payload)` on submit; triggers the acorn-flight animation via `useAcornSource`
+- **Integration**: Calls `checkInStore.completeCheckIn(slot, payload)` on submit; triggers the acorn-flight animation via `useAcornSource`; hero shows the player's own `useActiveLocalOutfit()` character
+- **Dev deep links**: `glidermon://checkin` clears today's check-ins (so the card reappears and the next check-in runs goal-setting); `glidermon://checkin/grade` seeds a goal so the next check-in runs the grading flow regardless of time of day (`checkInStore.devClearToday` / `devSeedGrading`).
+
+#### `components/checkin/` — reusable daily-ritual kit
+- **Purpose**: The shared visual system for GliderMon's guided rituals (Morning check-in today; Midday/Evening reflection and future rituals reuse it). Sits on top of `components/handcrafted/` (CraftPanel, CraftActionButton, tokens) and adds only a small "morning" accent set (`checkin/tokens.ts`) — not a second design system.
+- **Components**: `CheckInFlowShell` (cream paper surface + fixed header/progress + a GliderMon hero kept mounted & stable across steps + a 180ms fade/slide step transition; `centered` for short steps, `scroll` for the goal picker; `heroSize` `"large"`/`"medium"`), `CheckInHeader` (cardstock strip, small SVG sunrise, quiet outlined close), `CheckInProgress` (dot/thread "N of M" marker — not a bar; done+current dots muted-green, future dots kraft), `GlidermonCheckInHero` (one centered `SpineCharacter` stage, transparent, memoised, `ambientIdle={false}` so the character plays only the step's animation — no fidgets/reading mixing into a cheer; `size` only changes the character scale, never the GL frame, so the canvas is never resized mid-flow), `CheckInDialogueCard` (GliderMon's line — cream or lavender note; `compact`/`popIn`/`popDelay`), `CheckInChoiceCard` (full-row-tappable goal option ≥52px, thin ink outline vs the panels' heavier one, cream idle / pale-green felt selected, quick press push + 1.015 select pop; `hideControl` for immediate-answer rows), `CheckInChoiceGroup` (uppercase section heading), `CheckInRewardCard` (kraft card, stitched star, felt acorn, big `+N` primary line + quiet `★ Daily acorn cap +0.17` secondary; card pop then acorn pop), `CheckInCompleteStep`, `CraftPrimaryButton` (semantic wrapper over `CraftActionButton`; `size="lg"` for a step's single CTA).
+- **Size hierarchy**: intro/completion = large hero + `size="lg"` CTA; goal picker / grading recap+report = `heroSize="medium"` so the choices lead. `CraftActionButton` gained a `size` prop (`"md"` default, `"lg"` = taller + bigger label) used app-wide-safely.
+- **Reward value**: `CheckInRewardCard`'s cap line shows the real `CHECK_IN_CAP_BONUS` (0.17) exported from `checkInStore` and used by `computeCapMultiplier` — not a hardcoded string. XP is not shown (leveling phased out); the store still grants it.
+- **Hero animations per step**: intro `Idle/IdleWave`, glucose/recap/self-report `Idle/Idle`, completion `CheckIn/Cheer`; grading intro is adherence-driven (`CheckIn/Cheer` / `Idle/IdleWave` / `High/HighWorriedFace`, evening `ReadBook/ReadBook`). With `ambientIdle={false}` these play clean on track 0 (looping) — `SpineCharacter` forwards the flag to `controller.idleDriver.setAmbientBehaviorsEnabled()`.
 
 #### `GoalPicker.tsx`
-- **Purpose**: Reusable goal selection list for glucose goals, meal goals, and activity goals
+- **Purpose**: Older reusable goal selection list (single-select rows). No longer used by `CheckInFlowModal` after the redesign (replaced by `checkin/CheckInChoiceCard` + `CheckInChoiceGroup`); kept for any other caller.
 - **Features**: Preset options + optional free-text custom goal; single-select with visual confirmation
 
 ### Feedback Components
@@ -147,6 +155,8 @@ There is no router (`@react-navigation/*` is not wired up — a dead `AppNavigat
 adb shell am start -a android.intent.action.VIEW -d "glidermon://shop/luma"
 ```
 Supported today: `home`, `shop` (optionally `shop/luma|sable`, which opens straight to that merchant's `NpcStorePanel` and skips the Shaded Shop walk-up), `outfit`, `gallery`, `settings`. Arcade is deliberately excluded.
+
+Also `checkin` (clears today's check-ins so the Home check-in card reappears and the next check-in runs goal-setting) and `checkin/grade` (seeds a goal so the next check-in runs the grading flow regardless of time of day) — both land on HOME; see `checkInStore.devClearToday` / `devSeedGrading`.
 
 Also `streak/<started|continued|frozen|lost|commitment|milestone7|milestone30|milestone100|milestone365>` — jumps straight to a specific streak popup by forcing `streakStore` into that scenario (via `src/data/stores/streakTestScenarios.ts`, shared with `StreakTestButton.tsx`'s on-screen panel) and switching to HOME, e.g. `adb shell am start -a android.intent.action.VIEW -d "glidermon://streak/lost"`. Useful for screenshotting a specific splash without the on-screen test panel in the way (both the panel and the full-screen splash capture touch, so there's no way to toggle the panel off once a splash is showing).
 

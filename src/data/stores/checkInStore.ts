@@ -75,6 +75,11 @@ export const GLUCOSE_GOAL_DURATION_MS = 5 * 60 * 60 * 1000; // 5 hours
 export const CHECK_IN_XP: Record<CheckInSlot, number> = { morning: 50, midday: 30, evening: 80 };
 export const CHECK_IN_ACORNS: Record<CheckInSlot, number> = { morning: 5, midday: 3, evening: 8 };
 
+/** Flat daily-acorn-cap multiplier bonus each completed check-in unlocks,
+ * regardless of slot or goal outcome (see computeCapMultiplier). Exported so
+ * the reward UI shows the real number. */
+export const CHECK_IN_CAP_BONUS = 0.17;
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const ymd = (d = new Date()) => {
@@ -151,7 +156,7 @@ function computeCapMultiplier(today: DailyCheckIns): number {
   let m = 1.0;
 
   for (const slot of SLOT_ORDER) {
-    if (today[slot]) m += 0.17;
+    if (today[slot]) m += CHECK_IN_CAP_BONUS;
   }
 
   const grading = latestGrading(today);
@@ -181,6 +186,13 @@ export type CheckInState = {
   resetDailyIfNeeded: () => void;
   availableSlot: () => CheckInSlot | null;
   completeCheckIn: (slot: CheckInSlot, payload: CheckInPayload) => void;
+  /** Dev/test only: force today's slots back to empty so the check-in card
+   * reappears (used by the `glidermon://checkin` deep link). */
+  devClearToday: () => void;
+  /** Dev/test only: seed a completed goal-setting record (in the evening
+   * slot) + leave earlier slots open, so the next check-in runs the grading
+   * flow regardless of the time of day (`glidermon://checkin/grade`). */
+  devSeedGrading: () => void;
 };
 
 const STORE_VERSION = 3;
@@ -249,6 +261,26 @@ export const useCheckInStore = create<CheckInState>()(
 
         useProgressionStore.getState().setCheckInCapMultiplier(computeCapMultiplier(nextToday));
         useProgressionStore.getState().grantCheckInXp(CHECK_IN_XP[slot], CHECK_IN_ACORNS[slot]);
+      },
+
+      devClearToday: () => {
+        set({ today: emptyDay() });
+        useProgressionStore.getState().setCheckInCapMultiplier(1.0);
+      },
+
+      devSeedGrading: () => {
+        const startMs = Date.now() - 60 * 60 * 1000;
+        const day = emptyDay();
+        day.evening = {
+          kind: "goal_setting",
+          completedAt: new Date().toISOString(),
+          glucoseGoal: { type: "tir", target: 70, startMs, endMs: startMs + GLUCOSE_GOAL_DURATION_MS },
+          lifestyleGoals: [
+            { category: "meal", text: "Bolus before every meal" },
+            { category: "activity", text: "30-minute walk" },
+          ],
+        };
+        set({ today: day });
       },
     }),
     {

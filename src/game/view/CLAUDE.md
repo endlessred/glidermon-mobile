@@ -237,6 +237,11 @@ of "primitive" clips (`Primitives/Arms/*`, `Primitives/Body/*`, sliders, …).
 
 - **Ambient**: blinks, eye-looks, one-shot fidgets, and larger body composites
   (`FootLook`, the reading sequence, `AMBIENT_BODY_COMPOSITES`).
+  `setAmbientBehaviorsEnabled(false)` turns all of that off except blinks —
+  the character then plays only what track 0 is given (plus explicit
+  `playReaction`/`startInteraction`). Used by `SpineCharacter`'s
+  `ambientIdle={false}` prop for the check-in ritual, where the character is
+  a deliberate guide and must not wander into a book mid-cheer.
 - **`playReaction(name)`**: named one-shots (`REACTIONS`) — fired from anywhere
   via `characterReactionStore`.
 - **`startInteraction(behaviorKey, holdSeconds?, onDone?)`**: furniture

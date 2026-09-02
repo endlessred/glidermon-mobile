@@ -110,7 +110,7 @@ const STREAK_SCENARIOS: Record<string, () => void> = {
   milestone365: () => triggerMilestone(365),
 };
 
-function parseGlidermonUrl(url: string): { tab: Tab; shopId?: ShopId } | { streakScenario: string } | { devRoute: string } | null {
+function parseGlidermonUrl(url: string): { tab: Tab; shopId?: ShopId } | { streakScenario: string } | { devRoute: string } | { checkIn: "clear" | "grade" } | null {
   const match = url.match(/^glidermon:\/\/([^/?]+)\/?([^/?]*)/i);
   if (!match) return null;
   const segment = match[1].toLowerCase();
@@ -118,6 +118,13 @@ function parseGlidermonUrl(url: string): { tab: Tab; shopId?: ShopId } | { strea
 
   if (segment === "streak" && STREAK_SCENARIOS[sub]) {
     return { streakScenario: sub };
+  }
+
+  // Dev/test: land on HOME with the check-in card available. Bare `checkin`
+  // clears today so the next check-in runs goal-setting; `checkin/grade`
+  // seeds a goal so it runs the grading flow instead.
+  if (segment === "checkin") {
+    return { checkIn: sub === "grade" ? "grade" : "clear" };
   }
 
   // Dev-only tooling, e.g. glidermon://dev/thumbnails -- see
@@ -175,6 +182,13 @@ export default function App() {
 
       if ("streakScenario" in parsed) {
         STREAK_SCENARIOS[parsed.streakScenario]();
+        setTab("HOME");
+        return;
+      }
+
+      if ("checkIn" in parsed) {
+        if (parsed.checkIn === "grade") useCheckInStore.getState().devSeedGrading();
+        else useCheckInStore.getState().devClearToday();
         setTab("HOME");
         return;
       }
