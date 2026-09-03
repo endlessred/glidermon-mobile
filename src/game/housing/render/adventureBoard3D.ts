@@ -36,11 +36,30 @@ const FLOOR_WORLD_Y = 0;
 
 // Isometric render-order bands -- the SAME values furnitureBillboard3D.ts uses
 // so the board sorts against GliderMon on equal terms. Within the board, the
-// surface draws just before the frame (small bias), both inside the board's band.
+// surface draws just before the frame (tiny bias), both inside the band.
+//
+// The character's body/skin slots are OPAQUE-queue materials (hue-indexed
+// recolor, see normalizeMaterialForSlot). three.js renders the whole opaque
+// queue before the whole transparent queue regardless of renderOrder, so a
+// transparent board can never lose to that skin via renderOrder -- it always
+// draws in the later pass and covers him. So when the board is BEHIND him we
+// move both its layers into the opaque queue (alpha-tested hard cutout,
+// depthTest+write on) to compete on equal terms -- exactly what
+// tileSprite.ts's `opaqueCutout` does for furniture. When the board is in
+// FRONT of him it goes back to the transparent queue at a high renderOrder so
+// it covers even his transparent face / hat / shoe slots.
 const ORDER_IN_FRONT_OF_CHARACTER = 1000;
 const ORDER_BEHIND_CHARACTER = -1;
-const BOARD_SURFACE_BIAS = 0;
-const BOARD_FRAME_BIAS = 1;
+// Both biases land the board strictly between furniture's "behind" band (-1)
+// and GliderMon's own slot range (~2-70): the board is a front-corner object
+// that should read as in front of the bed/rug behind it, but still lose to
+// GliderMon when he steps in front of it. Surface below frame so the wooden
+// lip always covers the writing surface's overscanned edge.
+const BOARD_SURFACE_BIAS = 0.25;
+const BOARD_FRAME_BIAS = 0.5;
+// Hard-cutout threshold for the frame art while it's in the opaque queue --
+// same value furniture uses (tileSprite.OPAQUE_CUTOUT_ALPHA_TEST).
+const FRAME_CUTOUT_ALPHA_TEST = 0.5;
 
 export type BoardDepthClass = 'front' | 'behind';
 
@@ -148,18 +167,23 @@ export async function buildAdventureBoard3D(
     const sy0 = ph.minY - oh * os.bottom;
     const sy1 = ph.maxY + oh * os.top;
     const surfaceGeom = new THREE.PlaneGeometry(sx1 - sx0, sy1 - sy0);
-    // Cream until the first texture arrives -- never a blank/black plane. Must
-    // share the character's transparent-queue / no-depth-test conventions
-    // (SpineThree.ts) so renderOrder alone arbitrates board <-> character.
+    // Cream until the first texture arrives -- never a blank/black plane. The
+    // Skia texture is fully opaque, so this plane lives in the OPAQUE queue and
+    // participates in the real depth buffer (walls / furniture occlude it,
+    // it's recessed behind the frame). `setDepthClass` flips it to the
+    // transparent queue only for the "board in front of GliderMon" case.
     const surfaceMaterial = new THREE.MeshBasicMaterial({
       color: 0xf8eedc,
-      transparent: true,
-      depthTest: false,
-      depthWrite: false,
+      transparent: false,
+      depthTest: true,
+      depthWrite: true,
       toneMapped: false,
     });
     const boardSurfaceMesh = new THREE.Mesh(surfaceGeom, surfaceMaterial);
     boardSurfaceMesh.frustumCulled = false;
+    // Recessed along the billboard normal so the wooden lip sits proud of the
+    // writing surface (local +Z faces the camera under the shared billboard
+    // quaternion; a negative offset pushes the surface away from it).
     boardSurfaceMesh.position.set((sx0 + sx1) / 2, (sy0 + sy1) / 2, BOARD_UI_LOCAL_DEPTH_OFFSET);
 
     const group = new THREE.Group();
@@ -234,18 +258,48 @@ export async function buildAdventureBoard3D(
       applyMap();
     };
 
-    let depthClass: BoardDepthClass = 'behind';
+    // Toggle one board material between the opaque-cutout queue (so it can
+    // sort behind GliderMon's opaque skin) and the transparent queue (so it
+    // draws over even his transparent face/hat slots). `isFrameArt` keeps the
+    // frame's soft edges alpha-blended when it's in front.
+    const setQueueMode = (
+      mat: THREE.Material | undefined,
+      mode: BoardDepthClass,
+      isFrameArt: boolean
+    ) => {
+      const m = mat as any;
+      if (!m) return;
+      if (mode === 'behind') {
+        m.transparent = false;
+        m.depthTest = true;
+        m.depthWrite = true;
+        m.alphaTest = isFrameArt ? FRAME_CUTOUT_ALPHA_TEST : 0;
+      } else {
+        m.transparent = true;
+        m.depthTest = true;
+        m.depthWrite = false;
+        m.alphaTest = 0;
+      }
+      m.needsUpdate = true;
+    };
+
+    let depthClass: BoardDepthClass | null = null;
     const setDepthClass = (cls: BoardDepthClass) => {
-      depthClass = cls;
       const bandBase = cls === 'front' ? ORDER_IN_FRONT_OF_CHARACTER : ORDER_BEHIND_CHARACTER;
+      const modeChanged = cls !== depthClass;
+      depthClass = cls;
+      if (modeChanged) setQueueMode(boardSurfaceMesh.material, cls, false);
       boardSurfaceMesh.renderOrder = bandBase + BOARD_SURFACE_BIAS;
       spineMesh.traverse((o: any) => {
         if (o.userData?.slotName === undefined) return;
-        o.renderOrder = bandBase + BOARD_FRAME_BIAS + (o.userData.__slotIdx ?? 0) * 0.001;
+        if (modeChanged) setQueueMode(o.material, cls, true);
+        // Frame draws just after the surface (occludes its overscanned edges),
+        // still well inside the band -- below GliderMon when 'behind', above
+        // him when 'front'.
+        o.renderOrder = bandBase + BOARD_FRAME_BIAS + (o.userData.__slotIdx ?? 0) * 0.0001;
       });
     };
     setDepthClass('behind');
-    void depthClass;
 
     return {
       group,

@@ -26,7 +26,9 @@ export const BOARD_TEXTURE_LONG_EDGE: Record<"full" | "compact", number> = {
   compact: 512,
 };
 
-/** Tiny local-Z offset placing the UI plane just behind the Spine frame
- * (group local +Z faces the camera, so behind = negative). Small so the
- * writing surface doesn't visually detach from the frame. */
-export const BOARD_UI_LOCAL_DEPTH_OFFSET = -0.015;
+/** Local-Z offset recessing the writing surface behind the Spine frame plane
+ * (group local +Z faces the camera, so behind = negative). Big enough that the
+ * depth buffer never z-fights the near-coplanar frame art, small enough that
+ * the surface doesn't visually detach under the orthographic camera (a Z shift
+ * along the view axis produces no parallax, only depth ordering). */
+export const BOARD_UI_LOCAL_DEPTH_OFFSET = -0.04;

@@ -109,23 +109,38 @@ layers**, both children of the same billboard-rotated, floor-grounded group:
    `adventureBoardTexture.ts`), handed in via `IsometricRoomView3D`'s
    `boardTextures` prop, and uploaded here into a `THREE.DataTexture`
    (`setTextures`). Sized from the measured `Placeholder` local AABB expanded by
-   `BOARD_OPENING_OVERSCAN` (`render/adventureBoardLayout.ts`), sitting just
-   behind the frame (`BOARD_UI_LOCAL_DEPTH_OFFSET`). `setDensity('full'|'compact')`
-   swaps which pre-rendered texture shows (Goals camera → full).
+   `BOARD_OPENING_OVERSCAN` (`render/adventureBoardLayout.ts`), recessed behind
+   the frame by `BOARD_UI_LOCAL_DEPTH_OFFSET` along the billboard normal so the
+   wooden lip sits proud of it. `setDensity('full'|'compact')` swaps which
+   pre-rendered texture shows (Goals camera → full).
 2. `spineMesh` — the authored Spine frame / easel / leaves / sticky-notes, drawn
    **in front of** the surface. Its transparent opening lets the surface show
-   through; wood / leaves / notes naturally occlude the surface edges. The
+   through; wood / leaves / notes occlude the surface's overscanned edges. The
    `Placeholder` slot itself is hidden (`o.visible = false`) — it's only an
    alignment guide.
 
-Both `depthTest:false` (matching the character's SpineThree convention), so
-ordering is arbitrated purely by `renderOrder` bands: `setDepthClass('front'|'behind')`
-classifies the **whole board** in front of / behind GliderMon by isometric
-depth (`classifyBoardDepth`, same `x+z` formula as `furnitureBillboard3D.ts`),
-so anything in the room can pass in front of or behind it by world depth. Within
-the board the surface sits one step below the frame. **Do not push
-`ORDER_BEHIND_CHARACTER` below `-1`** — the frame's `depthTest:false` mesh then
-loses to the room walls and vanishes.
+**Depth vs GliderMon — the queue-flip.** His body/skin slots are OPAQUE-queue
+materials (hue-indexed recolor, `normalizeMaterialForSlot`), and three.js draws
+the whole opaque queue before the whole transparent queue regardless of
+`renderOrder` — so a *transparent* board can never sort behind his skin, it
+always draws in the later pass and covers him. `setDepthClass('front'|'behind')`
+classifies the whole board against GliderMon by isometric depth
+(`classifyBoardDepth`, same `x+z` formula as `furnitureBillboard3D.ts`) and
+switches **both** layers' materials to match — exactly what `tileSprite.ts`'s
+`opaqueCutout` does for furniture:
+- **behind** GliderMon → `transparent:false, depthTest:true, depthWrite:true`
+  (frame art gets `alphaTest` 0.5 hard cutout), `renderOrder` in `[-1, 0)`. Now
+  in the opaque queue, so his opaque skin (drawn after, `depthTest:false`)
+  paints over it, and the real depth buffer sorts it against the walls / bed /
+  rug behind it.
+- **in front of** GliderMon → `transparent:true, depthTest:true,
+  depthWrite:false`, `renderOrder` ~1000 (surface) / ~1001 (frame), so it draws
+  after *all* his slots including the transparent face / hat / shoes.
+`BOARD_SURFACE_BIAS` / `BOARD_FRAME_BIAS` keep both layers strictly between
+furniture's "behind" band (`-1`) and his slot range (~2-70): surface just below
+frame (lip covers the writing surface), whole board above the furniture behind
+it. The `needsUpdate` on a mode switch only fires when the class actually
+changes (rare — a wander onto/off the tiles in front of the easel).
 
 Sized as a world object (~1.9 world units, a touch taller than GliderMon, under
 `WALL_HEIGHT`). **Vertical placement is derived, not guessed:** after the group
