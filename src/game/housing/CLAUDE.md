@@ -51,11 +51,11 @@ fallback):
 - `nest` (overview): frustum fit to the room's projected bounding box.
 - `glidermon` (zoomed): frames `characterTargetRef` (character mid-height), eased
   over `CAMERA_PAN_DURATION_SECONDS` when he moves.
-- `goals`: frames the Adventure Board's `Placeholder` region
-  (`goalsTargetRef` = `placeholderCenterWorld` from `adventureBoard3D`), fitting
+- `goals`: frames the Adventure Board's wooden frame
+  (`goalsTargetRef` = `frameCenterWorld` from `adventureBoard3D`), fitting
   both projected width and height with `GOALS_MARGIN_RATIO` of context, eased the
-  same way. Each `render` frame also projects the board's placeholder AABB to
-  layout px and fires `onBoardRect` (throttled) so `HouseBoardOverlay` can align.
+  same way, and switches the board texture to `full` density. The goal content
+  is a texture inside the scene now — no screen-space projection / RN overlay.
 
 **Anything that moves the character's render position must also call the
 effect-local `aimCameraAt(x, z)`** or the follow-camera aims at the wrong spot
@@ -100,20 +100,47 @@ force-marked non-walkable in `walkableTiles.ts` (GliderMon never idles on them).
 
 Today there's one: the **Daily Adventure Board** (`slotId: 'adventureBoard'`),
 front-left corner of tier 1 (`(3,0)`; tiers 0/2 fall back to an open left-side
-tile). Rendered by `render/adventureBoard3D.ts` — a static Spine object (frame +
-easel + a hidden `Placeholder` slot used only to project the RN goal-UI overlay
-onto it, see `IsometricRoomView3D`'s `onBoardRect` + `HouseBoardOverlay`). Sized
-as a world object (~1.9 world units, a touch taller than GliderMon, under
+tile). Rendered by `render/adventureBoard3D.ts` as **one world entity with two
+layers**, both children of the same billboard-rotated, floor-grounded group:
+
+1. `boardSurfaceMesh` — a `PlaneGeometry` showing the dynamic goal UI as a
+   texture. The pixels are drawn offscreen with Skia
+   (`ui/components/adventureBoard/AdventureBoardDrawing.ts` +
+   `adventureBoardTexture.ts`), handed in via `IsometricRoomView3D`'s
+   `boardTextures` prop, and uploaded here into a `THREE.DataTexture`
+   (`setTextures`). Sized from the measured `Placeholder` local AABB expanded by
+   `BOARD_OPENING_OVERSCAN` (`render/adventureBoardLayout.ts`), sitting just
+   behind the frame (`BOARD_UI_LOCAL_DEPTH_OFFSET`). `setDensity('full'|'compact')`
+   swaps which pre-rendered texture shows (Goals camera → full).
+2. `spineMesh` — the authored Spine frame / easel / leaves / sticky-notes, drawn
+   **in front of** the surface. Its transparent opening lets the surface show
+   through; wood / leaves / notes naturally occlude the surface edges. The
+   `Placeholder` slot itself is hidden (`o.visible = false`) — it's only an
+   alignment guide.
+
+Both `depthTest:false` (matching the character's SpineThree convention), so
+ordering is arbitrated purely by `renderOrder` bands: `setDepthClass('front'|'behind')`
+classifies the **whole board** in front of / behind GliderMon by isometric
+depth (`classifyBoardDepth`, same `x+z` formula as `furnitureBillboard3D.ts`),
+so anything in the room can pass in front of or behind it by world depth. Within
+the board the surface sits one step below the frame. **Do not push
+`ORDER_BEHIND_CHARACTER` below `-1`** — the frame's `depthTest:false` mesh then
+loses to the room walls and vanishes.
+
+Sized as a world object (~1.9 world units, a touch taller than GliderMon, under
 `WALL_HEIGHT`). **Vertical placement is derived, not guessed:** after the group
 is built + billboard-rotated, its lowest visible world point (easel feet) is
 dropped onto the floor plane (`world y = 0`) via a `THREE.Box3` union over the
 visible slot geometries — only `BOARD_GROUND_EPSILON` keeps it off the floor
 (named `BOARD_GROUND_CALIBRATION_Y = 0` is the seam for a deliberate nudge, never
 a magic `position.y -= …`). `getAdventureBoardSlot(tier)` is the single source of
-truth for its position — the Goals camera preset and the UI anchor both derive
-from the built object, so moving the board moves everything with no compensating
-offsets elsewhere. A dev-only `assertNoSlotCollisions()` in `roomSlots.ts` flags
-overlaps.
+truth for its position — the Goals camera preset (aims at `frameCenterWorld`,
+fits `frameWorldSize`) derives from the built object, so moving the board moves
+everything with no compensating offsets elsewhere. A tap on the room view while
+the Goals camera frames a not-yet-planned board raycasts `boardSurfaceMesh`
+(`boardInteractive` / `onBoardTap` props, movement-thresholded vs a drag) to open
+the Morning Check-In. A dev-only `assertNoSlotCollisions()` in `roomSlots.ts`
+flags overlaps.
 
 ## Character-slot + furniture-interaction system
 

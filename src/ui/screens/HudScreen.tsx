@@ -20,7 +20,9 @@ const SHOW_FURNITURE_DEV_PANEL = false;
 import HomeHeader from "../components/HomeHeader";
 import NestCraftPanel from "../components/NestCraftPanel";
 import CameraPresetTabs, { CameraMode } from "../components/CameraPresetTabs";
-import HouseBoardOverlay, { BoardRect } from "../components/adventureBoard/HouseBoardOverlay";
+import { useAdventureBoardTextureSet } from "../components/adventureBoard/useAdventureBoardTextureSet";
+import AdventureBoardA11y from "../components/adventureBoard/AdventureBoardA11y";
+import { useAdventureBoardNotPlanned } from "../../data/selectors/adventureBoard";
 import { useAcornBadgeAnchor } from "../hooks/useAcornBadgeAnchor";
 import { CheckInCard } from "../components/CheckInCard";
 import DailyGoalBoard from "../components/DailyGoalBoard";
@@ -60,10 +62,12 @@ export default function HudScreen() {
   // Only reflects a deliberate tab press, never changes on its own.
   const [cameraMode, setCameraMode] = useState<CameraMode>("nest");
 
-  // Projected screen bounds of the Adventure Board's dynamic-content region,
-  // reported by IsometricRoomView3D each time the camera moves. Drives the
-  // absolutely-positioned goal overlay.
-  const [boardRect, setBoardRect] = useState<BoardRect | null>(null);
+  // In-world Adventure Board: the dynamic goal UI is a Skia-drawn texture on a
+  // plane inside the room scene (not an RN overlay), so it depth-sorts against
+  // Glidermon / furniture. Textures regenerate only on board-state changes.
+  const boardTextures = useAdventureBoardTextureSet();
+  const boardNotPlanned = useAdventureBoardNotPlanned();
+  const boardInteractive = cameraMode === "goals" && boardNotPlanned && !!availableSlot;
 
   // Glidermon room fills roughly the same vertical budget it always has;
   // its GL view is sized to whatever that box measures out to via
@@ -128,7 +132,9 @@ export default function HudScreen() {
                   characterScale={0.35}
                   outfit={localOutfit ?? undefined}
                   cameraMode={cameraMode}
-                  onBoardRect={setBoardRect}
+                  boardTextures={boardTextures}
+                  boardInteractive={boardInteractive}
+                  onBoardTap={() => setCheckInOpen(true)}
                 />
               ) : (
                 <IsometricRoomView
@@ -142,17 +148,15 @@ export default function HudScreen() {
               )
             )}
 
-            {/* Dynamic goal content aligned to the Spine board's placeholder
-                interior. Only the Skia/craft renderer exposes the projection. */}
-            {roomBoxSize && HOUSING_RENDERER === 'primitive3d' && (
-              <HouseBoardOverlay
-                rect={boardRect}
-                interactive={cameraMode === "goals"}
-                onStartCheckIn={availableSlot ? () => setCheckInOpen(true) : undefined}
-              />
-            )}
           </View>
         </NestCraftPanel>
+
+        {/* Non-visual screen-reader summary of the in-world board while the
+            Goals camera frames it (its text is now a GL texture). */}
+        <AdventureBoardA11y
+          active={HOUSING_RENDERER === 'primitive3d' && cameraMode === 'goals'}
+          onStartCheckIn={boardInteractive ? () => setCheckInOpen(true) : undefined}
+        />
 
         <CameraPresetTabs
           mode={cameraMode}

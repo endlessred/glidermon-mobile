@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { Modal, View, Text, StyleSheet } from "react-native";
-import DailyAdventureBoard from "./adventureBoard/DailyAdventureBoard";
+import AdventureBoardCanvas from "./adventureBoard/AdventureBoardCanvas";
 import DailyAdventureBoardPreview from "./adventureBoard/DailyAdventureBoardPreview";
 import { useAdventureBoardModel } from "../../data/selectors/adventureBoard";
 import {
@@ -384,7 +384,7 @@ function BoardRevealStep({ onContinue }: { onContinue: () => void }) {
       {/* A small craft note, not a full dialogue panel -- the board is the event. */}
       <Text style={styles.revealNote}>Setting up today's adventures…</Text>
       <DailyAdventureBoardPreview>
-        <DailyAdventureBoard variant="checkin" model={model} revealStep={reveal} />
+        <AdventureBoardCanvas model={model} density="full" revealStep={reveal} />
       </DailyAdventureBoardPreview>
       <View style={styles.revealContinue}>
         <CraftPrimaryButton label="Continue" accent="green" size="lg" onPress={onContinue} />

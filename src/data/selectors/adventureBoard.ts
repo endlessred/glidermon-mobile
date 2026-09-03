@@ -62,6 +62,29 @@ export interface AdventureBoardModel {
   dailyAcorns: number;
 }
 
+/**
+ * A stable string key of everything the board's *rendering* depends on. Used
+ * to memoize the generated in-world board texture -- it must NOT change when
+ * Glidermon moves, the camera pans, or Home re-renders for unrelated state.
+ * Glucose progress is bucketed (nearest 2%) so tiny CGM wobble doesn't churn
+ * the GPU texture.
+ */
+export function serializeAdventureBoardState(m: AdventureBoardModel): string {
+  const p = m.primary
+    ? [
+        m.primary.label,
+        m.primary.targetPct ?? "-",
+        Math.round(m.primary.displayMetric / 2) * 2,
+        m.primary.displayKind,
+        m.primary.onTrack ? 1 : 0,
+        m.primary.windowEnded ? 1 : 0,
+        m.primary.evaluation,
+      ].join(":")
+    : "none";
+  const minor = m.minorGoals.map((g) => `${g.id}${g.done ? "✓" : ""}`).join(",");
+  return `${m.state}|${p}|${m.dailyAcorns}|${minor}`;
+}
+
 // Short labels -- the board is narrow, and the "% / Target / status" context
 // already makes the goal unambiguous.
 function primaryLabel(type: GlucoseGoal["type"]): string {
@@ -96,6 +119,11 @@ export function computeAcornsEarnedToday(
     if (today[slot]) total += CHECK_IN_ACORNS[slot];
   }
   return total;
+}
+
+/** Narrow subscription: true before today's plan is set (checkInStore.today only). */
+export function useAdventureBoardNotPlanned(): boolean {
+  return useCheckInStore((s) => findTodayGoalSetting(s.today) === null);
 }
 
 /** Centralized "acorns earned today" selector (see computeAcornsEarnedToday). */

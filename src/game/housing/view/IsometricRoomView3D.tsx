@@ -23,7 +23,12 @@ import { createSkyTexture, getSkyPalette, paintSky, rgbToHex } from '../render/s
 import { createTreetopBackdrop3D } from '../render/treetopBackdrop3D';
 import { getSlotsForTier } from '../types/roomSlots';
 import { getWanderDestinations } from '../render/walkableTiles';
-import { buildAdventureBoard3D, AdventureBoardObject } from '../render/adventureBoard3D';
+import {
+  buildAdventureBoard3D,
+  AdventureBoardObject,
+  AdventureBoardTextureSetLike,
+  classifyBoardDepth,
+} from '../render/adventureBoard3D';
 
 export type RoomCameraMode = 'nest' | 'glidermon' | 'goals';
 
@@ -42,16 +47,17 @@ interface IsometricRoomView3DProps {
    * follow, `goals` = framed on the Daily Adventure Board. Takes precedence
    * over `zoomedIn`. */
   cameraMode?: RoomCameraMode;
-  /** Called (screen px, in this view's layout coordinate space) with the
-   * projected bounds of the Adventure Board's dynamic-content region, or null
-   * if it isn't available. Fires only when the rect meaningfully moves. */
-  onBoardRect?: (rect: { x: number; y: number; w: number; h: number } | null) => void;
+  /** Compact + full board-UI texture payloads (Skia offscreen), regenerated
+   * only when the board's goal state changes. Uploaded onto the in-world
+   * board-surface plane. */
+  boardTextures?: AdventureBoardTextureSetLike | null;
+  /** true while a tap on the in-world board should open the Morning Check-In
+   * (Goals camera + no plan set yet + a check-in slot is available). */
+  boardInteractive?: boolean;
+  /** Invoked when the board surface is tapped while `boardInteractive`. */
+  onBoardTap?: () => void;
 }
 
-// While the camera is animating, the projected board rect is re-emitted at
-// most this often (ms) -- bounds the RN relayout cost of the overlay during a
-// Goals pan. Once the camera is still the >0.5px early-out stops emits entirely.
-const BOARD_RECT_EMIT_INTERVAL_MS = 33;
 // The wooden board frame fills ~1/(1+ratio) of the Goals-camera frame. ~0 so
 // the frame (plaque, opening, rail) sits just inside the viewport on its
 // tighter axis, maximising the readable interior without cropping it.
@@ -229,7 +235,9 @@ export default function IsometricRoomView3D({
   outfit,
   zoomedIn = false,
   cameraMode,
-  onBoardRect,
+  boardTextures,
+  boardInteractive = false,
+  onBoardTap,
 }: IsometricRoomView3DProps) {
   const resolvedMode: RoomCameraMode = cameraMode ?? (zoomedIn ? 'glidermon' : 'nest');
   const catalog = useCosmeticsStore((state) => state.catalog);
@@ -261,23 +269,29 @@ export default function IsometricRoomView3D({
   const cameraPanElapsedRef = useRef(0);
   const characterHeightRef = useRef(TILE_SIZE * CHARACTER_DESIRED_TILE_HEIGHT * DEFAULT_CHARACTER_SCALE);
   const isZoomedInRef = useRef(false);
-  // --- Goals camera + Adventure Board projection ---------------------------
+  // --- Goals camera + in-world Adventure Board ----------------------------
   const goalsModeRef = useRef(false);
   const boardObjectRef = useRef<AdventureBoardObject | null>(null);
-  // Board Placeholder center (Goals camera target) + its own eased look-at,
-  // kept separate from the character follow-camera machinery above.
+  // The Goals camera aims at the board's frame center; its own eased look-at
+  // is kept separate from the character follow-camera machinery above.
   const goalsTargetRef = useRef(new THREE.Vector3(0, 0, 0));
   const goalsLookAtRef = useRef(new THREE.Vector3(0, 0, 0));
   const goalsPanFromRef = useRef(new THREE.Vector3(0, 0, 0));
   const goalsPanElapsedRef = useRef(0);
-  const boardCornersRef = useRef<THREE.Vector3[]>([
-    new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(),
-  ]);
-  const lastBoardRectRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
-  const lastBoardEmitAtRef = useRef(0);
-  const onBoardRectRef = useRef(onBoardRect);
+  const boardTextureVersionRef = useRef<string | null>(null);
+  // Latest texture set, mirrored into a ref so the GL-context / tier-rebuild
+  // paths (which don't re-run when the `boardTextures` prop changes) can pick
+  // up whatever is current at build time.
+  const boardTexturesRef = useRef(boardTextures);
+  const boardInteractiveRef = useRef(boardInteractive);
+  const onBoardTapRef = useRef(onBoardTap);
+  const raycasterRef = useRef(new THREE.Raycaster());
+  const tapStartRef = useRef<{ x: number; y: number; t: number } | null>(null);
+  // Layout px of this view -- for the tap raycast's NDC conversion.
   const layoutSizeRef = useRef({ w: width, h: height });
-  useEffect(() => { onBoardRectRef.current = onBoardRect; }, [onBoardRect]);
+  useEffect(() => { boardTexturesRef.current = boardTextures; }, [boardTextures]);
+  useEffect(() => { boardInteractiveRef.current = boardInteractive; }, [boardInteractive]);
+  useEffect(() => { onBoardTapRef.current = onBoardTap; }, [onBoardTap]);
   useEffect(() => { layoutSizeRef.current = { w: width, h: height }; }, [width, height]);
   const skyTextureRef = useRef<THREE.DataTexture | null>(null);
   const skyDataRef = useRef<Uint8Array | null>(null);
@@ -379,6 +393,11 @@ export default function IsometricRoomView3D({
     characterGroup.scale.x = 1; // clear any interaction flip from a previous tile
     characterWorldPosRef.current = { x: charX, z: charZ };
     characterTargetRef.current.set(charX, characterHeightRef.current / 2, charZ);
+
+    // Re-sort the board in front of / behind GliderMon by isometric depth now
+    // that he's moved -- same classification furniture uses.
+    const boardObj = boardObjectRef.current;
+    if (boardObj) boardObj.setDepthClass(classifyBoardDepth(boardObj.baseWorldPos, { x: charX, z: charZ }));
 
     // Kick off a camera pan toward the new target if zoomed in and visible;
     // otherwise there's nothing to animate, so just snap the (unseen)
@@ -813,7 +832,38 @@ export default function IsometricRoomView3D({
     }
 
     if (camera) updateCameraForZoom(camera, isZoomedInRef.current);
+    // Full board texture only when the Goals camera frames it; compact otherwise.
+    boardObjectRef.current?.setDensity(resolvedMode === 'goals' ? 'full' : 'compact');
   }, [resolvedMode, updateCameraForZoom]);
+
+  // Upload a fresh board-UI texture set when its versioned goal state changes
+  // (never on movement / camera / unrelated re-renders). The previous texture
+  // stays visible until this runs; the board object disposes the old GPU ones.
+  useEffect(() => {
+    const board = boardObjectRef.current;
+    // No board yet -> handleContextCreate / the tier rebuild will pick up
+    // boardTexturesRef.current when it finishes building.
+    if (!board || !boardTextures) return;
+    if (boardTextures.version !== boardTextureVersionRef.current) {
+      boardTextureVersionRef.current = boardTextures.version;
+      board.setTextures(boardTextures);
+    }
+    board.setDensity(resolvedMode === 'goals' ? 'full' : 'compact');
+  }, [boardTextures, resolvedMode]);
+
+  // Tap -> raycast the board surface -> start check-in (Goals + not-planned).
+  const tryBoardTap = useCallback((localX: number, localY: number) => {
+    if (!boardInteractiveRef.current || !onBoardTapRef.current) return;
+    const camera = cameraRef.current;
+    const board = boardObjectRef.current;
+    if (!camera || !board) return;
+    const { w, h } = layoutSizeRef.current;
+    if (w <= 0 || h <= 0) return;
+    const ndc = new THREE.Vector2((localX / w) * 2 - 1, -((localY / h) * 2 - 1));
+    raycasterRef.current.setFromCamera(ndc, camera);
+    const hits = raycasterRef.current.intersectObject(board.boardSurfaceMesh, false);
+    if (hits.length > 0) onBoardTapRef.current();
+  }, []);
 
   // Plays a one-shot positive reaction whenever something outside this
   // component (e.g. completing a Home-screen goal) fires
@@ -847,9 +897,15 @@ export default function IsometricRoomView3D({
       scene.add(board.group);
       boardObjectRef.current = board;
       goalsTargetRef.current.copy(board.frameCenterWorld);
-      lastBoardRectRef.current = null; // force a fresh emit at the new position
+      const tex = boardTexturesRef.current;
+      if (tex) { board.setTextures(tex); boardTextureVersionRef.current = tex.version; }
+      board.setDensity(goalsModeRef.current ? 'full' : 'compact');
+      const cw = characterWorldPosRef.current;
+      if (cw) board.setDepthClass(classifyBoardDepth(board.baseWorldPos, cw));
     });
     return () => { cancelled = true; };
+    // boardTextures intentionally not a dep -- the dedicated texture effect handles updates.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomSizeTier]);
 
   useEffect(
@@ -959,15 +1015,23 @@ export default function IsometricRoomView3D({
         characterWorldPos
       );
 
-      // Daily Adventure Board -- fixed system furnishing at the rear-right
-      // `adventureBoard` slot. Static Spine (frame + easel + placeholder);
-      // the dynamic goal UI is a projected RN overlay (see onBoardRect).
+      // Daily Adventure Board -- fixed system furnishing at the `adventureBoard`
+      // slot. The Spine frame + easel and a texture-mapped surface plane for
+      // the dynamic goal UI, both inside the scene so world depth sorts them
+      // against GliderMon and furniture naturally.
       const board = await buildAdventureBoard3D(dims, billboardQuaternion, roomSizeTier);
       if (board) {
         scene.add(board.group);
         boardObjectRef.current = board;
         goalsTargetRef.current.copy(board.frameCenterWorld);
         goalsLookAtRef.current.copy(board.frameCenterWorld);
+        const tex = boardTexturesRef.current;
+        if (tex) {
+          board.setTextures(tex);
+          boardTextureVersionRef.current = tex.version;
+        }
+        board.setDensity(goalsModeRef.current ? 'full' : 'compact');
+        board.setDepthClass(classifyBoardDepth(board.baseWorldPos, characterWorldPos));
       }
 
       const controller = await createSpineCharacterController({
@@ -1031,49 +1095,6 @@ export default function IsometricRoomView3D({
       spineRef.current = controller;
       lastTimeRef.current = null;
 
-      // Projects the board's Placeholder AABB to this view's layout px and
-      // reports it (throttled by the >0.5px early-out) so HudScreen can align
-      // the dynamic goal overlay. The board group is camera-facing under an
-      // orthographic camera, so the placeholder projects to an unrotated
-      // rectangle -- an axis-aligned rect from the 4 projected corners is exact.
-      const emitBoardRect = (cam: THREE.OrthographicCamera) => {
-        const cb = onBoardRectRef.current;
-        const boardObj = boardObjectRef.current;
-        if (!cb) return;
-        if (!boardObj) { if (lastBoardRectRef.current !== null) { lastBoardRectRef.current = null; cb(null); } return; }
-
-        const b = boardObj.placeholderLocalBounds;
-        const m = boardObj.group.matrixWorld;
-        const corners = boardCornersRef.current;
-        corners[0].set(b.minX, b.minY, 0);
-        corners[1].set(b.maxX, b.minY, 0);
-        corners[2].set(b.maxX, b.maxY, 0);
-        corners[3].set(b.minX, b.maxY, 0);
-
-        const { w: lw, h: lh } = layoutSizeRef.current;
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        for (const c of corners) {
-          c.applyMatrix4(m).project(cam);
-          const sx = (c.x * 0.5 + 0.5) * lw;
-          const sy = (1 - (c.y * 0.5 + 0.5)) * lh;
-          if (sx < minX) minX = sx;
-          if (sx > maxX) maxX = sx;
-          if (sy < minY) minY = sy;
-          if (sy > maxY) maxY = sy;
-        }
-        const rect = { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
-        const prev = lastBoardRectRef.current;
-        const moved =
-          !prev ||
-          Math.abs(prev.x - rect.x) > 0.5 ||
-          Math.abs(prev.y - rect.y) > 0.5 ||
-          Math.abs(prev.w - rect.w) > 0.5 ||
-          Math.abs(prev.h - rect.h) > 0.5;
-        if (!moved) return;
-        lastBoardRectRef.current = rect;
-        cb(rect);
-      };
-
       const render = () => {
         try {
           const now = performance.now();
@@ -1110,19 +1131,13 @@ export default function IsometricRoomView3D({
             updateCameraForZoom(camera, true);
           }
 
-          // Goals preset: ease the (static) board target the same way, then
-          // keep the projected board rect in sync with the overlay.
+          // Goals preset: ease the (static) board target the same way.
           if (goalsModeRef.current) {
             goalsPanElapsedRef.current += deltaSeconds;
             const gt = Math.min(goalsPanElapsedRef.current / CAMERA_PAN_DURATION_SECONDS, 1);
             const gEased = gt * gt * (3 - 2 * gt);
             goalsLookAtRef.current.lerpVectors(goalsPanFromRef.current, goalsTargetRef.current, gEased);
             updateCameraForZoom(camera, false);
-          }
-
-          if (onBoardRectRef.current && now - lastBoardEmitAtRef.current >= BOARD_RECT_EMIT_INTERVAL_MS) {
-            lastBoardEmitAtRef.current = now;
-            emitBoardRect(camera);
           }
 
           if (now - (lastSkyUpdateRef.current ?? 0) > SKY_UPDATE_INTERVAL_MS) {
@@ -1160,7 +1175,29 @@ export default function IsometricRoomView3D({
   }, [roomSizeTier, activeFloorPatternId, activeWallPatternId, activeFurnitureBySlot, catalog]);
 
   return (
-    <View style={{ width, height, backgroundColor: 'transparent' }}>
+    <View
+      style={{ width, height, backgroundColor: 'transparent' }}
+      // Tap detection for the in-world Adventure Board (Goals + not-planned).
+      // A quick tap that barely moves raycasts the board surface; anything
+      // larger is left alone (no room drag today, but future-proof).
+      onStartShouldSetResponder={() => boardInteractiveRef.current}
+      onResponderGrant={(e) => {
+        tapStartRef.current = {
+          x: e.nativeEvent.locationX,
+          y: e.nativeEvent.locationY,
+          t: Date.now(),
+        };
+      }}
+      onResponderRelease={(e) => {
+        const s = tapStartRef.current;
+        tapStartRef.current = null;
+        if (!s) return;
+        const dx = e.nativeEvent.locationX - s.x;
+        const dy = e.nativeEvent.locationY - s.y;
+        if (Math.hypot(dx, dy) > 12 || Date.now() - s.t > 600) return;
+        tryBoardTap(e.nativeEvent.locationX, e.nativeEvent.locationY);
+      }}
+    >
       <GLView style={{ flex: 1 }} onContextCreate={handleContextCreate} />
       {!isLoaded && (
         <View

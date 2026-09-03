@@ -1,65 +1,81 @@
 // Daily Adventure Board -- the framed easel that physically stands in
-// GliderMon's room at the `adventureBoard` system slot (roomSlots.ts). This
-// module owns ONLY the Spine presentation (frame + easel + the "Placeholder"
-// interior region). The dynamic goal content is a React Native overlay
-// (DailyAdventureBoard) that IsometricRoomView3D positions by projecting this
-// object's Placeholder bounds to screen space -- no dynamic text ever goes
-// into Spine.
+// GliderMon's room at the `adventureBoard` system slot (roomSlots.ts).
 //
-// v1: one complete Spine skin ("0"), used exactly as authored. The
-// `FutureFrame` / `FutureEasel` slots (empty here) are where busier
-// decoration will later be split out for a close-up detail mode -- not built
-// yet, deliberately no placeholder state for it.
+// This is one world entity with two internal layers, both children of the
+// same billboard-rotated, floor-grounded group:
+//   1. `boardSurfaceMesh` -- a plane showing the dynamic goal UI as a texture
+//      (drawn with Skia offscreen, uploaded here). Sits just BEHIND the frame.
+//   2. `spineMesh` -- the authored Spine frame / easel / leaves / notes, drawn
+//      IN FRONT of the surface. Its transparent opening lets the surface show
+//      through; wood / leaves / notes naturally occlude the surface edges.
+// The whole board is depth-classified against GliderMon exactly like furniture
+// (front / behind by isometric depth), so anything in the room can pass in
+// front of or behind it according to world depth.
+//
+// v1: one complete Spine skin ("0"), used exactly as authored.
 import * as THREE from 'three';
 import { Physics } from '@esotericsoftware/spine-core';
 import { loadSpineFromExpoAssets } from '../../../spine/loaders';
 import { RoomDims3D, gridToWorld } from './grid3D';
 import { getAdventureBoardSlot } from '../types/roomSlots';
+import {
+  BOARD_OPENING_OVERSCAN,
+  BOARD_UI_LOCAL_DEPTH_OFFSET,
+} from './adventureBoardLayout';
 
 const PHYSICS: any = Physics as any;
 
-// World height (tile units, TILE_SIZE = 1) of the whole board silhouette. It
-// is a world object: GliderMon stands ~1.6 units tall (characterScale 0.35 in
-// HudScreen) and WALL_HEIGHT is 2.0, so the easel is a touch taller than him
-// and stays clear of the wall. Tune on-device via `glidermon://home`.
 const BOARD_DESIRED_WORLD_HEIGHT = 1.9;
-// Small nudge tucking the easel into its corner rather than floating on the
-// tile center: toward the left wall (-x) and slightly back from the open
-// front edge (-z). Kept small so the tilted camera-facing billboard doesn't
-// poke through the wall box.
 const BOARD_NUDGE_X = -0.04;
 const BOARD_NUDGE_Z = -0.16;
-// The board's vertical placement is DERIVED, not guessed: after the group is
-// built + billboard-rotated, its lowest visible world point (the easel feet)
-// is dropped onto the room floor plane (world y = 0). Only a tiny epsilon
-// keeps the feet from z-fighting the floor. `CALIBRATION_Y` stays 0 unless a
-// deliberate, named nudge is ever needed -- never a magic `position.y -= …`.
+// Vertical placement is DERIVED (see below), never a magic offset. Only a tiny
+// epsilon keeps the easel feet off the floor plane; CALIBRATION_Y stays 0.
 const BOARD_GROUND_EPSILON = 0.01;
 const BOARD_GROUND_CALIBRATION_Y = 0;
 const FLOOR_WORLD_Y = 0;
 
+// Isometric render-order bands -- the SAME values furnitureBillboard3D.ts uses
+// so the board sorts against GliderMon on equal terms. Within the board, the
+// surface draws just before the frame (small bias), both inside the board's band.
+const ORDER_IN_FRONT_OF_CHARACTER = 1000;
+const ORDER_BEHIND_CHARACTER = -1;
+const BOARD_SURFACE_BIAS = 0;
+const BOARD_FRAME_BIAS = 1;
+
+export type BoardDepthClass = 'front' | 'behind';
+
+export interface AdventureBoardTexturePayloadLike {
+  pixels: Uint8Array;
+  width: number;
+  height: number;
+}
+export interface AdventureBoardTextureSetLike {
+  compact: AdventureBoardTexturePayloadLike;
+  full: AdventureBoardTexturePayloadLike;
+  version: string;
+}
+
 export interface AdventureBoardObject {
   group: THREE.Group;
-  /** Placeholder interior AABB in group-local units (z = 0 plane). The RN
-   * board UI is aligned to this after projection through the camera. */
-  placeholderLocalBounds: { minX: number; minY: number; maxX: number; maxY: number };
-  /** World-space center of the Placeholder region -- the RN overlay anchors here. */
-  placeholderCenterWorld: THREE.Vector3;
-  /** Placeholder world size. */
-  placeholderWorldSize: { w: number; h: number };
-  /** World-space center of the wooden Frame -- the Goals camera aims here so the
-   * whole board (plaque + opening + rail) is evenly composed. */
+  /** The dynamic-content plane. Raycast this for board taps. */
+  boardSurfaceMesh: THREE.Mesh;
+  /** World-space center of the wooden Frame -- the Goals camera aims here. */
   frameCenterWorld: THREE.Vector3;
   /** Wooden-frame world size, for fitting the Goals camera (width + height). */
   frameWorldSize: { w: number; h: number };
+  /** Placeholder AABB in group-local units (dev/debug only now). */
+  placeholderLocalBounds: { minX: number; minY: number; maxX: number; maxY: number };
+  /** Base world position (easel foot) used for isometric depth classification. */
+  baseWorldPos: { x: number; z: number };
+  /** Upload a fresh compact+full texture set and show the one for `density`. */
+  setTextures: (set: AdventureBoardTextureSetLike) => void;
+  /** Switch the visible density (Goals -> full, otherwise compact). */
+  setDensity: (density: 'full' | 'compact') => void;
+  /** Re-sort the whole board in front of / behind GliderMon. */
+  setDepthClass: (cls: BoardDepthClass) => void;
   dispose: () => void;
 }
 
-/**
- * Builds the board Spine object for a room tier. Positioned at the tier's
- * `adventureBoard` system slot; oriented with the shared billboard rotation
- * (same as furniture / character) so it faces the fixed isometric camera.
- */
 export async function buildAdventureBoard3D(
   dims: RoomDims3D,
   billboardQuaternion: THREE.Quaternion,
@@ -84,41 +100,31 @@ export async function buildAdventureBoard3D(
     const skH: number = data.height || 1509;
     const skX: number = data.x ?? 0;
     const skY: number = data.y ?? 0;
-
     const scale = BOARD_DESIRED_WORLD_HEIGHT / skH;
 
-    // The file's single skin is named "default", so SkeletonJson already set
-    // it as the default skin -- setupPose() below attaches it. Center the
-    // skeleton horizontally on the group origin and drop its baseline to
-    // y = 0, then let the group's position place it in the room.
     skeleton.scaleX = scale;
     skeleton.scaleY = scale;
     skeleton.x = -(skX + skW / 2) * scale;
-    skeleton.y = -skY * scale; // rough centering; final grounding is derived below
+    skeleton.y = -skY * scale;
     skeleton.setupPose();
 
     const anim = data.findAnimation?.('animation');
     if (anim) state.setAnimation(0, 'animation', true);
-
     skeleton.updateWorldTransform(PHYSICS.update);
 
     const { SkeletonMesh } = require('../../../spine/SpineThree');
-    const mesh = new SkeletonMesh(skeleton, state, resolveTexture);
-    mesh.frustumCulled = false;
-    mesh.update(0);
-    // Board is always toward the back of the room, so it always loses the
-    // depth argument to the character (same convention as furniture behind him).
-    mesh.renderOrder = -1;
+    const spineMesh = new SkeletonMesh(skeleton, state, resolveTexture);
+    spineMesh.frustumCulled = false;
+    spineMesh.update(0);
 
-    // Read slot AABBs straight off the built geometry (group-local coords;
-    // every Spine vert has z = 0):
-    //  - Placeholder : the RN overlay's alignment target. Hidden -- it's only
-    //    an alignment guide, not final visuals (spec).
-    //  - Frame       : used to aim/fit the Goals camera on the whole board.
+    // Measure Placeholder + Frame local AABBs; hide the Placeholder art (it's
+    // only an alignment guide). Capture each visible slot's authored draw
+    // index so depth reclassification can preserve intra-frame order.
     let ph = { minX: -1, minY: -1, maxX: 1, maxY: 1 };
     let fr: { minX: number; minY: number; maxX: number; maxY: number } | null = null;
-    mesh.traverse((o: any) => {
-      if (!o?.geometry || !o.userData?.slotName) return;
+    spineMesh.traverse((o: any) => {
+      if (!o?.geometry || o.userData?.slotName === undefined) return;
+      if (o.userData.__slotIdx === undefined) o.userData.__slotIdx = o.renderOrder;
       const name = o.userData.slotName;
       if (name === 'Placeholder') {
         o.geometry.computeBoundingBox();
@@ -133,26 +139,45 @@ export async function buildAdventureBoard3D(
     });
     const frame = fr ?? ph;
 
+    // ── The dynamic-content plane, sized from the calibrated opening ──────
+    const ow = ph.maxX - ph.minX;
+    const oh = ph.maxY - ph.minY;
+    const os = BOARD_OPENING_OVERSCAN;
+    const sx0 = ph.minX - ow * os.left;
+    const sx1 = ph.maxX + ow * os.right;
+    const sy0 = ph.minY - oh * os.bottom;
+    const sy1 = ph.maxY + oh * os.top;
+    const surfaceGeom = new THREE.PlaneGeometry(sx1 - sx0, sy1 - sy0);
+    // Cream until the first texture arrives -- never a blank/black plane. Must
+    // share the character's transparent-queue / no-depth-test conventions
+    // (SpineThree.ts) so renderOrder alone arbitrates board <-> character.
+    const surfaceMaterial = new THREE.MeshBasicMaterial({
+      color: 0xf8eedc,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const boardSurfaceMesh = new THREE.Mesh(surfaceGeom, surfaceMaterial);
+    boardSurfaceMesh.frustumCulled = false;
+    boardSurfaceMesh.position.set((sx0 + sx1) / 2, (sy0 + sy1) / 2, BOARD_UI_LOCAL_DEPTH_OFFSET);
+
     const group = new THREE.Group();
     group.quaternion.copy(billboardQuaternion);
-    group.add(mesh);
+    group.add(boardSurfaceMesh);
+    group.add(spineMesh);
 
     const slot = getAdventureBoardSlot(roomSizeTier);
-    const { x, z } = slot
-      ? gridToWorld(slot.row, slot.col, dims)
-      : { x: 0, z: 0 };
-    // Place horizontally, then ground vertically from the built geometry.
-    group.position.set(x + BOARD_NUDGE_X, 0, z + BOARD_NUDGE_Z);
+    const base = slot ? gridToWorld(slot.row, slot.col, dims) : { x: 0, z: 0 };
+    const baseWorldPos = { x: base.x + BOARD_NUDGE_X, z: base.z + BOARD_NUDGE_Z };
+    group.position.set(baseWorldPos.x, 0, baseWorldPos.z);
     group.updateMatrixWorld(true);
 
-    // World AABB of the VISIBLE board (Easel + Frame; Placeholder is hidden).
-    // The billboard rotation lives on the group, so the lowest world point
-    // isn't simply group.position.y + a local min -- union the rotated slot
-    // boxes and read min.y.
+    // Ground the lowest VISIBLE world point (easel feet) onto the floor plane.
     const worldBox = new THREE.Box3();
     const slotBox = new THREE.Box3();
-    mesh.traverse((o: any) => {
-      if (!o?.geometry || !o.userData?.slotName || o.visible === false) return;
+    spineMesh.traverse((o: any) => {
+      if (!o?.geometry || o.userData?.slotName === undefined || o.visible === false) return;
       if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
       slotBox.copy(o.geometry.boundingBox).applyMatrix4(group.matrixWorld);
       worldBox.union(slotBox);
@@ -163,31 +188,88 @@ export async function buildAdventureBoard3D(
       group.updateMatrixWorld(true);
     }
 
-    const placeholderCenterWorld = new THREE.Vector3(
-      (ph.minX + ph.maxX) / 2,
-      (ph.minY + ph.maxY) / 2,
-      0
-    ).applyMatrix4(group.matrixWorld);
     const frameCenterWorld = new THREE.Vector3(
       (frame.minX + frame.maxX) / 2,
       (frame.minY + frame.maxY) / 2,
       0
     ).applyMatrix4(group.matrixWorld);
 
+    // ── texture + depth lifecycle ───────────────────────────────────────
+    let compactTex: THREE.DataTexture | null = null;
+    let fullTex: THREE.DataTexture | null = null;
+    let density: 'full' | 'compact' = 'compact';
+
+    const makeTex = (p: AdventureBoardTexturePayloadLike) => {
+      const t = new THREE.DataTexture(p.pixels, p.width, p.height, THREE.RGBAFormat, THREE.UnsignedByteType);
+      (t as any).colorSpace = (THREE as any).SRGBColorSpace ?? (THREE as any).sRGBEncoding;
+      t.minFilter = THREE.LinearFilter;
+      t.magFilter = THREE.LinearFilter;
+      t.generateMipmaps = false;
+      t.needsUpdate = true;
+      return t;
+    };
+    const applyMap = () => {
+      const t = density === 'full' ? fullTex : compactTex;
+      if (t) {
+        surfaceMaterial.map = t;
+        surfaceMaterial.color.setHex(0xffffff);
+        surfaceMaterial.needsUpdate = true;
+      }
+    };
+
+    const setTextures = (set: AdventureBoardTextureSetLike) => {
+      const nextCompact = makeTex(set.compact);
+      const nextFull = makeTex(set.full);
+      const oldCompact = compactTex;
+      const oldFull = fullTex;
+      compactTex = nextCompact;
+      fullTex = nextFull;
+      applyMap(); // swap first, then free the previous GPU textures
+      oldCompact?.dispose();
+      oldFull?.dispose();
+    };
+    const setDensity = (d: 'full' | 'compact') => {
+      if (d === density) return;
+      density = d;
+      applyMap();
+    };
+
+    let depthClass: BoardDepthClass = 'behind';
+    const setDepthClass = (cls: BoardDepthClass) => {
+      depthClass = cls;
+      const bandBase = cls === 'front' ? ORDER_IN_FRONT_OF_CHARACTER : ORDER_BEHIND_CHARACTER;
+      boardSurfaceMesh.renderOrder = bandBase + BOARD_SURFACE_BIAS;
+      spineMesh.traverse((o: any) => {
+        if (o.userData?.slotName === undefined) return;
+        o.renderOrder = bandBase + BOARD_FRAME_BIAS + (o.userData.__slotIdx ?? 0) * 0.001;
+      });
+    };
+    setDepthClass('behind');
+    void depthClass;
+
     return {
       group,
-      placeholderLocalBounds: ph,
-      placeholderCenterWorld,
-      placeholderWorldSize: { w: ph.maxX - ph.minX, h: ph.maxY - ph.minY },
+      boardSurfaceMesh,
       frameCenterWorld,
       frameWorldSize: { w: frame.maxX - frame.minX, h: frame.maxY - frame.minY },
+      placeholderLocalBounds: ph,
+      baseWorldPos,
+      setTextures,
+      setDensity,
+      setDepthClass,
       dispose: () => {
+        surfaceGeom.dispose();
+        surfaceMaterial.dispose();
+        compactTex?.dispose();
+        fullTex?.dispose();
         group.traverse((obj) => {
           const m = obj as THREE.Mesh;
-          if (m.geometry) m.geometry.dispose();
+          if (m.geometry && m.geometry !== surfaceGeom) m.geometry.dispose();
           const mat = m.material as THREE.Material | THREE.Material[] | undefined;
-          if (Array.isArray(mat)) mat.forEach((x) => x.dispose());
-          else mat?.dispose();
+          if (mat && mat !== surfaceMaterial) {
+            if (Array.isArray(mat)) mat.forEach((x) => x.dispose());
+            else mat.dispose();
+          }
         });
       },
     };
@@ -195,4 +277,16 @@ export async function buildAdventureBoard3D(
     if (__DEV__) console.error('[adventureBoard3D] build failed:', err);
     return null;
   }
+}
+
+/**
+ * Classify the board in front of / behind GliderMon by isometric depth -- the
+ * fixed camera looks along -(1,1,1), so "closer to camera" ∝ x + z. Same
+ * formula as furnitureBillboard3D.ts.
+ */
+export function classifyBoardDepth(
+  boardBase: { x: number; z: number },
+  characterWorldPos: { x: number; z: number }
+): BoardDepthClass {
+  return boardBase.x + boardBase.z > characterWorldPos.x + characterWorldPos.z ? 'front' : 'behind';
 }
