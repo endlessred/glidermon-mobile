@@ -44,13 +44,18 @@ Key files:
 ### Camera
 
 Fixed isometric orthographic camera, direction always `-CAMERA_OFFSET`
-(`(10,10,10)`), only the look-at point moves. Two modes via the `zoomedIn` prop
-(driven by `CameraPresetTabs` on Home — "Nest" = overview, "Glidermon" = close
-follow):
+(`(10,10,10)`), only the look-at point moves. Three modes via the `cameraMode` prop (`'nest' | 'glidermon' | 'goals'`, driven
+by `CameraPresetTabs` on Home; the older `zoomedIn` boolean still works as a
+fallback):
 
-- Overview: frustum fit to the room's projected bounding box.
-- Zoomed: frames `characterTargetRef` (character mid-height), eased over
-  `CAMERA_PAN_DURATION_SECONDS` when he moves.
+- `nest` (overview): frustum fit to the room's projected bounding box.
+- `glidermon` (zoomed): frames `characterTargetRef` (character mid-height), eased
+  over `CAMERA_PAN_DURATION_SECONDS` when he moves.
+- `goals`: frames the Adventure Board's `Placeholder` region
+  (`goalsTargetRef` = `placeholderCenterWorld` from `adventureBoard3D`), fitting
+  both projected width and height with `GOALS_MARGIN_RATIO` of context, eased the
+  same way. Each `render` frame also projects the board's placeholder AABB to
+  layout px and fires `onBoardRect` (throttled) so `HouseBoardOverlay` can align.
 
 **Anything that moves the character's render position must also call the
 effect-local `aimCameraAt(x, z)`** or the follow-camera aims at the wrong spot
@@ -84,6 +89,31 @@ To retune a layout: edit the tier's array in `roomSlots.ts`. `bed` has
 `footprint: { w: 1, h: 2 }` (runs along the row axis — headboard one tile
 further back). Coordinates want an on-device pass; `glidermon://home` +
 screenshots.
+
+## System furnishings (`roomSlots.ts` → `getSystemSlotsForTier`)
+
+Fixed objects the game places itself, **separate from the player-swappable
+furniture** (`RoomSlotDef` / `activeFurnitureBySlot` / the shop) — kept as their
+own `SystemSlotDef` concept rather than a new `SlotType` so the furniture
+catalog's `Record<SlotType, …>` maps don't need fake entries. Their tiles are
+force-marked non-walkable in `walkableTiles.ts` (GliderMon never idles on them).
+
+Today there's one: the **Daily Adventure Board** (`slotId: 'adventureBoard'`),
+front-left corner of tier 1 (`(3,0)`; tiers 0/2 fall back to an open left-side
+tile). Rendered by `render/adventureBoard3D.ts` — a static Spine object (frame +
+easel + a hidden `Placeholder` slot used only to project the RN goal-UI overlay
+onto it, see `IsometricRoomView3D`'s `onBoardRect` + `HouseBoardOverlay`). Sized
+as a world object (~1.9 world units, a touch taller than GliderMon, under
+`WALL_HEIGHT`). **Vertical placement is derived, not guessed:** after the group
+is built + billboard-rotated, its lowest visible world point (easel feet) is
+dropped onto the floor plane (`world y = 0`) via a `THREE.Box3` union over the
+visible slot geometries — only `BOARD_GROUND_EPSILON` keeps it off the floor
+(named `BOARD_GROUND_CALIBRATION_Y = 0` is the seam for a deliberate nudge, never
+a magic `position.y -= …`). `getAdventureBoardSlot(tier)` is the single source of
+truth for its position — the Goals camera preset and the UI anchor both derive
+from the built object, so moving the board moves everything with no compensating
+offsets elsewhere. A dev-only `assertNoSlotCollisions()` in `roomSlots.ts` flags
+overlaps.
 
 ## Character-slot + furniture-interaction system
 

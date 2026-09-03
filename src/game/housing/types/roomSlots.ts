@@ -96,6 +96,83 @@ export function getSlotsForTier(tier: number): RoomSlotDef[] {
 }
 
 // ---------------------------------------------------------------------------
+// System furnishings -- fixed objects the game places itself, NOT part of the
+// player-swappable furniture inventory (roomSlots.ts's RoomSlotDef / the
+// housingStore.activeFurnitureBySlot map / the shop). Kept as a separate
+// concept rather than a new SlotType so the furniture catalog's
+// `Record<SlotType, ...>` maps don't need fake entries.
+//
+// The Daily Adventure Board is the first: it lives at the front-left corner
+// (the left vertex of the isometric diorama) -- an open, unobstructed area
+// that no furniture or idle position competes for, doesn't consume a
+// hobby/feature interaction slot, and has a predictable fixed location the
+// Goals camera can frame.
+// ---------------------------------------------------------------------------
+
+export type SystemSlotType = 'adventureBoard';
+
+export interface SystemSlotDef {
+  slotId: string;
+  type: SystemSlotType;
+  row: number;
+  col: number;
+  /** System furnishings are always fixed -- never player-movable/removable. */
+  fixed: true;
+  category: 'system';
+}
+
+// One entry per ROOM_SIZE_TIERS index. Left side of the room, clear of every
+// RoomSlotDef in the matching tier (see assertNoSlotCollisions). Tier 1 (the
+// default room) puts it at the front-left corner (3,0); tiers 0/2 have the
+// bed at that corner, so they fall back to the nearest open left-side tile.
+const SYSTEM_SLOT_LAYOUTS: SystemSlotDef[][] = [
+  [{ slotId: 'adventureBoard', type: 'adventureBoard', row: 0, col: 1, fixed: true, category: 'system' }],
+  [{ slotId: 'adventureBoard', type: 'adventureBoard', row: 3, col: 0, fixed: true, category: 'system' }],
+  [{ slotId: 'adventureBoard', type: 'adventureBoard', row: 0, col: 0, fixed: true, category: 'system' }],
+];
+
+export function getSystemSlotsForTier(tier: number): SystemSlotDef[] {
+  return SYSTEM_SLOT_LAYOUTS[tier] ?? [];
+}
+
+/** The Daily Adventure Board's fixed slot for a room tier (always present). */
+export function getAdventureBoardSlot(tier: number): SystemSlotDef | undefined {
+  return getSystemSlotsForTier(tier).find((s) => s.slotId === 'adventureBoard');
+}
+
+// Dev guard: no two occupied grid tiles (furniture footprints + system slots)
+// may overlap within a tier. Cheap, runs once on module load in __DEV__ so a
+// future layout edit that collides the board with furniture is caught
+// immediately rather than as a confusing render overlap.
+function assertNoSlotCollisions(): void {
+  for (let tier = 0; tier < ROOM_SLOT_LAYOUTS.length; tier++) {
+    const seen = new Map<string, string>();
+    const claim = (row: number, col: number, who: string) => {
+      const key = `${row},${col}`;
+      const prev = seen.get(key);
+      if (prev) {
+        console.warn(
+          `[roomSlots] tier ${tier}: duplicate occupied grid tile ${key} (${prev} vs ${who})`
+        );
+      } else {
+        seen.set(key, who);
+      }
+    };
+    for (const slot of ROOM_SLOT_LAYOUTS[tier]) {
+      if (slot.kind !== 'floor') continue;
+      const w = slot.footprint?.w ?? 1;
+      const h = slot.footprint?.h ?? 1;
+      for (let dr = 0; dr < h; dr++) {
+        for (let dc = 0; dc < w; dc++) claim(slot.row + dr, slot.col + dc, slot.slotId);
+      }
+    }
+    for (const sys of SYSTEM_SLOT_LAYOUTS[tier] ?? []) claim(sys.row, sys.col, sys.slotId);
+  }
+}
+
+if (__DEV__) assertNoSlotCollisions();
+
+// ---------------------------------------------------------------------------
 // Character slots -- authored standing positions GliderMon may relocate to
 // (Tamagotchi-style teleport, no walk cycle). Separate from the furniture
 // slots above: furniture slots hold furniture and are NOT random standing
@@ -145,12 +222,15 @@ const TIER_1_CHARACTER_SLOTS: CharacterSlotDef[] = [
   { id: 'bySeat', row: 2, col: 1, interactions: [{ furnitureSlotId: 'seating', facing: 'back' }] },
   // byFire (3,2): inward-facing, next to the front feature slot (3,3).
   { id: 'byFire', row: 3, col: 2, interactions: [{ furnitureSlotId: 'feature', facing: 'right' }] },
-  // bedside (3,0): at the foot of the bed (occupies rows 1-2, col 0).
-  { id: 'bedside', row: 3, col: 0, interactions: [{ furnitureSlotId: 'bed', facing: 'back' }] },
   // Pure idle positions -- keep the center usable and open.
   { id: 'center', row: 2, col: 2 },
   { id: 'frontMiddle', row: 3, col: 1 },
-  { id: 'backRight', row: 0, col: 3 },
+  // NOTE: the old `bedside` (3,0) idle position was removed when the Daily
+  // Adventure Board took that front-left-corner tile as its fixed system slot
+  // -- GliderMon must not idle inside/overlap the board (its `bed` "sleep"
+  // interaction was never implemented anyway). Likewise the earlier
+  // `backRight` (0,3). Five authored positions is enough for the current
+  // random-position system.
 ];
 
 // Tiers 0 and 2 are not authored yet -- an empty list means the wander

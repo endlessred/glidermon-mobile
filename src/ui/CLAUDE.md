@@ -46,6 +46,24 @@ Navigation structure and routing logic.
 - **States**: `glucose_response` category goals get a gold left-edge accent (currently-actionable); mid-completion gets a pale-green tint (`PALE_GREEN` token) matching the rest of the handcrafted state language
 - **Integration**: `goalsStore.completeGoal` / `skipGoal` / `snoozeGoal`
 
+### Daily Adventure Board (`components/adventureBoard/`)
+
+#### `DailyAdventureBoard.tsx`
+- **Purpose**: The one dynamic-content surface for the Daily Adventure Board, shared by `variant="house"` (the projected RN overlay aligned to the in-world Spine board, see `HouseBoardOverlay`) and `variant="checkin"` (the Morning Check-In "setting up today's adventures" reveal step, wrapped by `DailyAdventureBoardPreview`). Renders `model` only — never touches goal/CGM/reward logic.
+- **Contents** (`density="full"`, always in Goals mode): a quiet cream sheet — no stitched border, no per-item cards, one hairline divider. `not-planned` → "Plan today's adventures!" + Start Check-In (house only, when a slot is available); `active`/`complete` → primary glucose row (big actual in-range % / count · short label + `Target: N%` · `On track`/`Off track` while the 5h window is open, `Done`/`Missed` after — **never a checkmark before the window ends**), then 2 minor-goal rows (completed first — ○ / green `CheckBadge`), then `🌰 N today · +M more`. No title — the wooden plaque (Spine frame / preview frame) already says "Today's Adventures".
+- **`density="compact"`** (the small in-room projection when the Goals camera isn't active): one glance only — `Plan / today`, or the primary metric + `N left`, or `DONE!` in green. No goal rows.
+- **Data**: `useAdventureBoardModel()` in `data/selectors/adventureBoard.ts` — a memoized projection of `goalsStore` + `checkInStore` + `progressionStore` + `gameStore` (no new store). CGM math stays in `checkInStore.evaluateGlucoseGoal`. `computeAcornsEarnedToday()` / `useDailyAcorns()` there is the centralized "acorns earned today" value: `progressionStore.dailyEarned` (CGM ticks) **plus** each completed daily goal's reward **plus** `CHECK_IN_ACORNS` per completed slot — because `grantAcorns` / `grantCheckInXp` credit the balance but not `dailyEarned`.
+
+#### `BoardSurface.tsx`
+- **Purpose**: The writable cream board surface that sits *under* the wooden frame. Cream paper + faint grain + a whisper of top inner shade; **no** outer outline, large radius, or drop shadow (the wooden frame is the physical border). Two independent concepts: the surface full-bleeds a calibrated opening (caller sizes it), and `contentStyle` is the comfortable padding between surface and goal content.
+
+#### `HouseBoardOverlay.tsx`
+- **Purpose**: Absolutely-positioned overlay on the Home room GL view. Isolated (memoized) so live goal/acorn/CGM updates re-render only it. `pointerEvents` becomes `auto` only in the Goals camera preset.
+- **Geometry**: `IsometricRoomView3D`'s `onBoardRect` reports the projected *Placeholder* rect, which is smaller than the visible wooden aperture. `expandRect()` + the per-edge `SURFACE_OVERSCAN_*` constants map it onto the aperture so the cream reaches the inner wood lip **without spilling over the frame / leaves / pennant / notes** (they always read as on top). Content padding is separate, inside `DailyAdventureBoard`/`BoardSurface`.
+
+#### `DailyAdventureBoardPreview.tsx`
+- **Purpose**: Craft "wooden frame + easel + plaque" wrapper for off-world use (check-in reveal today). The frame's own padding is the wooden border; `BoardSurface` full-bleeds the opening inside it. The seam where a real render-target of the Spine frame could later drop in.
+
 ### Check-In Components (see `docs/superpowers/specs/2026-07-19-checkin-system-design.md`)
 
 #### `CheckInCard.tsx`
@@ -109,9 +127,9 @@ Navigation structure and routing logic.
 
 ### `HudScreen.tsx` (Main/Home)
 - **Purpose**: Primary gameplay screen, redesigned to share the handcrafted/paper-craft visual language established on `EquipScreen.tsx` (see `handcrafted/` below), kept calmer/less decorated since it holds the daily health ritual
-- **Components** (fixed, non-scrolling top region): `HomeHeader` (compact kraft-cardstock name/acorn/streak strip), `NestCraftPanel` wrapping the room/pet 3D view, `CameraPresetTabs` (Nest / Glidermon presets, attached directly under the frame). Scrollable region below: `CheckInCard` (when a slot is available, shown above the goal board per the hierarchy), `DailyGoalBoard`.
+- **Components** (fixed, non-scrolling top region): `HomeHeader` (compact kraft-cardstock name/acorn/streak strip), `NestCraftPanel` wrapping the room/pet 3D view (with `HouseBoardOverlay` positioned over it), `CameraPresetTabs` (Nest / Glidermon / Goals presets, attached directly under the frame). Scrollable region below: `CheckInCard` (when a slot is available, shown above the goal board per the hierarchy), `DailyGoalBoard`.
 - **Layout**: Hierarchy is Glidermon/Nest first, then the check-in ritual, then Today's Goals, then currency/streak (in the compact header), then decoration — roughly 70% clean paper surfaces / 20% texture / 10% decorative accents, deliberately less busy than Equip. No glucose display or level/XP bars on Home — glucose monitoring was moved off Home, and leveling is being phased out in favor of goal-based progression (`DailyGoalBoard` is the first concrete piece of that).
-- **Camera presets**: `cameraMode` (`"nest" | "glidermon"`) is local `HudScreen` state, only changed by an explicit tab press (never by incidental manual camera movement) — passed to `IsometricRoomView3D` as the controlled `zoomedIn` prop. "Nest" = standard wide overview; "Glidermon" activates the existing close/follow character camera (`IsometricRoomView3D`'s own camera math, untouched — see `src/game/CLAUDE.md`'s sibling doc / the component itself for `updateCameraForZoom`). The renderer's old internal "🔍 Zoom In" toggle button was removed in favor of this external, controlled prop.
+- **Camera presets**: `cameraMode` (`"nest" | "glidermon" | "goals"`) is local `HudScreen` state, only changed by an explicit tab press (never by incidental manual camera movement) — passed to `IsometricRoomView3D` as the controlled `cameraMode` prop. "Nest" = wide overview; "Glidermon" = the existing close/follow character camera (untouched); "Goals" smoothly frames the Daily Adventure Board (`getAdventureBoardSlot` → `adventureBoard3D` placeholder center) close enough to read the goal overlay while keeping room context — it does *not* open a separate screen. See `src/game/housing/CLAUDE.md` for `updateCameraForZoom` / `onBoardRect`.
 
 ### `ShopScreen.tsx`
 - **Purpose**: Entry point for the Shaded Shop -- keeps `ShadedShopViewport` (Luma/Sable in their 3D scene) visible full-bleed at all times; tapping either character opens that merchant's `components/shop/NpcStorePanel` as a bottom overlay (~62% of screen height) without hiding the scene above it

@@ -23,6 +23,9 @@ import { createSkyTexture, getSkyPalette, paintSky, rgbToHex } from '../render/s
 import { createTreetopBackdrop3D } from '../render/treetopBackdrop3D';
 import { getSlotsForTier } from '../types/roomSlots';
 import { getWanderDestinations } from '../render/walkableTiles';
+import { buildAdventureBoard3D, AdventureBoardObject } from '../render/adventureBoard3D';
+
+export type RoomCameraMode = 'nest' | 'glidermon' | 'goals';
 
 interface IsometricRoomView3DProps {
   width?: number;
@@ -32,9 +35,27 @@ interface IsometricRoomView3DProps {
   outfit?: OutfitSlot | null;
   /** Controlled camera mode: false = standard wide Nest overview, true =
    * close camera following Glidermon. Driven externally (e.g. by
-   * CameraPresetTabs on the Home screen) rather than an internal toggle. */
+   * CameraPresetTabs on the Home screen) rather than an internal toggle.
+   * Superseded by `cameraMode` when that is provided. */
   zoomedIn?: boolean;
+  /** Controlled camera preset. `nest` = wide overview, `glidermon` = close
+   * follow, `goals` = framed on the Daily Adventure Board. Takes precedence
+   * over `zoomedIn`. */
+  cameraMode?: RoomCameraMode;
+  /** Called (screen px, in this view's layout coordinate space) with the
+   * projected bounds of the Adventure Board's dynamic-content region, or null
+   * if it isn't available. Fires only when the rect meaningfully moves. */
+  onBoardRect?: (rect: { x: number; y: number; w: number; h: number } | null) => void;
 }
+
+// While the camera is animating, the projected board rect is re-emitted at
+// most this often (ms) -- bounds the RN relayout cost of the overlay during a
+// Goals pan. Once the camera is still the >0.5px early-out stops emits entirely.
+const BOARD_RECT_EMIT_INTERVAL_MS = 33;
+// The wooden board frame fills ~1/(1+ratio) of the Goals-camera frame. ~0 so
+// the frame (plaque, opening, rail) sits just inside the viewport on its
+// tighter axis, maximising the readable interior without cropping it.
+const GOALS_MARGIN_RATIO = 0.01;
 
 // Glidermon teleports (Tamagotchi-style, no walk cycle) to a weighted-random
 // wander destination at a random interval in this range. Destinations are
@@ -207,7 +228,10 @@ export default function IsometricRoomView3D({
   animation = 'idle',
   outfit,
   zoomedIn = false,
+  cameraMode,
+  onBoardRect,
 }: IsometricRoomView3DProps) {
+  const resolvedMode: RoomCameraMode = cameraMode ?? (zoomedIn ? 'glidermon' : 'nest');
   const catalog = useCosmeticsStore((state) => state.catalog);
   const selectedPaletteByCosmeticId = useCosmeticsStore((state) => state.selectedPaletteByCosmeticId);
   const roomSizeTier = useHousingStore((s) => s.roomSizeTier);
@@ -237,6 +261,24 @@ export default function IsometricRoomView3D({
   const cameraPanElapsedRef = useRef(0);
   const characterHeightRef = useRef(TILE_SIZE * CHARACTER_DESIRED_TILE_HEIGHT * DEFAULT_CHARACTER_SCALE);
   const isZoomedInRef = useRef(false);
+  // --- Goals camera + Adventure Board projection ---------------------------
+  const goalsModeRef = useRef(false);
+  const boardObjectRef = useRef<AdventureBoardObject | null>(null);
+  // Board Placeholder center (Goals camera target) + its own eased look-at,
+  // kept separate from the character follow-camera machinery above.
+  const goalsTargetRef = useRef(new THREE.Vector3(0, 0, 0));
+  const goalsLookAtRef = useRef(new THREE.Vector3(0, 0, 0));
+  const goalsPanFromRef = useRef(new THREE.Vector3(0, 0, 0));
+  const goalsPanElapsedRef = useRef(0);
+  const boardCornersRef = useRef<THREE.Vector3[]>([
+    new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(),
+  ]);
+  const lastBoardRectRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
+  const lastBoardEmitAtRef = useRef(0);
+  const onBoardRectRef = useRef(onBoardRect);
+  const layoutSizeRef = useRef({ w: width, h: height });
+  useEffect(() => { onBoardRectRef.current = onBoardRect; }, [onBoardRect]);
+  useEffect(() => { layoutSizeRef.current = { w: width, h: height }; }, [width, height]);
   const skyTextureRef = useRef<THREE.DataTexture | null>(null);
   const skyDataRef = useRef<Uint8Array | null>(null);
   const ambientLightRef = useRef<THREE.AmbientLight | null>(null);
@@ -629,6 +671,26 @@ export default function IsometricRoomView3D({
     const { w: glW, h: glH } = glSizeRef.current;
     const aspect = glW / glH;
 
+    // Goals preset: aim at the Placeholder's center and fit BOTH the wooden
+    // frame's width and height (whichever is tighter, so it works on narrow
+    // devices) with a thin even margin. The board is billboarded toward the
+    // fixed iso camera, so its world w/h map ~1:1 to screen extents.
+    if (goalsModeRef.current) {
+      const gTarget = goalsLookAtRef.current;
+      camera.position.copy(gTarget).add(CAMERA_OFFSET);
+      camera.lookAt(gTarget);
+      const size = boardObjectRef.current?.frameWorldSize ?? { w: 2.6, h: 3.0 };
+      const halfForHeight = size.h / 2;
+      const halfForWidth = size.w / (2 * aspect);
+      const half = Math.max(halfForHeight, halfForWidth) * (1 + GOALS_MARGIN_RATIO);
+      camera.left = -half * aspect;
+      camera.right = half * aspect;
+      camera.top = half;
+      camera.bottom = -half;
+      camera.updateProjectionMatrix();
+      return;
+    }
+
     const target = zoomedIn ? cameraLookAtRef.current : new THREE.Vector3(0, 0, 0);
     camera.position.copy(target).add(CAMERA_OFFSET);
     camera.lookAt(target);
@@ -733,17 +795,25 @@ export default function IsometricRoomView3D({
   }, [activeFloorPatternId, activeWallPatternId, updateCameraForZoom]);
 
   useEffect(() => {
-    isZoomedInRef.current = zoomedIn;
-    // Toggling into zoomed mode is a deliberate user action, not a
-    // background wander -- frame on Glidermon immediately rather than
-    // starting a multi-second pan from wherever the (unseen) look-at point
-    // last was.
-    if (zoomedIn) {
-      cameraLookAtRef.current.copy(characterTargetRef.current);
-    }
+    isZoomedInRef.current = resolvedMode === 'glidermon';
+    goalsModeRef.current = resolvedMode === 'goals';
     const camera = cameraRef.current;
-    if (camera) updateCameraForZoom(camera, zoomedIn);
-  }, [zoomedIn, updateCameraForZoom]);
+
+    if (resolvedMode === 'glidermon') {
+      // Deliberate user action, not a background wander -- frame on Glidermon
+      // immediately rather than starting a multi-second pan from wherever the
+      // (unseen) look-at point last was.
+      cameraLookAtRef.current.copy(characterTargetRef.current);
+    } else if (resolvedMode === 'goals') {
+      // Ease from wherever the camera is currently looking to the board.
+      if (camera) goalsPanFromRef.current.copy(camera.position).sub(CAMERA_OFFSET);
+      else goalsPanFromRef.current.set(0, 0, 0);
+      goalsLookAtRef.current.copy(goalsPanFromRef.current);
+      goalsPanElapsedRef.current = 0;
+    }
+
+    if (camera) updateCameraForZoom(camera, isZoomedInRef.current);
+  }, [resolvedMode, updateCameraForZoom]);
 
   // Plays a one-shot positive reaction whenever something outside this
   // component (e.g. completing a Home-screen goal) fires
@@ -759,6 +829,29 @@ export default function IsometricRoomView3D({
     if (reactionName) spineRef.current?.playReaction(reactionName);
   }, [reactionNonce, reactionName]);
 
+  // Rebuild the board when the room tier changes (rare -- a progression
+  // unlock). Skips the first run; the initial build happens in
+  // handleContextCreate from the same state.
+  const skipInitialBoardEffect = useRef(true);
+  useEffect(() => {
+    if (skipInitialBoardEffect.current) { skipInitialBoardEffect.current = false; return; }
+    const scene = sceneRef.current;
+    const billboardQuaternion = billboardQuaternionRef.current;
+    if (!scene || !billboardQuaternion) return;
+    const dims = ROOM_SIZE_TIERS[roomSizeTier] ?? ROOM_SIZE_TIERS[0];
+    let cancelled = false;
+    buildAdventureBoard3D(dims, billboardQuaternion, roomSizeTier).then((board) => {
+      if (cancelled || !board) return;
+      const old = boardObjectRef.current;
+      if (old) { scene.remove(old.group); old.dispose(); }
+      scene.add(board.group);
+      boardObjectRef.current = board;
+      goalsTargetRef.current.copy(board.frameCenterWorld);
+      lastBoardRectRef.current = null; // force a fresh emit at the new position
+    });
+    return () => { cancelled = true; };
+  }, [roomSizeTier]);
+
   useEffect(
     () => () => {
       if (rafRef.current != null) {
@@ -766,6 +859,7 @@ export default function IsometricRoomView3D({
         rafRef.current = null;
       }
       rendererRef.current?.dispose();
+      boardObjectRef.current?.dispose();
       skyTextureRef.current?.dispose();
       const treetopMesh = treetopGroupRef.current?.children[0] as THREE.Mesh | undefined;
       if (treetopMesh) {
@@ -865,6 +959,17 @@ export default function IsometricRoomView3D({
         characterWorldPos
       );
 
+      // Daily Adventure Board -- fixed system furnishing at the rear-right
+      // `adventureBoard` slot. Static Spine (frame + easel + placeholder);
+      // the dynamic goal UI is a projected RN overlay (see onBoardRect).
+      const board = await buildAdventureBoard3D(dims, billboardQuaternion, roomSizeTier);
+      if (board) {
+        scene.add(board.group);
+        boardObjectRef.current = board;
+        goalsTargetRef.current.copy(board.frameCenterWorld);
+        goalsLookAtRef.current.copy(board.frameCenterWorld);
+      }
+
       const controller = await createSpineCharacterController({
         animation: animationRef.current,
         outfit: outfitRef.current,
@@ -926,6 +1031,49 @@ export default function IsometricRoomView3D({
       spineRef.current = controller;
       lastTimeRef.current = null;
 
+      // Projects the board's Placeholder AABB to this view's layout px and
+      // reports it (throttled by the >0.5px early-out) so HudScreen can align
+      // the dynamic goal overlay. The board group is camera-facing under an
+      // orthographic camera, so the placeholder projects to an unrotated
+      // rectangle -- an axis-aligned rect from the 4 projected corners is exact.
+      const emitBoardRect = (cam: THREE.OrthographicCamera) => {
+        const cb = onBoardRectRef.current;
+        const boardObj = boardObjectRef.current;
+        if (!cb) return;
+        if (!boardObj) { if (lastBoardRectRef.current !== null) { lastBoardRectRef.current = null; cb(null); } return; }
+
+        const b = boardObj.placeholderLocalBounds;
+        const m = boardObj.group.matrixWorld;
+        const corners = boardCornersRef.current;
+        corners[0].set(b.minX, b.minY, 0);
+        corners[1].set(b.maxX, b.minY, 0);
+        corners[2].set(b.maxX, b.maxY, 0);
+        corners[3].set(b.minX, b.maxY, 0);
+
+        const { w: lw, h: lh } = layoutSizeRef.current;
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const c of corners) {
+          c.applyMatrix4(m).project(cam);
+          const sx = (c.x * 0.5 + 0.5) * lw;
+          const sy = (1 - (c.y * 0.5 + 0.5)) * lh;
+          if (sx < minX) minX = sx;
+          if (sx > maxX) maxX = sx;
+          if (sy < minY) minY = sy;
+          if (sy > maxY) maxY = sy;
+        }
+        const rect = { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+        const prev = lastBoardRectRef.current;
+        const moved =
+          !prev ||
+          Math.abs(prev.x - rect.x) > 0.5 ||
+          Math.abs(prev.y - rect.y) > 0.5 ||
+          Math.abs(prev.w - rect.w) > 0.5 ||
+          Math.abs(prev.h - rect.h) > 0.5;
+        if (!moved) return;
+        lastBoardRectRef.current = rect;
+        cb(rect);
+      };
+
       const render = () => {
         try {
           const now = performance.now();
@@ -960,6 +1108,21 @@ export default function IsometricRoomView3D({
             const eased = t * t * (3 - 2 * t); // smoothstep ease-in-out
             cameraLookAtRef.current.lerpVectors(cameraPanFromRef.current, characterTargetRef.current, eased);
             updateCameraForZoom(camera, true);
+          }
+
+          // Goals preset: ease the (static) board target the same way, then
+          // keep the projected board rect in sync with the overlay.
+          if (goalsModeRef.current) {
+            goalsPanElapsedRef.current += deltaSeconds;
+            const gt = Math.min(goalsPanElapsedRef.current / CAMERA_PAN_DURATION_SECONDS, 1);
+            const gEased = gt * gt * (3 - 2 * gt);
+            goalsLookAtRef.current.lerpVectors(goalsPanFromRef.current, goalsTargetRef.current, gEased);
+            updateCameraForZoom(camera, false);
+          }
+
+          if (onBoardRectRef.current && now - lastBoardEmitAtRef.current >= BOARD_RECT_EMIT_INTERVAL_MS) {
+            lastBoardEmitAtRef.current = now;
+            emitBoardRect(camera);
           }
 
           if (now - (lastSkyUpdateRef.current ?? 0) > SKY_UPDATE_INTERVAL_MS) {

@@ -1,5 +1,11 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import { Modal, View, Text, StyleSheet } from "react-native";
+import DailyAdventureBoard from "./adventureBoard/DailyAdventureBoard";
+import DailyAdventureBoardPreview from "./adventureBoard/DailyAdventureBoardPreview";
+import { useAdventureBoardModel } from "../../data/selectors/adventureBoard";
+import {
+  REVEAL_PRIMARY, REVEAL_MINOR_1, REVEAL_MINOR_2, REVEAL_SUMMARY,
+} from "./adventureBoard/boardStyles";
 import {
   useCheckInStore, CheckInSlot, GlucoseGoal, LifestyleGoal,
   findTodayGoalSetting, latestGrading, CHECK_IN_ACORNS, CHECK_IN_CAP_BONUS,
@@ -307,7 +313,26 @@ function GoalSettingFlow({
     );
   }
 
-  // Step 2: done
+  // Step 2: Adventure Board reveal -- the plan just set becomes a physical
+  // board being set up. Same shared component + view model as the house board.
+  if (step === 2) {
+    return (
+      <CheckInFlowShell
+        title={title}
+        onClose={onClose}
+        progress={{ current: 3, total: 3 }}
+        heroAnimation="CheckIn/Cheer"
+        stepKey="board"
+        heroOutfit={heroOutfit}
+        heroSize="small"
+        scroll
+      >
+        <BoardRevealStep onContinue={() => setStep(3)} />
+      </CheckInFlowShell>
+    );
+  }
+
+  // Step 3: done
   const doneMsg =
     slot === "morning" ? "You're ready for the morning."
     : slot === "midday" ? "You're set for the afternoon."
@@ -330,6 +355,41 @@ function GoalSettingFlow({
         onDone={onClose}
       />
     </CheckInFlowShell>
+  );
+}
+
+// ─── Adventure Board reveal step ────────────────────────────────────────────
+// Staggered ~600ms reveal of the just-set plan. Timers are cleared on unmount
+// so closing the modal mid-reveal can't setState on an unmounted flow.
+
+function BoardRevealStep({ onContinue }: { onContinue: () => void }) {
+  const model = useAdventureBoardModel();
+  const [reveal, setReveal] = useState(0);
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  useEffect(() => {
+    const order = [REVEAL_PRIMARY, REVEAL_MINOR_1, REVEAL_MINOR_2, REVEAL_SUMMARY];
+    order.forEach((s, i) => {
+      timersRef.current.push(setTimeout(() => setReveal(s), 160 * (i + 1)));
+    });
+    const timers = timersRef.current;
+    return () => {
+      timers.forEach(clearTimeout);
+      timersRef.current = [];
+    };
+  }, []);
+
+  return (
+    <>
+      {/* A small craft note, not a full dialogue panel -- the board is the event. */}
+      <Text style={styles.revealNote}>Setting up today's adventures…</Text>
+      <DailyAdventureBoardPreview>
+        <DailyAdventureBoard variant="checkin" model={model} revealStep={reveal} />
+      </DailyAdventureBoardPreview>
+      <View style={styles.revealContinue}>
+        <CraftPrimaryButton label="Continue" accent="green" size="lg" onPress={onContinue} />
+      </View>
+    </>
   );
 }
 
@@ -556,5 +616,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "800",
     marginTop: 9,
+  },
+  revealNote: {
+    fontSize: 13.5,
+    fontWeight: "700",
+    color: INK_MUTED,
+    textAlign: "center",
+    marginBottom: 22,
+  },
+  revealContinue: {
+    marginTop: 4,
   },
 });

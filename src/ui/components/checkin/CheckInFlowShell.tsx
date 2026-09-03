@@ -17,8 +17,9 @@ type Props = {
   /** Spine animation for the shared hero, driven by the current step. */
   heroAnimation: string;
   heroOutfit?: OutfitSlot | null;
-  /** "large" on greeting/completion, "medium" on the goal picker. */
-  heroSize?: "large" | "medium";
+  /** "large" on greeting/completion, "medium" on the goal picker, "small" on
+   * the board-reveal step (the board is the event there). */
+  heroSize?: "large" | "medium" | "small";
   /** Changes whenever the step changes -- drives the content transition. */
   stepKey: string | number;
   /** Long steps (the goal picker) scroll; short steps don't. */
