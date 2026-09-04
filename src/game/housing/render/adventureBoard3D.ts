@@ -25,13 +25,27 @@ import {
 
 const PHYSICS: any = Physics as any;
 
-const BOARD_DESIRED_WORLD_HEIGHT = 1.9;
+// ~90% of the original 1.9 -- first-pass shrink, the board was visually
+// dominating the room next to GliderMon/furniture. This is the ONE source of
+// truth for the board's size: everything else (surface plane sizing, the
+// floor-grounding below, the Goals camera's frameWorldSize fit) is derived
+// from the actually-measured, already-scaled geometry, so tuning this alone
+// re-scales and re-grounds correctly with no compensating offsets elsewhere.
+const BOARD_DESIRED_WORLD_HEIGHT = 1.71;
 const BOARD_NUDGE_X = -0.04;
 const BOARD_NUDGE_Z = -0.16;
-// Vertical placement is DERIVED (see below), never a magic offset. Only a tiny
-// epsilon keeps the easel feet off the floor plane; CALIBRATION_Y stays 0.
+// Vertical placement is DERIVED (see below): the group is dropped so its
+// lowest measured point sits BOARD_GROUND_EPSILON above the floor. The
+// authored Easel art also draws its two front legs at different heights in
+// local Spine units (~46-unit gap measured off the WoodEasel mesh), so that
+// single-point measurement only ever plants the shorter-drawn leg -- the
+// other reads as floating by the remaining gap. BOARD_GROUND_EXTRA_DROP is
+// the one calibration knob for that residual: an additional on-device-tuned
+// world-unit nudge, applied on top of the derived grounding, until both legs
+// read as planted. Retune this (not a one-off position.y hack elsewhere) if
+// the board ever moves, rescales, or the art changes.
 const BOARD_GROUND_EPSILON = 0.01;
-const BOARD_GROUND_CALIBRATION_Y = 0;
+const BOARD_GROUND_EXTRA_DROP = 0.15;
 const FLOOR_WORLD_Y = 0;
 
 // Isometric render-order bands -- the SAME values furnitureBillboard3D.ts uses
@@ -208,7 +222,7 @@ export async function buildAdventureBoard3D(
     });
     if (Number.isFinite(worldBox.min.y)) {
       group.position.y =
-        FLOOR_WORLD_Y - worldBox.min.y + BOARD_GROUND_EPSILON + BOARD_GROUND_CALIBRATION_Y;
+        FLOOR_WORLD_Y - worldBox.min.y + BOARD_GROUND_EPSILON - BOARD_GROUND_EXTRA_DROP;
       group.updateMatrixWorld(true);
     }
 

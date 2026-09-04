@@ -202,13 +202,23 @@ frame (lip covers the writing surface), whole board above the furniture behind
 it. The `needsUpdate` on a mode switch only fires when the class actually
 changes (rare — a wander onto/off the tiles in front of the easel).
 
-Sized as a world object (~1.9 world units, a touch taller than GliderMon, under
-`WALL_HEIGHT`). **Vertical placement is derived, not guessed:** after the group
-is built + billboard-rotated, its lowest visible world point (easel feet) is
-dropped onto the floor plane (`world y = 0`) via a `THREE.Box3` union over the
-visible slot geometries — only `BOARD_GROUND_EPSILON` keeps it off the floor
-(named `BOARD_GROUND_CALIBRATION_Y = 0` is the seam for a deliberate nudge, never
-a magic `position.y -= …`). `getAdventureBoardSlot(tier)` is the single source of
+Sized as a world object (~1.7 world units — ~90% of the original 1.9, a
+first-pass shrink so it doesn't visually dominate the room next to GliderMon/
+furniture — via `BOARD_DESIRED_WORLD_HEIGHT`, the one source of truth for its
+size). **Vertical placement is derived, then calibrated:** after the group is
+built + billboard-rotated, its lowest measured world point is dropped onto the
+floor plane (`world y = 0`) via a `THREE.Box3` union over the visible slot
+geometries, lifted by `BOARD_GROUND_EPSILON`. The Easel art itself draws its
+two front legs at different heights in local Spine units (~46-unit gap
+measured off the WoodEasel mesh) — a flat camera-facing billboard has one
+rigid Y, so that single-point measurement only plants the shorter-drawn leg;
+the other reads as floating by the remaining gap, and empirically by more
+than the raw leg-to-leg gap alone accounts for. `BOARD_GROUND_EXTRA_DROP` is
+the one on-device-tuned calibration knob for the residual — an additional
+world-unit nudge applied on top of the derived grounding, tuned by eye until
+both legs read as planted. Retune this constant (never a one-off
+`position.y -=` elsewhere) if the board moves, rescales, or the art changes.
+`getAdventureBoardSlot(tier)` is the single source of
 truth for its position — the Goals camera preset (aims at `frameCenterWorld`,
 fits `frameWorldSize`) derives from the built object, so moving the board moves
 everything with no compensating offsets elsewhere. A tap on the room view while
