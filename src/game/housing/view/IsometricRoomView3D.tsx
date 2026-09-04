@@ -21,6 +21,7 @@ import { computeNativeCharacterHeight } from '../render/characterScale';
 import { gridToWorld, TILE_SIZE } from '../render/grid3D';
 import { createSkyTexture, getSkyPalette, paintSky, rgbToHex } from '../render/sky3D';
 import { createTreetopBackdrop3D } from '../render/treetopBackdrop3D';
+import { ROOM_SHELL_LAYER, CONTENT_LAYER, assignLayer } from '../render/renderLayers';
 import { getSlotsForTier } from '../types/roomSlots';
 import { getWanderDestinations } from '../render/walkableTiles';
 import {
@@ -222,6 +223,9 @@ async function populateFurnitureGroup(
   const updaters: Array<(dt: number) => void> = [];
   for (const b of built) {
     group.add(b.group);
+    // Every furniture billboard (floor + wall-mounted) is room CONTENT, never
+    // shell -- see renderLayers.ts.
+    assignLayer(b.group, CONTENT_LAYER);
     if (b.update) updaters.push(b.update);
   }
   return updaters;
@@ -804,6 +808,7 @@ export default function IsometricRoomView3D({
       scene.remove(oldGroup);
       clearGroup(oldGroup);
       scene.add(built.group);
+      assignLayer(built.group, ROOM_SHELL_LAYER);
       roomGroupRef.current = built.group;
       roomBoundsRef.current = { halfWidth: built.halfWidth, halfDepth: built.halfDepth, wallHeight: built.wallHeight };
       updateCameraForZoom(camera, isZoomedInRef.current);
@@ -860,6 +865,9 @@ export default function IsometricRoomView3D({
     const { w, h } = layoutSizeRef.current;
     if (w <= 0 || h <= 0) return;
     const ndc = new THREE.Vector2((localX / w) * 2 - 1, -((localY / h) * 2 - 1));
+    // The board surface lives on CONTENT_LAYER (see renderLayers.ts); a
+    // Raycaster defaults to layer 0 only, which would silently miss it.
+    raycasterRef.current.layers.set(CONTENT_LAYER);
     raycasterRef.current.setFromCamera(ndc, camera);
     const hits = raycasterRef.current.intersectObject(board.boardSurfaceMesh, false);
     if (hits.length > 0) onBoardTapRef.current();
@@ -895,6 +903,7 @@ export default function IsometricRoomView3D({
       const old = boardObjectRef.current;
       if (old) { scene.remove(old.group); old.dispose(); }
       scene.add(board.group);
+      assignLayer(board.group, CONTENT_LAYER);
       boardObjectRef.current = board;
       goalsTargetRef.current.copy(board.frameCenterWorld);
       const tex = boardTexturesRef.current;
@@ -942,6 +951,10 @@ export default function IsometricRoomView3D({
       renderer.setSize(w, h, false);
       renderer.setViewport(0, 0, w, h);
       renderer.setClearColor(0x1a1c2c, 1);
+      // Two-pass room render (see renderLayers.ts) drives clear/clearDepth
+      // itself between passes -- a plain per-frame autoClear would wipe pass
+      // 1's shell before pass 2 could use its depth, or double-clear.
+      renderer.autoClear = false;
 
       const scene = new THREE.Scene();
       sceneRef.current = scene;
@@ -961,6 +974,7 @@ export default function IsometricRoomView3D({
       };
       const built = await buildRoomScene3D(grid);
       scene.add(built.group);
+      assignLayer(built.group, ROOM_SHELL_LAYER);
       roomBoundsRef.current = { halfWidth: built.halfWidth, halfDepth: built.halfDepth, wallHeight: built.wallHeight };
 
       const ambient = new THREE.AmbientLight(
@@ -974,6 +988,11 @@ export default function IsometricRoomView3D({
       sun.position.set(3, 5, 2);
       scene.add(sun);
       sunLightRef.current = sun;
+      // Lights are layer-gated like everything else -- the shell's
+      // MeshStandardMaterial floor/walls need them in pass 1; contents are
+      // unlit MeshBasicMaterial so this is just belt-and-suspenders.
+      ambient.layers.enableAll();
+      sun.layers.enableAll();
 
       // True isometric camera: equal offset on all three axes + lookAt the
       // origin. No hand-derived projection math -- Three.js's own camera
@@ -1022,6 +1041,7 @@ export default function IsometricRoomView3D({
       const board = await buildAdventureBoard3D(dims, billboardQuaternion, roomSizeTier);
       if (board) {
         scene.add(board.group);
+        assignLayer(board.group, CONTENT_LAYER);
         boardObjectRef.current = board;
         goalsTargetRef.current.copy(board.frameCenterWorld);
         goalsLookAtRef.current.copy(board.frameCenterWorld);
@@ -1073,6 +1093,7 @@ export default function IsometricRoomView3D({
       const { x: charX, z: charZ } = characterWorldPos;
       characterGroup.position.set(charX, 0, charZ);
       scene.add(characterGroup);
+      assignLayer(characterGroup, CONTENT_LAYER);
       characterGroupRef.current = characterGroup;
 
       // Zoomed-in framing centers on the character's mid-height, not their
@@ -1087,6 +1108,9 @@ export default function IsometricRoomView3D({
       // -- same depth-tested approach as furniture (treetopBackdrop3D.ts).
       const treetopGroup = await treetopPromise;
       scene.add(treetopGroup);
+      // Shell, not content -- it deliberately depth-tests against the walls
+      // (see treetopBackdrop3D.ts), so it must share pass 1's depth buffer.
+      assignLayer(treetopGroup, ROOM_SHELL_LAYER);
       treetopGroupRef.current = treetopGroup;
 
       updateCameraForZoom(camera, isZoomedInRef.current);
@@ -1157,7 +1181,27 @@ export default function IsometricRoomView3D({
             }
           }
 
+          // Two-pass room render (see renderLayers.ts): the architectural
+          // shell (floor/walls + the treetop backdrop that depth-tests
+          // against them) gets its own depth buffer in pass 1, which is then
+          // cleared before room CONTENTS (GliderMon, furniture, wall art, the
+          // Adventure Board) render in pass 2 against a fresh buffer -- so
+          // the shell's real 3D geometry can never depth-test (and clip)
+          // against a billboarded content object. Contents still share ONE
+          // depth buffer with each other, so their existing renderOrder-based
+          // occlusion (furnitureBillboard3D.ts / adventureBoard3D.ts) is
+          // unaffected. `scene.background` is toggled off for pass 2 only --
+          // three.js draws it as a full-screen quad on every render() call
+          // regardless of autoClear, so left on it would paint over pass 1.
+          renderer.clear(true, true, true);
+          camera.layers.set(ROOM_SHELL_LAYER);
           renderer.render(scene, camera);
+          renderer.clearDepth();
+          scene.background = null;
+          camera.layers.set(CONTENT_LAYER);
+          renderer.render(scene, camera);
+          scene.background = skyTexture;
+
           gl.endFrameEXP();
           rafRef.current = requestAnimationFrame(render);
         } catch (err) {

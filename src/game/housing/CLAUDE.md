@@ -34,12 +34,72 @@ Key files:
 | `render/grid3D.ts` | `gridToWorld(row, col, dims, footprint?)` → world `{x, z}`. **The single source of truth for "where is tile (row,col)".** `TILE_SIZE = 1`. No screen projection, no skirt/pivot math (unlike `quad`). |
 | `render/sceneBuilder3D.ts` | floor tiles + 2 back walls from a `RoomGridConfig` |
 | `render/proceduralTextures.ts` / `types/proceduralPatternCatalog.ts` | floor/wall patterns (procedural, **not** the asset-backed `FloorSetName`/`WallSetName` the other renderers use) |
+| `render/renderLayers.ts` | the two-pass split (below) — `ROOM_SHELL_LAYER`, `CONTENT_LAYER`, `assignLayer()` |
 | `render/furnitureBillboard3D.ts` | `buildFurnitureSlotBillboard(slot, furnitureId, variantId, dims, billboardQ, characterWorldPos, forceInFront?)` — one camera-facing billboard per occupied slot, composited from `restPoseAsset` / `layers` |
 | `render/billboard3D.ts` | `computeBillboardQuaternion(CAMERA_OFFSET)` — one shared rotation for every billboard (character, furniture, treetop) |
 | `render/walkableTiles.ts` | wander destinations + furniture-interaction resolution (see below) |
 | `render/characterScale.ts` | `computeNativeCharacterHeight` |
 | `types/roomSlots.ts` | fixed furniture **and** character slots, per room-size tier |
 | `types/furnitureCatalog.ts` | `FURNITURE_CATALOG` — one entry per `SlotType`, 1–2 variants each |
+
+### Two-pass render: shell vs contents (`render/renderLayers.ts`)
+
+The room shell (floor + walls, real `BoxGeometry` with a depth buffer) and room
+contents (GliderMon, furniture, wall art, the Adventure Board — all billboards)
+render in **two separate passes with two separate depth buffers**, not one:
+
+```ts
+renderer.clear(true, true, true);
+camera.layers.set(ROOM_SHELL_LAYER);
+renderer.render(scene, camera);   // floor, walls, treetop backdrop
+renderer.clearDepth();
+scene.background = null;         // else the sky quad repaints over pass 1
+camera.layers.set(CONTENT_LAYER);
+renderer.render(scene, camera);  // GliderMon, furniture, wall art, the board
+scene.background = skyTexture;   // restored for next frame's pass 1
+```
+
+**Why**: a billboard is a flat plane with one depth value across its whole
+face, while the shell's wall/floor surface depth varies continuously across
+its own face. At the angles this fixed isometric camera favors, that mismatch
+let a wall's near corner win the depth test against part of a tall/billboarded
+object while losing against another part of the same object — the wall
+visibly sliced through it (this is exactly the failure `treetopBackdrop3D.ts`
+worked around one object at a time before this existed, and what eventually
+also hit the Adventure Board and tall furniture). Splitting the passes makes
+it structurally impossible: contents never share a depth buffer with the
+shell, so the shell can never clip them.
+
+**Layer assignment** — every object gets `assignLayer(root, LAYER)` (recursive,
+sets `.layers` on every descendant) right after it's added to the scene, at
+**every** build/rebuild site (initial `handleContextCreate`, the shell-pattern
+rebuild effect, the furniture rebuild inside `populateFurnitureGroup`, both
+board build/rebuild sites, the character):
+- `ROOM_SHELL_LAYER`: the shell group, and the treetop backdrop (it
+  deliberately depth-tests against the walls — see `treetopBackdrop3D.ts` — so
+  it must share pass 1's depth buffer, not pass 2's).
+- `CONTENT_LAYER`: furniture (`populateFurnitureGroup`, floor + wall-mounted),
+  GliderMon (`characterGroup`), the Adventure Board (`board.group` — frame
+  **and** writing-surface plane together).
+- Lights (`ambient`/`sun`) call `.layers.enableAll()` — the shell's
+  `MeshStandardMaterial` floor/walls need them in pass 1; contents are unlit
+  `MeshBasicMaterial` so this is belt-and-suspenders.
+- The board-tap `Raycaster` needs `raycaster.layers.set(CONTENT_LAYER)` before
+  every `intersectObject` call — it defaults to layer 0 only and would
+  silently miss `boardSurfaceMesh` otherwise (see `tryBoardTap`).
+
+**Contents still share ONE depth buffer with each other** in pass 2 — this
+change is purely about the shell. GliderMon ↔ furniture ↔ Adventure Board
+occlusion is entirely unaffected: same `renderOrder` bands, same
+`depthTest`/opaque-cutout-queue logic as before (see the Adventure Board
+section below and `furnitureBillboard3D.ts`'s `RENDER_ORDER_BEHIND_CHARACTER` /
+`RENDER_ORDER_IN_FRONT_OF_CHARACTER`).
+
+**Adding a new content object**: call `assignLayer(theGroupYouJustAdded,
+CONTENT_LAYER)` right after `scene.add(...)` — forgetting it makes the object
+invisible in both passes (it stays on the default layer 0, which the camera
+never renders once `camera.layers.set` is in play) rather than merely
+mis-ordered, so the failure is loud, not subtle.
 
 ### Camera
 
