@@ -248,7 +248,8 @@ export default function IsometricRoomView3D({
   const selectedPaletteByCosmeticId = useCosmeticsStore((state) => state.selectedPaletteByCosmeticId);
   const roomSizeTier = useHousingStore((s) => s.roomSizeTier);
   const activeFloorPatternId = useHousingStore((s) => s.activeFloorPatternId);
-  const activeWallPatternId = useHousingStore((s) => s.activeWallPatternId);
+  const activeWallPatternIdLeft = useHousingStore((s) => s.activeWallPatternIdLeft);
+  const activeWallPatternIdRight = useHousingStore((s) => s.activeWallPatternIdRight);
   const activeFurnitureBySlot = useHousingStore((s) => s.activeFurnitureBySlot);
   const characterTile = useHousingStore((s) => s.characterTile);
 
@@ -801,7 +802,8 @@ export default function IsometricRoomView3D({
       width: dims.width,
       height: dims.height,
       floorPatternId: activeFloorPatternId,
-      wallPatternId: activeWallPatternId,
+      wallPatternIdLeft: activeWallPatternIdLeft,
+      wallPatternIdRight: activeWallPatternIdRight,
     };
     buildRoomScene3D(grid).then((built) => {
       if (cancelled) return;
@@ -816,7 +818,7 @@ export default function IsometricRoomView3D({
     return () => {
       cancelled = true;
     };
-  }, [activeFloorPatternId, activeWallPatternId, updateCameraForZoom]);
+  }, [activeFloorPatternId, activeWallPatternIdLeft, activeWallPatternIdRight, updateCameraForZoom]);
 
   useEffect(() => {
     isZoomedInRef.current = resolvedMode === 'glidermon';
@@ -970,7 +972,8 @@ export default function IsometricRoomView3D({
         width: dims.width,
         height: dims.height,
         floorPatternId: activeFloorPatternId,
-        wallPatternId: activeWallPatternId,
+        wallPatternIdLeft: activeWallPatternIdLeft,
+        wallPatternIdRight: activeWallPatternIdRight,
       };
       const built = await buildRoomScene3D(grid);
       scene.add(built.group);
@@ -1216,7 +1219,7 @@ export default function IsometricRoomView3D({
       setIsLoaded(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomSizeTier, activeFloorPatternId, activeWallPatternId, activeFurnitureBySlot, catalog]);
+  }, [roomSizeTier, activeFloorPatternId, activeWallPatternIdLeft, activeWallPatternIdRight, activeFurnitureBySlot, catalog]);
 
   return (
     <View

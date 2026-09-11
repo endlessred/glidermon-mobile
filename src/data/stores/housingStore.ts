@@ -4,6 +4,13 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { FloorSetName, WallSetName } from "../../game/housing/types/RoomConfig";
 import { DEFAULT_FLOOR_PATTERN_ID, DEFAULT_WALL_PATTERN_ID } from "../../game/housing/types/proceduralPatternCatalog";
+import {
+  getNestThemeById,
+  nestThemeWallLeftId,
+  nestThemeWallRightId,
+  nestThemeFloorId,
+} from "../../game/housing/types/nestThemeCatalog";
+import { isPremiumEntitled } from "../../game/housing/premiumEntitlement";
 
 export interface RoomSizeTier {
   width: number;
@@ -47,6 +54,27 @@ type HousingState = {
   // plan for why these two systems are deliberately not unified.
   activeFloorPatternId: string;
   activeWallPatternId: string;
+  // Per-screen-side wall selection -- the 3D-primitive room shell's two
+  // visible walls are NOT interchangeable the way `activeWallPatternId`
+  // above assumed (that field renders identically on both, fine for
+  // symmetric repeating/tileable patterns). An authored Nest Theme's two
+  // wall images are deliberately different, so the renderer needs a
+  // distinct selection per side -- see sceneBuilder3D.ts's
+  // wallPatternIdLeft/wallPatternIdRight and nestThemeCatalog.ts's
+  // left/right screen-wall naming. Added alongside (not replacing)
+  // `activeWallPatternId`, which existing repeating-material call sites
+  // (the shop, PatternSwatch) keep reading/writing unchanged --
+  // `setActiveWallPattern` sets all three fields together so a plain
+  // repeating wall pattern still looks identical on both walls exactly as
+  // before.
+  activeWallPatternIdLeft: string;
+  activeWallPatternIdRight: string;
+  // Which complete Nest Theme (if any) is currently equipped -- purely
+  // informational bookkeeping for a future "is this whole theme equipped"
+  // UI state; the renderer never reads it, only the three fields above.
+  // Not cleared by setActiveFloorPattern/setActiveWallPattern today (no UI
+  // surfaces it yet) -- revisit once mix-and-match equip UI exists.
+  activeNestThemeId: string | null;
   unlockedFloorPatternIds: string[];
   unlockedWallPatternIds: string[];
   // Slot-based furniture for the 3D-primitive room shell (roomSlots.ts) --
@@ -70,6 +98,11 @@ type HousingState = {
   unlockWallPattern: (id: string) => void;
   setActiveFloorPattern: (id: string) => void;
   setActiveWallPattern: (id: string) => void;
+  /** Equips a complete Nest Theme's left wall, right wall, and floor pieces
+   *  together (see nestThemeCatalog.ts). No-ops silently if the theme id is
+   *  unknown, or if it's premiumOnly and the player isn't entitled -- the
+   *  renderer never does its own entitlement check, so this is the one gate. */
+  applyNestTheme: (themeId: string) => void;
   placeFurniture: (placement: FurniturePlacement) => void;
   removeFurniture: (id: string) => void;
   unlockFurniture: (id: string) => void;
@@ -107,6 +140,9 @@ export const useHousingStore = create<HousingState>()(
       furniturePlacements: DEFAULT_FURNITURE,
       activeFloorPatternId: DEFAULT_FLOOR_PATTERN_ID,
       activeWallPatternId: DEFAULT_WALL_PATTERN_ID,
+      activeWallPatternIdLeft: DEFAULT_WALL_PATTERN_ID,
+      activeWallPatternIdRight: DEFAULT_WALL_PATTERN_ID,
+      activeNestThemeId: null,
       unlockedFloorPatternIds: [DEFAULT_FLOOR_PATTERN_ID],
       unlockedWallPatternIds: [DEFAULT_WALL_PATTERN_ID],
       activeFurnitureBySlot: DEFAULT_FURNITURE_BY_SLOT,
@@ -152,7 +188,22 @@ export const useHousingStore = create<HousingState>()(
 
       setActiveWallPattern: (id) => {
         if (!get().unlockedWallPatternIds.includes(id)) return;
-        set({ activeWallPatternId: id });
+        // Applies to both walls at once -- this is the existing single-pick
+        // repeating-material path, which has always rendered identically on
+        // both sides (see activeWallPatternIdLeft/Right's comment above).
+        set({ activeWallPatternId: id, activeWallPatternIdLeft: id, activeWallPatternIdRight: id });
+      },
+
+      applyNestTheme: (themeId) => {
+        const theme = getNestThemeById(themeId);
+        if (!theme) return;
+        if (theme.premiumOnly && !isPremiumEntitled()) return;
+        set({
+          activeWallPatternIdLeft: nestThemeWallLeftId(theme.id),
+          activeWallPatternIdRight: nestThemeWallRightId(theme.id),
+          activeFloorPatternId: nestThemeFloorId(theme.id),
+          activeNestThemeId: theme.id,
+        });
       },
 
       placeFurniture: (placement) => {
@@ -192,7 +243,7 @@ export const useHousingStore = create<HousingState>()(
     {
       name: "housing_store_v1",
       storage: createJSONStorage(() => AsyncStorage),
-      version: 4,
+      version: 5,
       migrate: (persisted: any, fromVersion: number) => {
         const s = persisted ?? {};
         s.roomSizeTier = typeof s.roomSizeTier === "number" ? s.roomSizeTier : 1;
@@ -230,6 +281,15 @@ export const useHousingStore = create<HousingState>()(
         s.characterTile = s.characterTile && typeof s.characterTile.row === "number" && typeof s.characterTile.col === "number"
           ? s.characterTile
           : DEFAULT_CHARACTER_TILE;
+
+        // v5: per-screen-side wall selection (Premium Nest Themes) + which
+        // theme (if any) is equipped, added alongside `activeWallPatternId`.
+        // A pre-v5 save has no notion of asymmetric walls, so both sides
+        // simply mirror the single value it already had -- zero visual
+        // change for existing players.
+        s.activeWallPatternIdLeft = typeof s.activeWallPatternIdLeft === "string" ? s.activeWallPatternIdLeft : s.activeWallPatternId;
+        s.activeWallPatternIdRight = typeof s.activeWallPatternIdRight === "string" ? s.activeWallPatternIdRight : s.activeWallPatternId;
+        s.activeNestThemeId = typeof s.activeNestThemeId === "string" ? s.activeNestThemeId : null;
         return s;
       },
       onRehydrateStorage: () => (state) => {
