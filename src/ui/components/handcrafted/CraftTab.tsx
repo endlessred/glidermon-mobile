@@ -10,6 +10,13 @@ type CraftTabProps = {
   selected?: boolean;
   disabled?: boolean;
   onPress?: () => void;
+  /** Optional long-press handler -- e.g. a shortcut into a tab's contextual
+   * action menu (see CameraPresetTabs' Nest tab). Omit for plain tabs. */
+  onLongPress?: () => void;
+  /** Shows a small "▾" beside the label -- signals this tab has a
+   * contextual action available (tap or long-press) without permanently
+   * adding text like "Furnish" to the tab itself. */
+  showCaret?: boolean;
   style?: StyleProp<ViewStyle>;
   /** "pill" (default) is a fully-rounded standalone button. "flushTop" is a
    * folder-tab shape -- rounded top only, open bottom -- meant to sit
@@ -33,10 +40,11 @@ type CraftTabProps = {
 // a stretched SVG) so it never warps. The selected tab pops forward with a
 // shadow; idle tabs use a muted outline so they read as sitting slightly
 // behind/recessed into the panel below.
-export default function CraftTab({ label, icon, selected, disabled, onPress, style, shape = "pill", iconSize, labelSize, selectedColor }: CraftTabProps) {
+export default function CraftTab({ label, icon, selected, disabled, onPress, onLongPress, showCaret, style, shape = "pill", iconSize, labelSize, selectedColor }: CraftTabProps) {
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={onLongPress}
       accessibilityRole="tab"
       accessibilityState={{ selected: !!selected, disabled: !!disabled }}
       style={[
@@ -66,6 +74,9 @@ export default function CraftTab({ label, icon, selected, disabled, onPress, sty
       >
         {label}
       </Text>
+      {showCaret && (
+        <Text style={[styles.caret, selected && styles.labelSelected]}>▾</Text>
+      )}
     </Pressable>
   );
 }
@@ -137,5 +148,11 @@ const styles = StyleSheet.create({
   },
   labelDisabled: {
     color: INK_MUTED,
+  },
+  caret: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: INK,
+    marginLeft: -1,
   },
 });

@@ -35,6 +35,9 @@ type CosmeticCardProps = {
    * card's upper-right corner reflecting the currently-selected palette.
    * Omit entirely for cosmetics that aren't recolorable. */
   paletteSwatchColors?: string[];
+  /** Text shown in the "equipped"-state pill tag. Defaults to "EQUIPPED";
+   * Furnish Nest passes "PLACED" since furniture is placed, not equipped. */
+  equippedLabel?: string;
 };
 
 const STROKE_BY_STATE: Record<CosmeticCardState, string> = {
@@ -64,6 +67,7 @@ export default function CosmeticCard({
   disabled,
   children,
   paletteSwatchColors,
+  equippedLabel = "EQUIPPED",
 }: CosmeticCardProps) {
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   const cardSeed = seed ?? rotationIndex;
@@ -131,7 +135,7 @@ export default function CosmeticCard({
 
       {isEquipped && (
         <View style={styles.tag}>
-          <Text style={styles.tagText}>EQUIPPED</Text>
+          <Text style={styles.tagText}>{equippedLabel}</Text>
         </View>
       )}
       {isEquipped && <CheckBadge size={18} style={styles.badge} />}

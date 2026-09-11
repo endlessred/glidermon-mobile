@@ -22,7 +22,7 @@ import { gridToWorld, TILE_SIZE } from '../render/grid3D';
 import { createSkyTexture, getSkyPalette, paintSky, rgbToHex } from '../render/sky3D';
 import { createTreetopBackdrop3D } from '../render/treetopBackdrop3D';
 import { ROOM_SHELL_LAYER, CONTENT_LAYER, assignLayer } from '../render/renderLayers';
-import { getSlotsForTier } from '../types/roomSlots';
+import { getSlotsForTier, getCharacterSlotsForTier, RoomSlotDef } from '../types/roomSlots';
 import { getWanderDestinations } from '../render/walkableTiles';
 import {
   buildAdventureBoard3D,
@@ -30,6 +30,12 @@ import {
   AdventureBoardTextureSetLike,
   classifyBoardDepth,
 } from '../render/adventureBoard3D';
+import {
+  buildFurnishSlotMarkers3D,
+  updateFurnishMarkerSelection,
+  FurnishSlotMarkersHandle,
+} from '../render/furnishSlotMarkers3D';
+import { buildFurnishSurfaceHighlight3D, FurnishSurface } from '../render/furnishSurfaceHighlight3D';
 
 export type RoomCameraMode = 'nest' | 'glidermon' | 'goals';
 
@@ -57,6 +63,29 @@ interface IsometricRoomView3DProps {
   boardInteractive?: boolean;
   /** Invoked when the board surface is tapped while `boardInteractive`. */
   onBoardTap?: () => void;
+  /** True while the Furnish Nest editor is active. Forces the furniture
+   * layer to render `draftFurnitureBySlot` instead of the persisted store
+   * value, shows slot markers, pauses wandering, and enables slot-tap
+   * raycasting. */
+  furnishMode?: boolean;
+  /** Draft placements to preview while `furnishMode` is true. Ignored when
+   * `furnishMode` is false. */
+  draftFurnitureBySlot?: Record<string, { furnitureId: string; variantId: string }> | null;
+  /** Currently-selected housing slot in the Furnish session (for marker
+   * highlighting and safe-park). */
+  selectedSlotId?: string | null;
+  /** Draft floor/wall surface ids to preview while `furnishMode` is true
+   * (ignored otherwise). Fed into the existing shell-rebuild path exactly
+   * like `draftFurnitureBySlot` feeds the furniture-rebuild path. */
+  draftSurfaces?: { floor: string; leftWall: string; rightWall: string } | null;
+  /** Currently-selected room surface in the Furnish session, for the
+   * selection highlight. Mutually exclusive with `selectedSlotId` by
+   * construction one level up (useFurnishSession's selectedTarget). */
+  selectedSurface?: FurnishSurface | null;
+  /** Invoked when a tap resolves to either an editable housing slot
+   * (furniture, marker, or empty-slot hit proxy) or a room surface
+   * (floor/left wall/right wall) while `furnishMode` is true. */
+  onSelectTarget?: (target: { kind: 'slot'; slotId: string } | { kind: 'surface'; surface: FurnishSurface }) => void;
 }
 
 // The wooden board frame fills ~1/(1+ratio) of the Goals-camera frame. ~0 so
@@ -124,6 +153,32 @@ function pickWeighted<T>(items: T[], weightOf: (item: T) => number): T | null {
     if (r < 0) return item;
   }
   return items[items.length - 1];
+}
+
+// --- Furnish Nest: safe-park (see the selectedSlotId effect below) --------
+// v1 rule: GliderMon "obscures" a slot if his tile falls inside that slot's
+// footprint. He can never actually be teleported onto an OCCUPIED floor slot
+// (getWalkableTiles excludes those), so in practice this only ever fires for
+// an EMPTY slot he happens to be idling on/near when the player selects it.
+// Known limitation (see the plan/CLAUDE.md): his sprite reads much larger on
+// screen than one tile, so an adjacent tile can still visually cover most of
+// the furniture -- ship this simple rule first and widen it only if that
+// proves visible on-device, rather than redesigning safe-park up front.
+function characterObscuresSlot(tile: { row: number; col: number }, slot: RoomSlotDef): boolean {
+  if (slot.kind !== 'floor') return false;
+  const w = slot.footprint?.w ?? 1;
+  const h = slot.footprint?.h ?? 1;
+  return tile.row >= slot.row && tile.row < slot.row + h && tile.col >= slot.col && tile.col < slot.col + w;
+}
+
+/** First authored, pure-idle (no interactions) character slot whose own
+ * tile doesn't overlap `avoidSlot`. Returns undefined on tiers with no
+ * authored character slots (0/2) or if every idle slot happens to overlap --
+ * callers leave GliderMon where he is in that case, per spec. */
+function findSafeFurnishIdleTile(tier: number, avoidSlot: RoomSlotDef): { row: number; col: number } | undefined {
+  const idleSlots = getCharacterSlotsForTier(tier).filter((s) => !s.interactions || s.interactions.length === 0);
+  const safe = idleSlots.find((s) => !characterObscuresSlot({ row: s.row, col: s.col }, avoidSlot));
+  return safe ? { row: safe.row, col: safe.col } : undefined;
 }
 
 const DEFAULT_CHARACTER_SCALE = 1;
@@ -242,6 +297,12 @@ export default function IsometricRoomView3D({
   boardTextures,
   boardInteractive = false,
   onBoardTap,
+  furnishMode = false,
+  draftFurnitureBySlot = null,
+  selectedSlotId = null,
+  draftSurfaces = null,
+  selectedSurface = null,
+  onSelectTarget,
 }: IsometricRoomView3DProps) {
   const resolvedMode: RoomCameraMode = cameraMode ?? (zoomedIn ? 'glidermon' : 'nest');
   const catalog = useCosmeticsStore((state) => state.catalog);
@@ -250,12 +311,24 @@ export default function IsometricRoomView3D({
   const activeFloorPatternId = useHousingStore((s) => s.activeFloorPatternId);
   const activeWallPatternIdLeft = useHousingStore((s) => s.activeWallPatternIdLeft);
   const activeWallPatternIdRight = useHousingStore((s) => s.activeWallPatternIdRight);
-  const activeFurnitureBySlot = useHousingStore((s) => s.activeFurnitureBySlot);
+  const persistedFurnitureBySlot = useHousingStore((s) => s.activeFurnitureBySlot);
   const characterTile = useHousingStore((s) => s.characterTile);
+  // While Furnish Nest is active, the room previews the draft session's
+  // placements instead of the persisted store value -- everything below that
+  // builds/rebuilds the furniture layer reads this, not the raw store value,
+  // so Cancel/Done semantics stay entirely in the caller (HudScreen).
+  const effectiveFurnitureBySlot = furnishMode && draftFurnitureBySlot ? draftFurnitureBySlot : persistedFurnitureBySlot;
+  // Same reasoning as effectiveFurnitureBySlot -- while furnishing, preview
+  // the draft surface ids; Cancel/Done semantics stay entirely in the
+  // caller (HudScreen/useFurnishSession), this component never writes them.
+  const effectiveFloorPatternId = furnishMode && draftSurfaces ? draftSurfaces.floor : activeFloorPatternId;
+  const effectiveWallPatternIdLeft = furnishMode && draftSurfaces ? draftSurfaces.leftWall : activeWallPatternIdLeft;
+  const effectiveWallPatternIdRight = furnishMode && draftSurfaces ? draftSurfaces.rightWall : activeWallPatternIdRight;
 
   const [isLoaded, setIsLoaded] = useState(false);
   const initializedRef = useRef(false);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const glRef = useRef<any>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const spineRef = useRef<SpineCharacterController | null>(null);
   const lastTimeRef = useRef<number | null>(null);
@@ -312,6 +385,20 @@ export default function IsometricRoomView3D({
   // `initializedRef` guard only ever runs once per mount.
   const furnitureGroupRef = useRef<THREE.Group | null>(null);
   const roomGroupRef = useRef<THREE.Group | null>(null);
+  // --- Furnish Nest: slot markers + tap-to-select --------------------------
+  const furnishModeRef = useRef(furnishMode);
+  const selectedSlotIdRef = useRef(selectedSlotId);
+  const onSelectTargetRef = useRef(onSelectTarget);
+  const furnishMarkerGroupRef = useRef<THREE.Group | null>(null);
+  const furnishMarkerHandleRef = useRef<FurnishSlotMarkersHandle | null>(null);
+  const previousSelectedSlotIdRef = useRef<string | null>(selectedSlotId);
+  // --- Furnish Nest: room-surface (floor/wall) selection highlight --------
+  const selectedSurfaceRef = useRef(selectedSurface);
+  const furnishHighlightMeshRef = useRef<THREE.Mesh | null>(null);
+  useEffect(() => { furnishModeRef.current = furnishMode; }, [furnishMode]);
+  useEffect(() => { selectedSlotIdRef.current = selectedSlotId; }, [selectedSlotId]);
+  useEffect(() => { selectedSurfaceRef.current = selectedSurface; }, [selectedSurface]);
+  useEffect(() => { onSelectTargetRef.current = onSelectTarget; }, [onSelectTarget]);
   const billboardQuaternionRef = useRef<THREE.Quaternion | null>(null);
   const roomDimsRef = useRef<{ width: number; height: number } | null>(null);
   // Reused by every furniture rebuild for front/behind renderOrder
@@ -367,14 +454,93 @@ export default function IsometricRoomView3D({
     const characterWorldPos = characterWorldPosRef.current;
     if (!group || !dims || !billboardQuaternion || !characterWorldPos) return;
     let cancelled = false;
-    populateFurnitureGroup(group, roomSizeTier, activeFurnitureBySlot, dims, billboardQuaternion, characterWorldPos).then((updaters) => {
+    populateFurnitureGroup(group, roomSizeTier, effectiveFurnitureBySlot, dims, billboardQuaternion, characterWorldPos).then((updaters) => {
       if (__DEV__) console.log(`[housing3D DEBUG] rebuilt furniture layer, ${updaters.length} updater(s)`);
       if (!cancelled) furnitureUpdatersRef.current = updaters;
     });
     return () => {
       cancelled = true;
     };
-  }, [activeFurnitureBySlot, roomSizeTier]);
+  }, [effectiveFurnitureBySlot, roomSizeTier]);
+
+  // Furnish Nest: full marker-group build/rebuild/teardown. Only when
+  // furnishMode toggles or the actual slot occupancy/tier changes -- a pure
+  // selection change is handled by the lighter effect right below instead,
+  // so re-selecting a slot never re-triggers this (or any Skia work; marker
+  // textures are cached by (label,state) regardless).
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+    if (furnishMarkerGroupRef.current) {
+      scene.remove(furnishMarkerGroupRef.current);
+      // Plain geometry/material dispose -- Material.dispose() does not
+      // cascade into disposing its .map, so the shared cached marker
+      // textures (furnishMarkerTexture.ts) are untouched.
+      clearGroup(furnishMarkerGroupRef.current);
+      furnishMarkerGroupRef.current = null;
+      furnishMarkerHandleRef.current = null;
+    }
+
+    const dims = roomDimsRef.current;
+    const billboardQuaternion = billboardQuaternionRef.current;
+    const characterWorldPos = characterWorldPosRef.current;
+    if (!furnishMode || !dims || !billboardQuaternion || !characterWorldPos) return;
+
+    const handle = buildFurnishSlotMarkers3D(
+      roomSizeTier,
+      effectiveFurnitureBySlot,
+      dims,
+      billboardQuaternion,
+      characterWorldPos,
+      selectedSlotIdRef.current
+    );
+    scene.add(handle.group);
+    assignLayer(handle.group, CONTENT_LAYER);
+    furnishMarkerGroupRef.current = handle.group;
+    furnishMarkerHandleRef.current = handle;
+    previousSelectedSlotIdRef.current = selectedSlotIdRef.current;
+  }, [furnishMode, effectiveFurnitureBySlot, roomSizeTier]);
+
+  // Furnish Nest: selection-only marker update. Swaps just the two affected
+  // markers' texture/scale/renderOrder in place -- no group rebuild.
+  useEffect(() => {
+    const handle = furnishMarkerHandleRef.current;
+    const characterWorldPos = characterWorldPosRef.current;
+    if (handle && characterWorldPos) {
+      updateFurnishMarkerSelection(
+        handle.markerMeshes,
+        effectiveFurnitureBySlot,
+        roomSizeTier,
+        characterWorldPos,
+        previousSelectedSlotIdRef.current,
+        selectedSlotId
+      );
+    }
+    previousSelectedSlotIdRef.current = selectedSlotId;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSlotId]);
+
+  // Furnish Nest: selected room-surface (floor/wall) highlight. At most one
+  // at a time -- selectedSurface and selectedSlotId are mutually exclusive
+  // by construction one level up (useFurnishSession's selectedTarget), so
+  // this never competes with the furniture-slot marker system above.
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+    if (furnishHighlightMeshRef.current) {
+      scene.remove(furnishHighlightMeshRef.current);
+      furnishHighlightMeshRef.current.geometry.dispose();
+      (furnishHighlightMeshRef.current.material as THREE.Material).dispose();
+      furnishHighlightMeshRef.current = null;
+    }
+    if (!furnishMode || !selectedSurface) return;
+    const bounds = roomBoundsRef.current;
+    const mesh = buildFurnishSurfaceHighlight3D(selectedSurface, bounds.halfWidth, bounds.halfDepth);
+    if (!mesh) return;
+    scene.add(mesh);
+    assignLayer(mesh, CONTENT_LAYER);
+    furnishHighlightMeshRef.current = mesh;
+  }, [furnishMode, selectedSurface, roomSizeTier]);
 
   // Moves Glidermon to his current tile whenever it changes after the
   // initial mount (the wander scheduler below writes to housingStore's
@@ -429,7 +595,7 @@ export default function IsometricRoomView3D({
       populateFurnitureGroup(
         furnitureGroup,
         roomSizeTier,
-        activeFurnitureBySlot,
+        effectiveFurnitureBySlot,
         dims,
         billboardQuaternion,
         charPos,
@@ -507,7 +673,7 @@ export default function IsometricRoomView3D({
     return () => {
       cancelled = true;
     };
-  }, [characterTile, roomSizeTier, activeFurnitureBySlot]);
+  }, [characterTile, roomSizeTier, effectiveFurnitureBySlot]);
 
   // Wander scheduler: at each WANDER_INTERVAL_RANGE_MS tick, if Glidermon
   // isn't mid-behavior or mid-interaction, pick a weighted-random wander
@@ -519,6 +685,12 @@ export default function IsometricRoomView3D({
     if (!isLoaded) return;
     // DEV: parked-interaction tuning mode disables wandering entirely.
     if (DEBUG_FORCE_INTERACTION) return;
+    // Furnish Nest: pause wandering for the duration of the editing session
+    // so GliderMon doesn't repeatedly walk over furniture the player is
+    // trying to place. Toggling furnishMode re-runs this effect (it's in the
+    // deps below), which cancels the pending timeout on the way out and
+    // restarts the chain fresh when it flips back to false.
+    if (furnishMode) return;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
     let cancelled = false;
 
@@ -599,7 +771,22 @@ export default function IsometricRoomView3D({
       cancelled = true;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [isLoaded]);
+  }, [isLoaded, furnishMode]);
+
+  // Furnish Nest: reactive safe-park. Entering Furnish alone moves nothing --
+  // only selecting a slot (or switching to a different one) checks whether
+  // GliderMon is currently standing in the way of THAT slot, and relocates
+  // him only then. Uses only the existing setCharacterTile action; doesn't
+  // touch the permanent wander system.
+  useEffect(() => {
+    if (!furnishMode || !selectedSlotId) return;
+    const dims = roomDimsRef.current;
+    if (!dims) return;
+    const slot = getSlotsForTier(roomSizeTier).find((s) => s.slotId === selectedSlotId);
+    if (!slot || !characterObscuresSlot(characterTile, slot)) return;
+    const safeTile = findSafeFurnishIdleTile(roomSizeTier, slot);
+    if (safeTile) useHousingStore.getState().setCharacterTile(safeTile);
+  }, [furnishMode, selectedSlotId, characterTile, roomSizeTier]);
 
   // DEV: when DEBUG_FORCE_INTERACTION is set, park Glidermon in that
   // interaction indefinitely with the tuning anchor/flip constants above --
@@ -779,6 +966,44 @@ export default function IsometricRoomView3D({
     camera.updateProjectionMatrix();
   }, []);
 
+  // Re-fits the renderer/camera if the underlying GL surface's OWN reported
+  // buffer size (gl.drawingBufferWidth/Height) ever actually changes.
+  // Confirmed on-device (Android emulator, expo-gl) that it does NOT: the
+  // native GL surface is sized once at creation and does not resize when
+  // this component's `width`/`height` props change afterward, however the
+  // RN layout box grows/shrinks around it -- the rendered content simply
+  // stays pinned at its original size within the new layout bounds, leaving
+  // an unpainted band. That's why HudScreen does not attempt to grow the
+  // room while Furnish Nest is active: doing so cleanly would require
+  // remounting this component (a new GL context, i.e. a brief full
+  // texture/Spine reload) rather than a live resize, which reads as a worse
+  // regression than not growing it. Kept as defensive dead-weight-free
+  // code (a cheap per-frame check, see `render` below) in case a future
+  // expo-gl/platform version does start resizing the surface live, or a
+  // genuine device rotation triggers it differently than a same-orientation
+  // layout change did in testing -- never rely on this alone to grow the
+  // room. Reads gl.drawingBufferWidth/Height (physical pixels, already
+  // scaled by device density) rather than the `width`/`height` props, which
+  // are React Native LOGICAL/dp units -- a different unit system than the
+  // GL surface's own size (handleContextCreate always sized the renderer
+  // from the GL context's own reported buffer dimensions, never from the RN
+  // layout props, and renderer.setPixelRatio(1) means the renderer treats
+  // whatever it's given as 1:1 physical pixels).
+  const syncGlSizeIfChanged = useCallback(() => {
+    const gl = glRef.current;
+    const renderer = rendererRef.current;
+    const camera = cameraRef.current;
+    if (!gl || !renderer || !camera) return;
+    const w = gl.drawingBufferWidth;
+    const h = gl.drawingBufferHeight;
+    if (w === glSizeRef.current.w && h === glSizeRef.current.h) return;
+    glSizeRef.current = { w, h };
+    gl.viewport(0, 0, w, h);
+    renderer.setSize(w, h, false);
+    renderer.setViewport(0, 0, w, h);
+    updateCameraForZoom(camera, isZoomedInRef.current);
+  }, [updateCameraForZoom]);
+
   // Rebuilds just the floor/wall shell when the store changes (buy/apply a
   // material or procedural pattern in the shop) -- skips the very first
   // render for the same reason as the furniture effect above. The shell
@@ -801,9 +1026,9 @@ export default function IsometricRoomView3D({
     const grid = {
       width: dims.width,
       height: dims.height,
-      floorPatternId: activeFloorPatternId,
-      wallPatternIdLeft: activeWallPatternIdLeft,
-      wallPatternIdRight: activeWallPatternIdRight,
+      floorPatternId: effectiveFloorPatternId,
+      wallPatternIdLeft: effectiveWallPatternIdLeft,
+      wallPatternIdRight: effectiveWallPatternIdRight,
     };
     buildRoomScene3D(grid).then((built) => {
       if (cancelled) return;
@@ -818,7 +1043,7 @@ export default function IsometricRoomView3D({
     return () => {
       cancelled = true;
     };
-  }, [activeFloorPatternId, activeWallPatternIdLeft, activeWallPatternIdRight, updateCameraForZoom]);
+  }, [effectiveFloorPatternId, effectiveWallPatternIdLeft, effectiveWallPatternIdRight, updateCameraForZoom]);
 
   useEffect(() => {
     isZoomedInRef.current = resolvedMode === 'glidermon';
@@ -873,6 +1098,61 @@ export default function IsometricRoomView3D({
     raycasterRef.current.setFromCamera(ndc, camera);
     const hits = raycasterRef.current.intersectObject(board.boardSurfaceMesh, false);
     if (hits.length > 0) onBoardTapRef.current();
+  }, []);
+
+  // Tap -> raycast, in priority order: (1) occupied furniture + empty-slot
+  // hit-proxies/markers (CONTENT_LAYER) -> a housing slot; (2) only if that
+  // came up empty, the room shell itself (ROOM_SHELL_LAYER, floor + 2 walls)
+  // -> a room surface; (3) otherwise nothing. This is what makes "tap a
+  // chair" resolve to Seating rather than the floor underneath it, and "tap
+  // the framed picture" resolve to its Wall Art slot rather than the wall
+  // behind it -- both fall out of pass (1) always running first, not from
+  // any bespoke per-case logic. Mirrors tryBoardTap's NDC/layer setup;
+  // only the target objects and hit-resolution differ.
+  const tryFurnishTap = useCallback((localX: number, localY: number) => {
+    if (!furnishModeRef.current || !onSelectTargetRef.current) return;
+    const camera = cameraRef.current;
+    if (!camera) return;
+    const { w, h } = layoutSizeRef.current;
+    if (w <= 0 || h <= 0) return;
+    const ndc = new THREE.Vector2((localX / w) * 2 - 1, -((localY / h) * 2 - 1));
+
+    // Pass 1: furniture (incl. wall art) + empty-slot markers/hit-proxies.
+    const furnitureGroup = furnitureGroupRef.current;
+    const markerGroup = furnishMarkerGroupRef.current;
+    if (furnitureGroup || markerGroup) {
+      raycasterRef.current.layers.set(CONTENT_LAYER);
+      raycasterRef.current.setFromCamera(ndc, camera);
+      const targets = [furnitureGroup, markerGroup].filter(Boolean) as THREE.Object3D[];
+      const hits = raycasterRef.current.intersectObjects(targets, true);
+      for (const hit of hits) {
+        let obj: THREE.Object3D | null = hit.object;
+        while (obj) {
+          const slotId = obj.userData?.slotId;
+          if (typeof slotId === 'string') {
+            onSelectTargetRef.current({ kind: 'slot', slotId });
+            return;
+          }
+          obj = obj.parent;
+        }
+      }
+    }
+
+    // Pass 2: the room shell itself (floor + 2 walls) -- only reached when
+    // pass 1 found nothing at all.
+    const roomGroup = roomGroupRef.current;
+    if (roomGroup) {
+      raycasterRef.current.layers.set(ROOM_SHELL_LAYER);
+      raycasterRef.current.setFromCamera(ndc, camera);
+      const shellHits = raycasterRef.current.intersectObject(roomGroup, true);
+      for (const hit of shellHits) {
+        const surface = hit.object.userData?.furnishSurface;
+        if (surface === 'floor' || surface === 'leftWall' || surface === 'rightWall') {
+          onSelectTargetRef.current({ kind: 'surface', surface });
+          return;
+        }
+      }
+    }
   }, []);
 
   // Plays a one-shot positive reaction whenever something outside this
@@ -943,6 +1223,7 @@ export default function IsometricRoomView3D({
     initializedRef.current = true;
 
     try {
+      glRef.current = gl;
       const w = gl.drawingBufferWidth;
       const h = gl.drawingBufferHeight;
       glSizeRef.current = { w, h };
@@ -971,9 +1252,9 @@ export default function IsometricRoomView3D({
       const grid = {
         width: dims.width,
         height: dims.height,
-        floorPatternId: activeFloorPatternId,
-        wallPatternIdLeft: activeWallPatternIdLeft,
-        wallPatternIdRight: activeWallPatternIdRight,
+        floorPatternId: effectiveFloorPatternId,
+        wallPatternIdLeft: effectiveWallPatternIdLeft,
+        wallPatternIdRight: effectiveWallPatternIdRight,
       };
       const built = await buildRoomScene3D(grid);
       scene.add(built.group);
@@ -1031,7 +1312,7 @@ export default function IsometricRoomView3D({
       furnitureUpdatersRef.current = await populateFurnitureGroup(
         furnitureGroup,
         roomSizeTier,
-        activeFurnitureBySlot,
+        effectiveFurnitureBySlot,
         dims,
         billboardQuaternion,
         characterWorldPos
@@ -1124,6 +1405,8 @@ export default function IsometricRoomView3D({
 
       const render = () => {
         try {
+          syncGlSizeIfChanged();
+
           const now = performance.now();
           const last = lastTimeRef.current ?? now;
           const deltaSeconds = Math.min((now - last) / 1000, 1 / 15);
@@ -1219,15 +1502,16 @@ export default function IsometricRoomView3D({
       setIsLoaded(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomSizeTier, activeFloorPatternId, activeWallPatternIdLeft, activeWallPatternIdRight, activeFurnitureBySlot, catalog]);
+  }, [roomSizeTier, effectiveFloorPatternId, effectiveWallPatternIdLeft, effectiveWallPatternIdRight, effectiveFurnitureBySlot, catalog]);
 
   return (
     <View
       style={{ width, height, backgroundColor: 'transparent' }}
-      // Tap detection for the in-world Adventure Board (Goals + not-planned).
-      // A quick tap that barely moves raycasts the board surface; anything
-      // larger is left alone (no room drag today, but future-proof).
-      onStartShouldSetResponder={() => boardInteractiveRef.current}
+      // Tap detection for the in-world Adventure Board (Goals + not-planned)
+      // and, while Furnish Nest is active, for furniture/slot-marker
+      // selection. A quick tap that barely moves raycasts; anything larger
+      // is left alone (no room drag today, but future-proof).
+      onStartShouldSetResponder={() => boardInteractiveRef.current || furnishModeRef.current}
       onResponderGrant={(e) => {
         tapStartRef.current = {
           x: e.nativeEvent.locationX,
@@ -1242,7 +1526,11 @@ export default function IsometricRoomView3D({
         const dx = e.nativeEvent.locationX - s.x;
         const dy = e.nativeEvent.locationY - s.y;
         if (Math.hypot(dx, dy) > 12 || Date.now() - s.t > 600) return;
-        tryBoardTap(e.nativeEvent.locationX, e.nativeEvent.locationY);
+        if (furnishModeRef.current) {
+          tryFurnishTap(e.nativeEvent.locationX, e.nativeEvent.locationY);
+        } else {
+          tryBoardTap(e.nativeEvent.locationX, e.nativeEvent.locationY);
+        }
       }}
     >
       <GLView style={{ flex: 1 }} onContextCreate={handleContextCreate} />

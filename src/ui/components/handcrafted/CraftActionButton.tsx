@@ -18,6 +18,12 @@ type Props = {
   /** "lg" gives a taller button with a larger label -- for a screen's single
    * primary CTA (e.g. the check-in flow). Default "md". */
   size?: "md" | "lg";
+  /** Visually subdues the button (reduced opacity) WITHOUT disabling
+   * interaction -- distinct from `disabled`, which also blocks onPress and
+   * swaps to a flat kraft-tan fill. Use this for "nothing to confirm yet,
+   * but still tappable" states (e.g. a toolbar's primary action before any
+   * change has been made). */
+  dim?: boolean;
   style?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
 };
@@ -32,7 +38,7 @@ const FILL_BY_TONE: Record<CraftActionButtonTone, string> = {
 // press-scale feedback -- originally built inline for CraftCelebrationModal,
 // extracted here so any screen needing a "real button" (not a tab) gets the
 // same hand-made feel instead of a flat digital button.
-export default function CraftActionButton({ label, caption, icon, onPress, disabled, tone = "gold", size = "md", style, accessibilityLabel }: Props) {
+export default function CraftActionButton({ label, caption, icon, onPress, disabled, tone = "gold", size = "md", dim, style, accessibilityLabel }: Props) {
   const lg = size === "lg";
   const pressScale = useRef(new Animated.Value(1)).current;
   const pressTranslateY = useRef(new Animated.Value(0)).current;
@@ -62,7 +68,7 @@ export default function CraftActionButton({ label, caption, icon, onPress, disab
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ disabled: !!disabled }}
       hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-      style={[{ alignSelf: "stretch" }, style]}
+      style={[{ alignSelf: "stretch" }, dim && !disabled && styles.dim, style]}
     >
       <Animated.View
         style={[
@@ -110,6 +116,9 @@ const styles = {
     opacity: 0.6,
     shadowOpacity: 0,
     elevation: 0,
+  },
+  dim: {
+    opacity: 0.55,
   },
   grain: {
     position: "absolute" as const,

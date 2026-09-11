@@ -176,6 +176,13 @@ export interface FurnitureInteractionDef {
 export interface FurnitureVariant {
   /** Variant identifier */
   id: string;
+  /**
+   * Player-facing name -- the only name ever shown in Shop/Furnish/etc.
+   * `id`/`skin` are internal asset-pipeline identifiers (e.g. "TableLamp_On")
+   * and must never leak into player-visible UI; always set this explicitly
+   * rather than deriving one from `id`/`skin` at render time.
+   */
+  displayName: string;
   /** Acorn cost to unlock this variant in the shop. */
   cost: number;
   /** Optional skin override for this variant */

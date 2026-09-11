@@ -45,6 +45,7 @@ import { initializeCosmeticSystem } from "./src/game/cosmetics/cosmeticDefinitio
 import { useOutfitStore } from "./src/data/stores/outfitStore";
 import { POSE_DEFINITIONS } from "./src/data/poses/poseDefinitions";
 import { useHealthKit } from "./src/data/hooks/useHealthKit";
+import { useUiChromeStore } from "./src/data/stores/uiChromeStore";
 // import { migrateEquippedCosmeticsToOutfit, syncOutfitToCosmeticsStore } from "./src/data/utils/outfitMigration.ts";
 
 // Arcade is deprecated and deliberately excluded from TABS (not just hidden
@@ -144,6 +145,9 @@ function parseGlidermonUrl(url: string): { tab: Tab; shopId?: ShopId } | { strea
 export default function App() {
   // ---- theme ----
   const { colors } = useTheme();
+  // Hidden while Furnish Nest (or any future full-screen editor mode) is
+  // active -- see src/data/stores/uiChromeStore.ts.
+  const hideGlobalNav = useUiChromeStore((s) => s.hideGlobalNav);
 
   // Filter out noisy EXGL warnings
   useEffect(() => {
@@ -360,18 +364,25 @@ export default function App() {
       </View>
 
       {/* bottom nav: one continuous crafted shelf, matching the Home/Equip
-          handmade material system -- see src/ui/components/handcrafted/. */}
-      <CraftBottomNav>
-        {NAV_TABS.map((t) => (
-          <CraftNavItem
-            key={t}
-            icon={NAV_ICONS[t]}
-            label={NAV_LABELS[t]}
-            active={tab === t}
-            onPress={() => setTab(t)}
-          />
-        ))}
-      </CraftBottomNav>
+          handmade material system -- see src/ui/components/handcrafted/.
+          Hidden while a full-screen editor mode (e.g. Furnish Nest) is
+          active -- its own explicit Cancel/Done controls are the exit
+          mechanism instead, and hiding this both gives that editor more
+          vertical space and prevents accidentally navigating away with
+          unsaved changes. */}
+      {!hideGlobalNav && (
+        <CraftBottomNav>
+          {NAV_TABS.map((t) => (
+            <CraftNavItem
+              key={t}
+              icon={NAV_ICONS[t]}
+              label={NAV_LABELS[t]}
+              active={tab === t}
+              onPress={() => setTab(t)}
+            />
+          ))}
+        </CraftBottomNav>
+      )}
 
       {/* global overlays */}
       <ToastHost />

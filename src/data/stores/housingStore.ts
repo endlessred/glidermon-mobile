@@ -6,11 +6,52 @@ import { FloorSetName, WallSetName } from "../../game/housing/types/RoomConfig";
 import { DEFAULT_FLOOR_PATTERN_ID, DEFAULT_WALL_PATTERN_ID } from "../../game/housing/types/proceduralPatternCatalog";
 import {
   getNestThemeById,
+  getUsableNestThemes,
+  getNestThemeWallPieceById,
+  getNestThemeFloorPieceById,
   nestThemeWallLeftId,
   nestThemeWallRightId,
   nestThemeFloorId,
 } from "../../game/housing/types/nestThemeCatalog";
 import { isPremiumEntitled } from "../../game/housing/premiumEntitlement";
+
+// Shared "is this id allowed" gate for surface setters -- a Nest Theme piece
+// id (e.g. "nestTheme:mossy_grove:floor") is gated by its theme's own
+// premiumOnly/entitlement (the same check applyNestTheme already uses),
+// never by unlockedFloorPatternIds/unlockedWallPatternIds -- those two
+// arrays only ever hold plain proceduralPatternCatalog.ts ids, by design
+// (see nestThemeCatalog.ts's id-namespace comment). A plain catalog id falls
+// back to the existing unlocked-array check.
+function isFloorPatternIdUsable(id: string, unlockedFloorPatternIds: string[]): boolean {
+  const piece = getNestThemeFloorPieceById(id);
+  if (piece) {
+    const theme = getNestThemeById(piece.themeId);
+    return !!theme && (!theme.premiumOnly || isPremiumEntitled());
+  }
+  return unlockedFloorPatternIds.includes(id);
+}
+function isWallPatternIdUsable(id: string, unlockedWallPatternIds: string[]): boolean {
+  const piece = getNestThemeWallPieceById(id);
+  if (piece) {
+    const theme = getNestThemeById(piece.themeId);
+    return !!theme && (!theme.premiumOnly || isPremiumEntitled());
+  }
+  return unlockedWallPatternIds.includes(id);
+}
+// If floor+left+right exactly match one usable theme's three pieces, that
+// theme's id is the correct activeNestThemeId; otherwise the configuration
+// is genuinely mixed and it should be null. Computed fresh rather than
+// trusted from the caller, since a piecemeal edit can accidentally
+// reconstruct a theme (or drift away from one) without saying so explicitly.
+function matchingNestThemeId(floorPatternId: string, wallPatternIdLeft: string, wallPatternIdRight: string): string | null {
+  const theme = getUsableNestThemes().find(
+    (t) =>
+      nestThemeFloorId(t.id) === floorPatternId &&
+      nestThemeWallLeftId(t.id) === wallPatternIdLeft &&
+      nestThemeWallRightId(t.id) === wallPatternIdRight
+  );
+  return theme?.id ?? null;
+}
 
 export interface RoomSizeTier {
   width: number;
@@ -98,11 +139,30 @@ type HousingState = {
   unlockWallPattern: (id: string) => void;
   setActiveFloorPattern: (id: string) => void;
   setActiveWallPattern: (id: string) => void;
+  /** Sets just the left or right wall, independently -- unlike
+   *  setActiveWallPattern (mirrors both), this is what lets a player pick a
+   *  different look per side. Accepts either a plain
+   *  proceduralPatternCatalog.ts id (gated by unlockedWallPatternIds) or a
+   *  Nest Theme wall-piece id (gated by that theme's own entitlement).
+   *  Clears activeNestThemeId to null -- see setActiveNestSurfaces below for
+   *  the atomic, theme-detecting alternative Furnish Nest actually commits
+   *  through. */
+  setActiveWallPatternLeft: (id: string) => void;
+  setActiveWallPatternRight: (id: string) => void;
   /** Equips a complete Nest Theme's left wall, right wall, and floor pieces
    *  together (see nestThemeCatalog.ts). No-ops silently if the theme id is
    *  unknown, or if it's premiumOnly and the player isn't entitled -- the
    *  renderer never does its own entitlement check, so this is the one gate. */
   applyNestTheme: (themeId: string) => void;
+  /** Atomically commits a full room-shell configuration (floor + both walls)
+   *  in one `set()` -- the single write Furnish Nest's Done uses, instead of
+   *  three independent setter calls (one store notification/shell-rebuild
+   *  instead of up to three). No-ops entirely (nothing partially applied) if
+   *  any of the three ids fails its usability gate. Derives
+   *  activeNestThemeId itself: set to a theme's id only if all three
+   *  incoming ids exactly match that theme's three pieces, else null for a
+   *  genuinely mixed configuration -- never just nulled unconditionally. */
+  setActiveNestSurfaces: (surfaces: { floorPatternId: string; wallPatternIdLeft: string; wallPatternIdRight: string }) => void;
   placeFurniture: (placement: FurniturePlacement) => void;
   removeFurniture: (id: string) => void;
   unlockFurniture: (id: string) => void;
@@ -182,7 +242,7 @@ export const useHousingStore = create<HousingState>()(
       },
 
       setActiveFloorPattern: (id) => {
-        if (!get().unlockedFloorPatternIds.includes(id)) return;
+        if (!isFloorPatternIdUsable(id, get().unlockedFloorPatternIds)) return;
         set({ activeFloorPatternId: id });
       },
 
@@ -194,6 +254,16 @@ export const useHousingStore = create<HousingState>()(
         set({ activeWallPatternId: id, activeWallPatternIdLeft: id, activeWallPatternIdRight: id });
       },
 
+      setActiveWallPatternLeft: (id) => {
+        if (!isWallPatternIdUsable(id, get().unlockedWallPatternIds)) return;
+        set({ activeWallPatternIdLeft: id, activeNestThemeId: null });
+      },
+
+      setActiveWallPatternRight: (id) => {
+        if (!isWallPatternIdUsable(id, get().unlockedWallPatternIds)) return;
+        set({ activeWallPatternIdRight: id, activeNestThemeId: null });
+      },
+
       applyNestTheme: (themeId) => {
         const theme = getNestThemeById(themeId);
         if (!theme) return;
@@ -203,6 +273,23 @@ export const useHousingStore = create<HousingState>()(
           activeWallPatternIdRight: nestThemeWallRightId(theme.id),
           activeFloorPatternId: nestThemeFloorId(theme.id),
           activeNestThemeId: theme.id,
+        });
+      },
+
+      setActiveNestSurfaces: ({ floorPatternId, wallPatternIdLeft, wallPatternIdRight }) => {
+        const { unlockedFloorPatternIds, unlockedWallPatternIds } = get();
+        if (
+          !isFloorPatternIdUsable(floorPatternId, unlockedFloorPatternIds) ||
+          !isWallPatternIdUsable(wallPatternIdLeft, unlockedWallPatternIds) ||
+          !isWallPatternIdUsable(wallPatternIdRight, unlockedWallPatternIds)
+        ) {
+          return;
+        }
+        set({
+          activeFloorPatternId: floorPatternId,
+          activeWallPatternIdLeft: wallPatternIdLeft,
+          activeWallPatternIdRight: wallPatternIdRight,
+          activeNestThemeId: matchingNestThemeId(floorPatternId, wallPatternIdLeft, wallPatternIdRight),
         });
       },
 

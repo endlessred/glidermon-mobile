@@ -36,12 +36,12 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
     },
     variants: [
       {
-        id: "wood_chair_green", cost: 150, skin: "WoodChair_Green", restPoseAsset: "1x1_WoodChair_Front_Green",
+        id: "wood_chair_green", displayName: "Green Wood Chair", cost: 150, skin: "WoodChair_Green", restPoseAsset: "1x1_WoodChair_Front_Green",
         rarity: "common", tags: ["cozy", "casual", "cheerful"],
         shopStock: [{ store: "luma", weight: 6 }, { store: "sable", weight: 4 }],
       },
       {
-        id: "wood_chair_brown", cost: 150, skin: "WoodChair_Brown", restPoseAsset: "1x1_WoodChair_Front_Brown",
+        id: "wood_chair_brown", displayName: "Brown Wood Chair", cost: 150, skin: "WoodChair_Brown", restPoseAsset: "1x1_WoodChair_Front_Brown",
         rarity: "common", tags: ["casual"],
         shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
       },
@@ -63,6 +63,7 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
     variants: [
       {
         id: "bed_single_wood",
+        displayName: "Wood Single Bed",
         cost: 260,
         skin: "BedSingle_Wood",
         restPoseAsset: "SingleBed1",
@@ -72,6 +73,7 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
       },
       {
         id: "bed_single_pink",
+        displayName: "Pink Single Bed",
         cost: 260,
         skin: "BedSingle_Pink",
         restPoseAsset: "SingleBed3",
@@ -92,6 +94,7 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
     variants: [
       {
         id: "storage_cabinet",
+        displayName: "Wood Cabinet",
         cost: 180,
         skin: "Cabinet_Wood",
         restPoseAsset: "1x1_CabinetteBottomOverDoors",
@@ -102,6 +105,7 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
       },
       {
         id: "storage_chest",
+        displayName: "Mysterious Chest",
         cost: 380,
         skin: "Chest_Animated",
         restPoseAsset: "Animation_Chest_Layer1",
@@ -126,12 +130,12 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
     occlusion: "none",
     variants: [
       {
-        id: "rug_brown", cost: 130, skin: "SquareCarpet_Brown", restPoseAsset: "1x1_SquareCarpet_Brown",
+        id: "rug_brown", displayName: "Brown Square Rug", cost: 130, skin: "SquareCarpet_Brown", restPoseAsset: "1x1_SquareCarpet_Brown",
         rarity: "common", tags: ["casual"],
         shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
       },
       {
-        id: "rug_blue", cost: 130, skin: "SquareCarpet_Blue", restPoseAsset: "1x1_SquareCarpet_Blue",
+        id: "rug_blue", displayName: "Blue Square Rug", cost: 130, skin: "SquareCarpet_Blue", restPoseAsset: "1x1_SquareCarpet_Blue",
         rarity: "common", tags: ["calm"],
         shopStock: [{ store: "luma", weight: 6 }, { store: "sable", weight: 4 }],
       },
@@ -147,12 +151,12 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
     occlusion: "none",
     variants: [
       {
-        id: "wall_painting", cost: 140, skin: "Painting1Frame1_Wood", restPoseAsset: "WallDecor_Painting1Frame1_Wood",
+        id: "wall_painting", displayName: "Framed Painting", cost: 140, skin: "Painting1Frame1_Wood", restPoseAsset: "WallDecor_Painting1Frame1_Wood",
         rarity: "common", tags: ["artsy"],
         shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
       },
       {
-        id: "wall_clock", cost: 140, skin: "RoundClock_Brown", restPoseAsset: "WallDecor_RoundClock_Brown",
+        id: "wall_clock", displayName: "Round Clock", cost: 140, skin: "RoundClock_Brown", restPoseAsset: "WallDecor_RoundClock_Brown",
         rarity: "common", tags: ["casual"],
         shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
       },
@@ -168,12 +172,12 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
     occlusion: "none",
     variants: [
       {
-        id: "table_square", cost: 160, skin: "TableSquareWood_Wood", restPoseAsset: "1x1_TableSquareWood_Wood",
+        id: "table_square", displayName: "Square Wood Table", cost: 160, skin: "TableSquareWood_Wood", restPoseAsset: "1x1_TableSquareWood_Wood",
         rarity: "common", tags: ["casual"],
         shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
       },
       {
-        id: "table_round", cost: 160, skin: "TableRound_Wood", restPoseAsset: "1x1_TableRound_Wood",
+        id: "table_round", displayName: "Round Wood Table", cost: 160, skin: "TableRound_Wood", restPoseAsset: "1x1_TableRound_Wood",
         rarity: "common", tags: ["casual"],
         shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
       },
@@ -189,12 +193,12 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
     occlusion: "none",
     variants: [
       {
-        id: "lamp_table", cost: 140, skin: "TableLamp_On", restPoseAsset: "1x1_TableLamp_On",
+        id: "lamp_table", displayName: "Table Lamp", cost: 140, skin: "TableLamp_On", restPoseAsset: "1x1_TableLamp_On",
         rarity: "common", tags: ["cozy", "cheerful"],
         shopStock: [{ store: "luma", weight: 6 }, { store: "sable", weight: 4 }],
       },
       {
-        id: "lamp_classic", cost: 140, skin: "ClassicLamp_On", restPoseAsset: "1x1_ClassicLamp_On",
+        id: "lamp_classic", displayName: "Classic Floor Lamp", cost: 140, skin: "ClassicLamp_On", restPoseAsset: "1x1_ClassicLamp_On",
         rarity: "common", tags: ["moody"],
         shopStock: [{ store: "sable", weight: 6 }, { store: "luma", weight: 4 }],
       },
@@ -214,12 +218,12 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
     interaction: { behavior: "dance", animation: "dance", interactionSide: "front" },
     variants: [
       {
-        id: "hobby_piano", cost: 200, skin: "Piano_Brown", restPoseAsset: "1x1_Piano_Brown",
+        id: "hobby_piano", displayName: "Piano", cost: 200, skin: "Piano_Brown", restPoseAsset: "1x1_Piano_Brown",
         rarity: "uncommon", tags: ["artsy", "moody"],
         shopStock: [{ store: "sable", weight: 6 }, { store: "luma", weight: 4 }],
       },
       {
-        id: "hobby_record_player", cost: 200, skin: "RecordPlayerOff_Brown", restPoseAsset: "1x1_RecordPlayerOff_Brown",
+        id: "hobby_record_player", displayName: "Record Player", cost: 200, skin: "RecordPlayerOff_Brown", restPoseAsset: "1x1_RecordPlayerOff_Brown",
         rarity: "uncommon", tags: ["fun", "nostalgic", "cheerful"],
         shopStock: [{ store: "luma", weight: 6 }, { store: "sable", weight: 4 }],
       },
@@ -239,6 +243,7 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
     variants: [
       {
         id: "feature_fireplace",
+        displayName: "Fireplace",
         cost: 220,
         skin: "Fireplace_Brown",
         restPoseAsset: "1x1_FireplaceUnder_Brown",
@@ -252,6 +257,7 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
       },
       {
         id: "feature_campfire",
+        displayName: "Campfire",
         cost: 380,
         skin: "Campfire_Animated",
         restPoseAsset: "Animation_Campfire_Layer1",
@@ -299,7 +305,7 @@ export interface FurnitureShopItem {
   shopStock?: ShopStockConfig[];
 }
 
-const SLOT_TYPE_LABELS: Record<SlotType, string> = {
+export const SLOT_TYPE_LABELS: Record<SlotType, string> = {
   bed: 'Bed',
   seating: 'Seating',
   storage: 'Storage',
@@ -311,13 +317,40 @@ const SLOT_TYPE_LABELS: Record<SlotType, string> = {
   feature: 'Feature',
 };
 
+// One emoji per slot type -- shared by the Furnish Nest 3D slot markers and
+// the furniture inventory panel header, so the two surfaces never drift.
+export const SLOT_TYPE_ICONS: Record<SlotType, string> = {
+  bed: '🛏',
+  seating: '🪑',
+  storage: '🗄',
+  rug: '🧺',
+  wallDecor: '🖼',
+  tableDesk: '🪵',
+  lighting: '💡',
+  hobby: '🎵',
+  feature: '🔥',
+};
+
+// Inverse of SLOT_TYPE_FOR_FURNITURE_ID, returning every catalog furnitureId
+// compatible with a given slot type. Always length 1 today (the catalog
+// happens to have exactly one furnitureId per SlotType), but deliberately
+// plural -- Furnish Nest's inventory filtering iterates every id this
+// returns rather than assuming a single match, so adding a second catalog
+// entry for an existing slot type (e.g. a second seating set) needs no
+// change on the Furnish side.
+export function getFurnitureIdsForSlotType(type: SlotType): string[] {
+  return Object.keys(SLOT_TYPE_FOR_FURNITURE_ID).filter(
+    (furnitureId) => SLOT_TYPE_FOR_FURNITURE_ID[furnitureId] === type
+  );
+}
+
 export const FURNITURE_SHOP_CATALOG: FurnitureShopItem[] = Object.values(FURNITURE_CATALOG).flatMap((def) =>
   def.variants.map((variant) => ({
     id: `${def.id}_${variant.id}`,
     furnitureId: def.id,
     variantId: variant.id,
     slotType: SLOT_TYPE_FOR_FURNITURE_ID[def.id],
-    name: `${SLOT_TYPE_LABELS[SLOT_TYPE_FOR_FURNITURE_ID[def.id]]} – ${variant.skin ?? variant.id}`,
+    name: `${SLOT_TYPE_LABELS[SLOT_TYPE_FOR_FURNITURE_ID[def.id]]} – ${variant.displayName}`,
     cost: variant.cost,
     previewAsset: variant.restPoseAsset ?? variant.layers?.[0]?.assetName ?? '',
     rarity: variant.rarity,

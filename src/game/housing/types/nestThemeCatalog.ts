@@ -17,6 +17,8 @@
 //                         (one image mapped once across the whole surface,
 //                         cropped rather than stretched for smaller room
 //                         tiers -- see sceneBuilder3D.ts).
+import { isPremiumEntitled } from '../premiumEntitlement';
+
 export type WallRenderMode = 'repeat' | 'fullWall';
 export type FloorRenderMode = 'tile' | 'fullFloor';
 
@@ -101,6 +103,13 @@ const themeById = new Map(NEST_THEME_CATALOG.map((t) => [t.id, t]));
 
 export function getNestThemeById(id: string): NestThemeDefinition | undefined {
   return themeById.get(id);
+}
+
+// The one "which themes can Furnish Nest show/apply" gate -- v1 shows only
+// usable themes (no locked-theme upsell UI yet, per the housing plan), so
+// this is a plain filter rather than a per-theme ownership list.
+export function getUsableNestThemes(): NestThemeDefinition[] {
+  return NEST_THEME_CATALOG.filter((t) => !t.premiumOnly || isPremiumEntitled());
 }
 
 // Deterministic per-surface ids so housingStore's existing single-id

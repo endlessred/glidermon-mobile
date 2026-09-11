@@ -251,6 +251,9 @@ export async function buildRoomScene3D(grid: Room3DConfig): Promise<Built3DRoom>
       const tile = new THREE.Mesh(floorGeometry, floorFaceMaterials);
       const { x, z } = gridToWorld(row, col, grid);
       tile.position.set(x, -FLOOR_THICKNESS / 2, z);
+      // Read by Furnish Nest's shell raycast fallback (IsometricRoomView3D.tsx)
+      // -- never rendered, no visible debug geometry.
+      tile.userData.furnishSurface = 'floor';
       group.add(tile);
     }
   }
@@ -275,6 +278,8 @@ export async function buildRoomScene3D(grid: Room3DConfig): Promise<Built3DRoom>
     buildFaceMaterials(edgeMaterial, BOX_FACE.PZ, wallMaterialRight)
   );
   backWallX.position.set(0, WALL_HEIGHT / 2, -halfDepth - WALL_THICKNESS / 2);
+  // Visible RIGHT screen wall -- see Furnish Nest's shell raycast fallback.
+  backWallX.userData.furnishSurface = 'rightWall';
   group.add(backWallX);
 
   // Back wall along the Z axis, at the far X edge -- one box spanning the
@@ -287,6 +292,8 @@ export async function buildRoomScene3D(grid: Room3DConfig): Promise<Built3DRoom>
     buildFaceMaterials(edgeMaterial, BOX_FACE.PX, wallMaterialLeft)
   );
   backWallZ.position.set(-halfWidth - WALL_THICKNESS / 2, WALL_HEIGHT / 2, 0);
+  // Visible LEFT screen wall -- see Furnish Nest's shell raycast fallback.
+  backWallZ.userData.furnishSurface = 'leftWall';
   group.add(backWallZ);
 
   return { group, halfWidth, halfDepth, wallHeight: WALL_HEIGHT };

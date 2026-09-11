@@ -56,6 +56,47 @@ export interface BuiltFurnitureBillboard {
   update?: (dt: number) => void;
 }
 
+/**
+ * Given a RoomSlotDef, resolves where it sits in world space and how it's
+ * oriented -- wall slots snap to their wall plane (mirrored/rotated per
+ * which wall run), floor slots sit at their grid tile and share the room's
+ * one billboard-facing quaternion. Extracted from buildFurnitureSlotBillboard
+ * so the Furnish Nest slot-marker renderer (furnishSlotMarkers3D.ts) can
+ * position markers/hit-proxies identically without duplicating the
+ * wall-mount math.
+ */
+export function resolveSlotWorldPlacement(
+  slot: RoomSlotDef,
+  dims: RoomDims3D,
+  billboardQuaternion: THREE.Quaternion
+): { position: { x: number; y: number; z: number }; quaternion: THREE.Quaternion; mirrorX: boolean } {
+  const { halfWidth, halfDepth } = roomHalfExtents(dims);
+  // The 'leftBack' wall renders on-screen right under this fixed camera --
+  // its art comes in backwards relative to that wall (confirmed by on-device
+  // inspection), so it's mirrored here rather than re-exporting the asset.
+  const mirrorX = slot.kind === 'wall' && slot.wall === 'leftBack';
+  let position: { x: number; y: number; z: number };
+  if (slot.kind === 'wall') {
+    if (slot.wall === 'leftBack') {
+      const { x } = gridToWorld(slot.row, slot.col, dims);
+      position = { x, y: WALL_DECOR_HEIGHT, z: -halfDepth + WALL_FLUSH_INSET };
+    } else {
+      const { z } = gridToWorld(slot.row, slot.col, dims);
+      position = { x: -halfWidth + WALL_FLUSH_INSET, y: WALL_DECOR_HEIGHT, z };
+    }
+  } else {
+    const { x, z } = gridToWorld(slot.row, slot.col, dims, slot.footprint);
+    position = { x, y: 0, z };
+  }
+  const quaternion =
+    slot.kind === 'wall'
+      ? slot.wall === 'leftBack'
+        ? LEFT_BACK_WALL_QUATERNION
+        : RIGHT_BACK_WALL_QUATERNION
+      : billboardQuaternion;
+  return { position, quaternion, mirrorX };
+}
+
 // Furniture (depthTest:true) can never correctly depth-sort against the
 // character (deliberately depthTest:false/depthWrite:false in SpineThree.ts,
 // so room geometry never clips it -- see that file for why). Ordering
@@ -63,8 +104,11 @@ export interface BuiltFurnitureBillboard {
 // well outside the character's own per-slot renderOrder range (small
 // integers, roughly 0..30) so furniture always loses to a "front" character
 // slot and always wins against a "behind" one, regardless of skeleton size.
-const RENDER_ORDER_BEHIND_CHARACTER = -1;
-const RENDER_ORDER_IN_FRONT_OF_CHARACTER = 1000;
+// Exported so furnishSlotMarkers3D.ts can classify markers into the exact
+// same front/behind bands furniture already uses for the same slot, instead
+// of escaping to a separate always-on-top renderOrder.
+export const RENDER_ORDER_BEHIND_CHARACTER = -1;
+export const RENDER_ORDER_IN_FRONT_OF_CHARACTER = 1000;
 
 export async function buildFurnitureSlotBillboard(
   slot: RoomSlotDef,
@@ -93,24 +137,7 @@ export async function buildFurnitureSlotBillboard(
   // Slot world position, computed up front so it can drive both the
   // in-front/behind-the-character renderOrder classification below and the
   // final group placement at the end of this function.
-  const { halfWidth, halfDepth } = roomHalfExtents(dims);
-  let slotWorldPos: { x: number; y: number; z: number };
-  // The 'leftBack' wall renders on-screen right under this fixed camera --
-  // its art comes in backwards relative to that wall (confirmed by on-device
-  // inspection), so it's mirrored here rather than re-exporting the asset.
-  const mirrorX = slot.kind === 'wall' && slot.wall === 'leftBack';
-  if (slot.kind === 'wall') {
-    if (slot.wall === 'leftBack') {
-      const { x } = gridToWorld(slot.row, slot.col, dims);
-      slotWorldPos = { x, y: WALL_DECOR_HEIGHT, z: -halfDepth + WALL_FLUSH_INSET };
-    } else {
-      const { z } = gridToWorld(slot.row, slot.col, dims);
-      slotWorldPos = { x: -halfWidth + WALL_FLUSH_INSET, y: WALL_DECOR_HEIGHT, z };
-    }
-  } else {
-    const { x, z } = gridToWorld(slot.row, slot.col, dims, slot.footprint);
-    slotWorldPos = { x, y: 0, z };
-  }
+  const { position: slotWorldPos, mirrorX } = resolveSlotWorldPlacement(slot, dims, billboardQuaternion);
 
   // The camera is a fixed isometric orthographic camera looking along
   // (-1,-1,-1) (see CAMERA_OFFSET in IsometricRoomView3D.tsx), so "distance
@@ -241,6 +268,9 @@ export async function buildFurnitureSlotBillboard(
   } else {
     group.quaternion.copy(billboardQuaternion);
   }
+  // Lets Furnish Nest's raycast (furnishSlotMarkers3D.ts / IsometricRoomView3D.tsx)
+  // resolve a tap on already-placed furniture back to its housing slot.
+  group.userData.slotId = slot.slotId;
 
   const update = updaters.length > 0 ? (dt: number) => updaters.forEach((u) => u(dt)) : undefined;
   return { group, update };
