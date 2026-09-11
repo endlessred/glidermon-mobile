@@ -10,9 +10,24 @@ import * as THREE from 'three';
 import { makeSpritePlane } from './tileSprite';
 import { loadFurnitureTexture } from '../assets/quadTextures';
 import { getFurnitureDef } from '../types/furnitureCatalog';
-import { gridToWorld, roomHalfExtents, RoomDims3D, TILE_SIZE } from './grid3D';
+import { gridToWorld, RoomDims3D, TILE_SIZE } from './grid3D';
 import { WALL_HEIGHT } from './sceneBuilder3D';
 import { RoomSlotDef } from '../types/roomSlots';
+import { buildStaticFurnitureSlotBillboard } from './staticFurnitureBillboard3D';
+import {
+  resolveSlotWorldPlacement,
+  RENDER_ORDER_BEHIND_CHARACTER,
+  RENDER_ORDER_IN_FRONT_OF_CHARACTER,
+  BuiltFurnitureBillboard,
+  WALL_DECOR_HEIGHT,
+} from './slotWorldPlacement3D';
+
+// Re-exported for existing consumers (furnishSlotMarkers3D.ts) -- the actual
+// definitions live in slotWorldPlacement3D.ts so staticFurnitureBillboard3D.ts
+// can depend on them without importing this file (this file already imports
+// *it*, for the staticAtlas delegation below).
+export { resolveSlotWorldPlacement, RENDER_ORDER_BEHIND_CHARACTER, RENDER_ORDER_IN_FRONT_OF_CHARACTER };
+export type { BuiltFurnitureBillboard };
 
 // Rest-pose art comes from the asset pack in raw trimmed-pixel dimensions
 // (e.g. ~100-300px), while this scene works in 1-world-unit-per-tile space --
@@ -20,95 +35,6 @@ import { RoomSlotDef } from '../types/roomSlots';
 // a tile instead of a room-engulfing quad with only its transparent padding
 // inside the camera frustum.
 const FURNITURE_DESIRED_TILE_HEIGHT = 0.9;
-// Mount height for wall-mounted décor (bottom of the billboard, which pivots
-// bottom-center), and how far in front of the wall plane it sits so it
-// doesn't z-fight with the wall box itself. Expressed as a fraction of
-// WALL_HEIGHT (rather than a fixed world-unit height) so décor stays
-// properly "up on the wall" instead of looking low if WALL_HEIGHT
-// (sceneBuilder3D.ts) changes again -- décor is clamped to fit the
-// remaining headroom above this height (see wallHeightBudget below), so
-// mounting too high leaves too little room and forces oversized items to
-// render tiny.
-const WALL_DECOR_HEIGHT_RATIO = 0.55;
-const WALL_DECOR_HEIGHT = WALL_HEIGHT * WALL_DECOR_HEIGHT_RATIO;
-// Wall décor mounts flush against the actual wall plane, angled with it,
-// instead of standing upright like a camera-facing billboard -- these two
-// fixed quaternions orient a decor plane to lie flat against each wall run.
-// PlaneGeometry's default normal is +Z, which already matches the leftBack
-// wall's inner face (backWallX in sceneBuilder3D) exactly, so it needs no
-// rotation; the rightBack wall's inner face points +X instead, a 90° turn
-// around Y away. NOTE: the current décor art (picture, clock) was drawn as
-// upright isometric billboards, not perspective-correct for lying flat
-// against a wall, so it'll look off until that art is replaced -- tracked
-// as a follow-up, not fixed here.
-const LEFT_BACK_WALL_QUATERNION = new THREE.Quaternion();
-const RIGHT_BACK_WALL_QUATERNION = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
-// Nudges the décor plane just off the wall's exact inner-face depth so it
-// doesn't z-fight with the wall box itself -- flush-mounted and coplanar
-// with the wall now (not tilted relative to it), so this only needs to be
-// large enough to avoid z-fighting, not to clear a tilted surface's depth
-// range the way the old camera-facing approach did.
-const WALL_FLUSH_INSET = 0.015;
-
-export interface BuiltFurnitureBillboard {
-  group: THREE.Group;
-  /** Present when at least one layer is a frame-cycling flipbook animation. */
-  update?: (dt: number) => void;
-}
-
-/**
- * Given a RoomSlotDef, resolves where it sits in world space and how it's
- * oriented -- wall slots snap to their wall plane (mirrored/rotated per
- * which wall run), floor slots sit at their grid tile and share the room's
- * one billboard-facing quaternion. Extracted from buildFurnitureSlotBillboard
- * so the Furnish Nest slot-marker renderer (furnishSlotMarkers3D.ts) can
- * position markers/hit-proxies identically without duplicating the
- * wall-mount math.
- */
-export function resolveSlotWorldPlacement(
-  slot: RoomSlotDef,
-  dims: RoomDims3D,
-  billboardQuaternion: THREE.Quaternion
-): { position: { x: number; y: number; z: number }; quaternion: THREE.Quaternion; mirrorX: boolean } {
-  const { halfWidth, halfDepth } = roomHalfExtents(dims);
-  // The 'leftBack' wall renders on-screen right under this fixed camera --
-  // its art comes in backwards relative to that wall (confirmed by on-device
-  // inspection), so it's mirrored here rather than re-exporting the asset.
-  const mirrorX = slot.kind === 'wall' && slot.wall === 'leftBack';
-  let position: { x: number; y: number; z: number };
-  if (slot.kind === 'wall') {
-    if (slot.wall === 'leftBack') {
-      const { x } = gridToWorld(slot.row, slot.col, dims);
-      position = { x, y: WALL_DECOR_HEIGHT, z: -halfDepth + WALL_FLUSH_INSET };
-    } else {
-      const { z } = gridToWorld(slot.row, slot.col, dims);
-      position = { x: -halfWidth + WALL_FLUSH_INSET, y: WALL_DECOR_HEIGHT, z };
-    }
-  } else {
-    const { x, z } = gridToWorld(slot.row, slot.col, dims, slot.footprint);
-    position = { x, y: 0, z };
-  }
-  const quaternion =
-    slot.kind === 'wall'
-      ? slot.wall === 'leftBack'
-        ? LEFT_BACK_WALL_QUATERNION
-        : RIGHT_BACK_WALL_QUATERNION
-      : billboardQuaternion;
-  return { position, quaternion, mirrorX };
-}
-
-// Furniture (depthTest:true) can never correctly depth-sort against the
-// character (deliberately depthTest:false/depthWrite:false in SpineThree.ts,
-// so room geometry never clips it -- see that file for why). Ordering
-// between the two has to be arbitrated via renderOrder instead: these sit
-// well outside the character's own per-slot renderOrder range (small
-// integers, roughly 0..30) so furniture always loses to a "front" character
-// slot and always wins against a "behind" one, regardless of skeleton size.
-// Exported so furnishSlotMarkers3D.ts can classify markers into the exact
-// same front/behind bands furniture already uses for the same slot, instead
-// of escaping to a separate always-on-top renderOrder.
-export const RENDER_ORDER_BEHIND_CHARACTER = -1;
-export const RENDER_ORDER_IN_FRONT_OF_CHARACTER = 1000;
 
 export async function buildFurnitureSlotBillboard(
   slot: RoomSlotDef,
@@ -120,7 +46,11 @@ export async function buildFurnitureSlotBillboard(
   /** Force this slot's billboard to render in front of the character
    * regardless of depth score -- used while GliderMon is sitting in it, so the
    * seat/back render over his legs instead of him overlapping the chair. */
-  forceInFront = false
+  forceInFront = false,
+  /** Selected colorway id for this slot's occupant (Furnish Nest's "Colors"
+   * action) -- see StaticFurnitureVisual / FURNITURE_RECOLOR_PALETTES.
+   * Ignored for variants that aren't `recolorable`. */
+  paletteId?: string
 ): Promise<BuiltFurnitureBillboard | null> {
   const def = getFurnitureDef(furnitureId);
   const variant = def?.variants.find((v) => v.id === variantId);
@@ -131,13 +61,28 @@ export async function buildFurnitureSlotBillboard(
     return null;
   }
 
+  // Static-atlas path (chair/storage/lighting migration) -- a variant with
+  // `staticAtlas` set skips the layers/restPoseAsset rendering below
+  // entirely; see staticFurnitureBillboard3D.ts.
+  if (variant.staticAtlas) {
+    return buildStaticFurnitureSlotBillboard(
+      slot,
+      variant,
+      paletteId,
+      dims,
+      billboardQuaternion,
+      characterWorldPos,
+      forceInFront
+    );
+  }
+
   const layers = variant.layers ?? (variant.restPoseAsset ? [{ assetName: variant.restPoseAsset }] : []);
   if (layers.length === 0) return null;
 
   // Slot world position, computed up front so it can drive both the
   // in-front/behind-the-character renderOrder classification below and the
   // final group placement at the end of this function.
-  const { position: slotWorldPos, mirrorX } = resolveSlotWorldPlacement(slot, dims, billboardQuaternion);
+  const { position: slotWorldPos, quaternion: slotQuaternion, mirrorX } = resolveSlotWorldPlacement(slot, dims, billboardQuaternion);
 
   // The camera is a fixed isometric orthographic camera looking along
   // (-1,-1,-1) (see CAMERA_OFFSET in IsometricRoomView3D.tsx), so "distance
@@ -263,11 +208,7 @@ export async function buildFurnitureSlotBillboard(
   }
 
   group.position.set(slotWorldPos.x, slotWorldPos.y, slotWorldPos.z);
-  if (slot.kind === 'wall') {
-    group.quaternion.copy(slot.wall === 'leftBack' ? LEFT_BACK_WALL_QUATERNION : RIGHT_BACK_WALL_QUATERNION);
-  } else {
-    group.quaternion.copy(billboardQuaternion);
-  }
+  group.quaternion.copy(slotQuaternion);
   // Lets Furnish Nest's raycast (furnishSlotMarkers3D.ts / IsometricRoomView3D.tsx)
   // resolve a tap on already-placed furniture back to its housing slot.
   group.userData.slotId = slot.slotId;

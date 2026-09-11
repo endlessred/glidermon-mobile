@@ -10,7 +10,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { useHousingStore } from "../../data/stores/housingStore";
 import { getUsableNestThemes, nestThemeFloorId, nestThemeWallLeftId, nestThemeWallRightId } from "../../game/housing/types/nestThemeCatalog";
 
-export type FurniturePlacementMap = Record<string, { furnitureId: string; variantId: string }>;
+export type FurniturePlacementMap = Record<string, { furnitureId: string; variantId: string; paletteId?: string }>;
 
 export type FurnishTarget =
   | { kind: "slot"; slotId: string }
@@ -36,6 +36,11 @@ export interface FurnishSession {
   selectTarget: (target: FurnishTarget) => void;
   placeFurniture: (furnitureId: string, variantId: string) => void;
   removeFurniture: () => void;
+  /** Sets the colorway for whatever is currently placed in the selected slot
+   * -- no-op if the slot isn't selected or is empty. Mirrors Outfit's
+   * setCosmeticPalette, but scoped to the draft session (only committed to
+   * housingStore on Done, same as placeFurniture/removeFurniture). */
+  setPalette: (paletteId: string) => void;
   placeSurface: (surface: "floor" | "leftWall" | "rightWall", patternId: string) => void;
   applyThemeDraft: (themeId: string) => void;
   commit: () => void;
@@ -49,7 +54,7 @@ function arePlacementsEqual(a: FurniturePlacementMap, b: FurniturePlacementMap):
   for (const key of aKeys) {
     const av = a[key];
     const bv = b[key];
-    if (!bv || av.furnitureId !== bv.furnitureId || av.variantId !== bv.variantId) return false;
+    if (!bv || av.furnitureId !== bv.furnitureId || av.variantId !== bv.variantId || av.paletteId !== bv.paletteId) return false;
   }
   return true;
 }
@@ -104,6 +109,16 @@ export function useFurnishSession(): FurnishSession {
     });
   }, [selectedSlotId]);
 
+  const setPalette = useCallback(
+    (paletteId: string) => {
+      setDraftPlacements((prev) => {
+        if (!selectedSlotId || !prev[selectedSlotId]) return prev;
+        return { ...prev, [selectedSlotId]: { ...prev[selectedSlotId], paletteId } };
+      });
+    },
+    [selectedSlotId]
+  );
+
   const placeSurface = useCallback((surface: "floor" | "leftWall" | "rightWall", patternId: string) => {
     setDraftSurfaces((prev) => ({ ...prev, [surface]: patternId }));
   }, []);
@@ -138,9 +153,9 @@ export function useFurnishSession(): FurnishSession {
       const changed =
         (!before && after) ||
         (before && !after) ||
-        (before && after && (before.furnitureId !== after.furnitureId || before.variantId !== after.variantId));
+        (before && after && (before.furnitureId !== after.furnitureId || before.variantId !== after.variantId || before.paletteId !== after.paletteId));
       if (!changed) continue;
-      if (after) setActiveFurniture(slotId, after.furnitureId, after.variantId);
+      if (after) setActiveFurniture(slotId, after.furnitureId, after.variantId, after.paletteId);
       else clearFurnitureSlot(slotId);
     }
 
@@ -190,6 +205,7 @@ export function useFurnishSession(): FurnishSession {
     selectTarget,
     placeFurniture,
     removeFurniture,
+    setPalette,
     placeSurface,
     applyThemeDraft,
     commit,

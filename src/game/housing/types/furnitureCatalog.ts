@@ -1,6 +1,7 @@
 import { FurnitureCatalog, FurnitureDef, FurnitureInteractionDef } from './RoomConfig';
 import { SlotType } from './roomSlots';
 import type { Rarity, ShopStockConfig } from '../../../data/shop/shopTypes';
+import { FURNITURE_RECOLOR_PALETTES } from '../furniture/FurnitureColors';
 
 // Furniture catalog defining all available furniture items, one entry per
 // slot type (see roomSlots.ts) with 1-2 starter variants each, sourced from
@@ -42,6 +43,50 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
       },
       {
         id: "wood_chair_brown", displayName: "Brown Wood Chair", cost: 150, skin: "WoodChair_Brown", restPoseAsset: "1x1_WoodChair_Front_Brown",
+        rarity: "common", tags: ["casual"],
+        shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
+      },
+      // Static-atlas migration (ShadedFurniture.atlas) -- pixel-anchored via
+      // render/staticFurnitureBillboard3D.ts instead of a Spine skeleton, see
+      // that file and scripts/buildFurnitureAtlasMetadata.ts. `recolorable` +
+      // `palettes` let the player pick a colorway for this ONE owned item
+      // (Furnish Nest's "Colors" action, mirroring Outfit's ColorwaySheet) --
+      // see FurnitureColors.ts' FURNITURE_RECOLOR_PALETTES for the shared
+      // palette list and why this art recolors this way.
+      {
+        id: "leaf_chair", displayName: "Leaf Chair", cost: 170,
+        staticAtlas: { atlasRegion: "skeleton-Chair-LeafChair_0" },
+        recolorable: true, palettes: FURNITURE_RECOLOR_PALETTES,
+        rarity: "uncommon", tags: ["nature", "cozy"],
+        shopStock: [{ store: "luma", weight: 7 }, { store: "sable", weight: 3 }],
+      },
+      {
+        id: "crescent_moon_chair", displayName: "Crescent Moon Chair", cost: 210,
+        staticAtlas: { atlasRegion: "skeleton-Chair-Crescent Moon Chair_0" },
+        recolorable: true, palettes: FURNITURE_RECOLOR_PALETTES,
+        rarity: "uncommon", tags: ["mysterious", "night"],
+        shopStock: [{ store: "sable", weight: 7 }, { store: "luma", weight: 3 }],
+      },
+      {
+        id: "gamer_chair", displayName: "Gamer Chair", cost: 190,
+        staticAtlas: { atlasRegion: "skeleton-Chair-GamerChair_0" },
+        recolorable: true, palettes: FURNITURE_RECOLOR_PALETTES,
+        rarity: "uncommon", tags: ["casual", "fun"],
+        shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
+      },
+      {
+        id: "half_pipe_chair", displayName: "Half-Pipe Chair", cost: 190,
+        staticAtlas: { atlasRegion: "skeleton-Chair-HalfPipeChair_0" },
+        recolorable: true, palettes: FURNITURE_RECOLOR_PALETTES,
+        rarity: "uncommon", tags: ["fun", "casual"],
+        shopStock: [{ store: "luma", weight: 5 }, { store: "sable", weight: 5 }],
+      },
+      {
+        id: "carved_wood_chair", displayName: "Carved Wood Chair", cost: 160,
+        staticAtlas: { atlasRegion: "skeleton-Chair-WoodChair_0" },
+        // WoodChair only paints its red channel (confirmed by channel-usage
+        // sampling) -- palette swaps just act as a stain-color change here.
+        recolorable: true, palettes: FURNITURE_RECOLOR_PALETTES,
         rarity: "common", tags: ["casual"],
         shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
       },
@@ -117,6 +162,37 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
         rarity: "rare",
         tags: ["mysterious"],
         shopStock: [{ store: "sable", weight: 6 }, { store: "luma", weight: 4 }],
+      },
+      // Static-atlas migration (ShadedFurniture.atlas) -- see the chair
+      // entry above for how staticAtlas differs from restPoseAsset/layers,
+      // and for what recolorable/palettes do.
+      {
+        id: "apothecary_cabinet", displayName: "Apothecary Cabinet", cost: 220,
+        staticAtlas: { atlasRegion: "skeleton-Storage-Apothecary_0" },
+        recolorable: true, palettes: FURNITURE_RECOLOR_PALETTES,
+        rarity: "uncommon", tags: ["mysterious"],
+        shopStock: [{ store: "sable", weight: 7 }, { store: "luma", weight: 3 }],
+      },
+      {
+        id: "hollow_log_trunk", displayName: "Hollow Log Trunk", cost: 190,
+        staticAtlas: { atlasRegion: "skeleton-Storage-Hollow Log Trunk_0" },
+        recolorable: true, palettes: FURNITURE_RECOLOR_PALETTES,
+        rarity: "uncommon", tags: ["nature", "cozy"],
+        shopStock: [{ store: "luma", weight: 7 }, { store: "sable", weight: 3 }],
+      },
+      {
+        id: "skate_locker", displayName: "Skate Locker", cost: 180,
+        staticAtlas: { atlasRegion: "skeleton-Storage-Skate Locker_0" },
+        recolorable: true, palettes: FURNITURE_RECOLOR_PALETTES,
+        rarity: "common", tags: ["casual", "fun"],
+        shopStock: [{ store: "luma", weight: 5 }, { store: "sable", weight: 5 }],
+      },
+      {
+        id: "steamer_trunk", displayName: "Steamer Trunk", cost: 200,
+        staticAtlas: { atlasRegion: "skeleton-Storage-Steamer Trunk_0" },
+        recolorable: true, palettes: FURNITURE_RECOLOR_PALETTES,
+        rarity: "common", tags: ["casual"],
+        shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
       },
     ]
   },
@@ -201,6 +277,16 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
         id: "lamp_classic", displayName: "Classic Floor Lamp", cost: 140, skin: "ClassicLamp_On", restPoseAsset: "1x1_ClassicLamp_On",
         rarity: "common", tags: ["moody"],
         shopStock: [{ store: "sable", weight: 6 }, { store: "luma", weight: 4 }],
+      },
+      // Static-atlas migration (ShadedFurniture.atlas) -- see the chair
+      // entry above for how staticAtlas differs from restPoseAsset/layers,
+      // and for what recolorable/palettes do.
+      {
+        id: "traffic_cone_lamp", displayName: "Traffic Cone Lamp", cost: 180,
+        staticAtlas: { atlasRegion: "skeleton-Lighting-Traffic Cone Lamp_0" },
+        recolorable: true, palettes: FURNITURE_RECOLOR_PALETTES,
+        rarity: "uncommon", tags: ["fun", "cheerful"],
+        shopStock: [{ store: "luma", weight: 7 }, { store: "sable", weight: 3 }],
       },
     ]
   },

@@ -5,12 +5,13 @@
 // duration. Reuses the exact Outfit visual language (CosmeticGrid,
 // CosmeticCard via FurnitureCard, CraftActionButton) rather than inventing a
 // second design system.
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import CraftPanel from "../handcrafted/CraftPanel";
 import CraftActionButton from "../handcrafted/CraftActionButton";
 import CosmeticGrid from "../handcrafted/CosmeticGrid";
 import FurnitureCard from "./FurnitureCard";
+import ColorwaySheet from "../ColorwaySheet";
 import { useHousingStore } from "../../../data/stores/housingStore";
 import { RoomSlotDef } from "../../../game/housing/types/roomSlots";
 import {
@@ -33,13 +34,15 @@ type Props = {
    * when selectedTarget.kind === 'slot'; the "nothing selected" state lives
    * in FurnishEmptyState instead. */
   selectedSlot: RoomSlotDef;
-  draftPlacements: Record<string, { furnitureId: string; variantId: string }>;
+  draftPlacements: Record<string, { furnitureId: string; variantId: string; paletteId?: string }>;
   onSelectFurniture: (furnitureId: string, variantId: string) => void;
   onRemove: () => void;
+  onSelectPalette: (paletteId: string) => void;
 };
 
-export default function FurnitureInventoryPanel({ selectedSlot, draftPlacements, onSelectFurniture, onRemove }: Props) {
+export default function FurnitureInventoryPanel({ selectedSlot, draftPlacements, onSelectFurniture, onRemove, onSelectPalette }: Props) {
   const unlockedFurnitureIds = useHousingStore((s) => s.unlockedFurnitureIds);
+  const [colorwaySheetOpen, setColorwaySheetOpen] = useState(false);
 
   const ownedItems = useMemo(() => {
     const furnitureIds = getFurnitureIdsForSlotType(selectedSlot.type);
@@ -72,6 +75,13 @@ export default function FurnitureInventoryPanel({ selectedSlot, draftPlacements,
   // originally.
   const occupant = draftPlacements[selectedSlot.slotId];
 
+  // The variant currently occupying this slot -- drives whether the
+  // "Colors" action shows, same as EquipScreen's activeItemHasPalettes.
+  const occupantVariant = occupant
+    ? FURNITURE_CATALOG[occupant.furnitureId]?.variants.find((v) => v.id === occupant.variantId)
+    : undefined;
+  const occupantHasPalettes = !!occupantVariant?.recolorable && (occupantVariant.palettes?.length ?? 0) > 1;
+
   return (
     <CraftPanel texture="cork" stitched={false} shadow="panel" grainOpacity={0.13} style={styles.panel} contentStyle={styles.panelContent}>
       <View style={styles.header}>
@@ -96,14 +106,33 @@ export default function FurnitureInventoryPanel({ selectedSlot, draftPlacements,
         }}
       />
       {occupant && (
-        <CraftActionButton
-          label="× Remove"
-          tone="cream"
-          onPress={onRemove}
-          style={styles.removeButton}
-          accessibilityLabel="Remove furniture from this slot"
-        />
+        <View style={styles.actionRow}>
+          <CraftActionButton
+            label="× Remove"
+            tone="cream"
+            onPress={onRemove}
+            style={styles.actionButton}
+            accessibilityLabel="Remove furniture from this slot"
+          />
+          {occupantHasPalettes && (
+            <CraftActionButton
+              label="🎨 Colors"
+              tone="cream"
+              onPress={() => setColorwaySheetOpen(true)}
+              style={styles.actionButton}
+              accessibilityLabel="Change this furniture's color"
+            />
+          )}
+        </View>
       )}
+
+      <ColorwaySheet
+        visible={colorwaySheetOpen}
+        item={occupantVariant ? { name: occupantVariant.displayName, palettes: occupantVariant.palettes } : undefined}
+        selectedPaletteId={occupant?.paletteId}
+        onSelectPalette={onSelectPalette}
+        onClose={() => setColorwaySheetOpen(false)}
+      />
     </CraftPanel>
   );
 }
@@ -130,9 +159,13 @@ const styles = StyleSheet.create({
     opacity: 0.65,
     marginTop: 1,
   },
-  removeButton: {
-    alignSelf: "center",
-    minWidth: 150,
+  actionRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 10,
     marginTop: 10,
+  },
+  actionButton: {
+    minWidth: 140,
   },
 });

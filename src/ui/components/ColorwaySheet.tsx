@@ -3,14 +3,22 @@ import React from "react";
 import { Modal, View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { CraftPanel, PaletteCard, INK, CREAM, GOLD } from "./handcrafted";
-import { useCosmeticsStore, type CosmeticItem } from "../../data/stores/cosmeticsStore";
+import { useCosmeticsStore } from "../../data/stores/cosmeticsStore";
 import { useToastStore } from "../../data/stores/toastStore";
 import ToastHost from "./ToastHost";
-import { DEFAULT_PALETTE_ID, isPaletteLocked } from "../../data/cosmetics/palette";
+import { DEFAULT_PALETTE_ID, isPaletteLocked, type CosmeticPalette } from "../../data/cosmetics/palette";
+
+// Structural, not tied to CosmeticItem -- also used by Furnish Nest for
+// FurnitureVariant, which has the same `name`/`palettes` shape but isn't a
+// cosmetic. Any item with premade colorways can use this sheet.
+type RecolorableItem = {
+  name: string;
+  palettes?: CosmeticPalette[];
+};
 
 type ColorwaySheetProps = {
   visible: boolean;
-  item: CosmeticItem | null | undefined;
+  item: RecolorableItem | null | undefined;
   selectedPaletteId?: string;
   onSelectPalette: (paletteId: string) => void;
   onClose: () => void;

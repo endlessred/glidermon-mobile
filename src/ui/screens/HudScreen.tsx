@@ -248,6 +248,7 @@ export default function HudScreen() {
             draftPlacements={furnish.draftPlacements}
             onSelectFurniture={furnish.placeFurniture}
             onRemoveFurniture={furnish.removeFurniture}
+            onSelectPalette={furnish.setPalette}
             draftSurfaces={furnish.draftSurfaces}
             onPreviewSurface={furnish.placeSurface}
             onApplyTheme={furnish.applyThemeDraft}

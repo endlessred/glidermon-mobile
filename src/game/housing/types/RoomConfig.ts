@@ -173,6 +173,34 @@ export interface FurnitureInteractionDef {
   interactionAnchor?: { xOffset: number; yOffset: number; zOffset?: number };
 }
 
+/**
+ * Static-atlas rendering for a furniture variant -- a single trimmed texture
+ * region from ShadedFurniture.atlas, pixel-anchored to the slot's world
+ * origin instead of relying on matching PNG dimensions or a Spine skeleton
+ * (see render/staticFurnitureBillboard3D.ts). currently only wired up for
+ * the chair/storage/lighting slot types (SLOT_TYPE_FOR_FURNITURE_ID); a
+ * variant without this just keeps using the existing
+ * layers/restPoseAsset Spine-or-quad rendering path.
+ *
+ * This art is painted in flat #ff0000/#00ff00/#0000ff per logical part
+ * (confirmed by sampling ShadedFurniture.png directly) -- the same
+ * hue-indexed-recolor convention the character/wall-furniture shaders
+ * already key off (src/spine/HueIndexedRecolor.ts) -- so a variant can also
+ * declare `recolorable`/`palettes` (below) to let the player pick a
+ * colorway for the ONE item they own, the same "Colors" pattern Outfit uses
+ * (ColorwaySheet), instead of shipping separately-priced colored duplicates.
+ */
+export interface StaticFurnitureVisual {
+  /** Region name in ShadedFurniture.atlas, e.g.
+   * "skeleton-Chair-LeafChair_0". */
+  atlasRegion: string;
+  /** Tile footprint override for this visual. Defaults to the occupying
+   * RoomSlotDef's own `footprint` (itself defaulting to 1x1) when omitted --
+   * set this only if a static-atlas item needs a footprint different from
+   * its slot's, which no current item does. */
+  footprint?: { width: number; depth: number };
+}
+
 export interface FurnitureVariant {
   /** Variant identifier */
   id: string;
@@ -210,6 +238,26 @@ export interface FurnitureVariant {
    * when omitted.
    */
   layers?: FurnitureVariantLayer[];
+  /**
+   * When present, this variant renders via the static-atlas billboard path
+   * (staticFurnitureBillboard3D.ts) instead of layers/restPoseAsset --
+   * see StaticFurnitureVisual.
+   */
+  staticAtlas?: StaticFurnitureVisual;
+  /**
+   * Recolor support for this ONE owned item -- reuses the exact
+   * cosmetics palette system (data/cosmetics/palette.ts) so Furnish Nest's
+   * "Colors" action can share ColorwaySheet/resolveCosmeticRecolor/
+   * PaletteCard with Outfit verbatim rather than a parallel implementation.
+   * `palettes` is a designer-made colorway list (see FurnitureColors.ts'
+   * FURNITURE_RECOLOR_PALETTES); `maskRecolor` is the static fallback used
+   * when `recolorable` is false/omitted or `palettes` is empty. Currently
+   * only meaningful for `staticAtlas` variants (staticFurnitureBillboard3D.ts
+   * is the only renderer that resolves/applies it).
+   */
+  recolorable?: boolean;
+  maskRecolor?: import("../../../data/cosmetics/palette").MaskRecolor;
+  palettes?: import("../../../data/cosmetics/palette").CosmeticPalette[];
 
   // Shop stock metadata (see data/shop/shopTypes.ts) -- independent of cost
   // above. Absence of shopStock just means this variant isn't sold through

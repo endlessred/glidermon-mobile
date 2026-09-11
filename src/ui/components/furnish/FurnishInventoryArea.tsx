@@ -16,9 +16,10 @@ type Surface = "floor" | "leftWall" | "rightWall";
 type Props = {
   selectedTarget: FurnishTarget | null;
   roomSizeTier: number;
-  draftPlacements: Record<string, { furnitureId: string; variantId: string }>;
+  draftPlacements: Record<string, { furnitureId: string; variantId: string; paletteId?: string }>;
   onSelectFurniture: (furnitureId: string, variantId: string) => void;
   onRemoveFurniture: () => void;
+  onSelectPalette: (paletteId: string) => void;
   draftSurfaces: FurnishSurfaces;
   onPreviewSurface: (surface: Surface, patternId: string) => void;
   onApplyTheme: (themeId: string) => void;
@@ -30,6 +31,7 @@ export default function FurnishInventoryArea({
   draftPlacements,
   onSelectFurniture,
   onRemoveFurniture,
+  onSelectPalette,
   draftSurfaces,
   onPreviewSurface,
   onApplyTheme,
@@ -43,6 +45,7 @@ export default function FurnishInventoryArea({
         draftPlacements={draftPlacements}
         onSelectFurniture={onSelectFurniture}
         onRemove={onRemoveFurniture}
+        onSelectPalette={onSelectPalette}
       />
     );
   }

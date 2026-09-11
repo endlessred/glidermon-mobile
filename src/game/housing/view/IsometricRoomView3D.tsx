@@ -251,7 +251,7 @@ function clearGroup(group: THREE.Group) {
 async function populateFurnitureGroup(
   group: THREE.Group,
   roomSizeTier: number,
-  activeFurnitureBySlot: Record<string, { furnitureId: string; variantId: string }>,
+  activeFurnitureBySlot: Record<string, { furnitureId: string; variantId: string; paletteId?: string }>,
   dims: { width: number; height: number },
   billboardQuaternion: THREE.Quaternion,
   characterWorldPos: { x: number; z: number },
@@ -269,7 +269,8 @@ async function populateFurnitureGroup(
       dims,
       billboardQuaternion,
       characterWorldPos,
-      forceInFrontSlotIds?.has(slot.slotId) ?? false
+      forceInFrontSlotIds?.has(slot.slotId) ?? false,
+      occupant.paletteId
     );
     if (built3) built.push(built3);
   }

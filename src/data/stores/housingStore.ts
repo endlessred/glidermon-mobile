@@ -122,7 +122,7 @@ type HousingState = {
   // kept separate from `furniturePlacements` above, which the `quad`/`legacy`
   // renderers still use with their freeform row/col placement. Keyed by
   // slotId; a slot with no entry renders empty until purchased.
-  activeFurnitureBySlot: Record<string, { furnitureId: string; variantId: string }>;
+  activeFurnitureBySlot: Record<string, { furnitureId: string; variantId: string; paletteId?: string }>;
   unlockedFurnitureIds: string[]; // `${furnitureId}_${variantId}`
   // Glidermon's current floor tile in the 3D-primitive room shell (see
   // IsometricRoomView3D.tsx's wander scheduler). Persisted so he's found
@@ -166,7 +166,7 @@ type HousingState = {
   placeFurniture: (placement: FurniturePlacement) => void;
   removeFurniture: (id: string) => void;
   unlockFurniture: (id: string) => void;
-  setActiveFurniture: (slotId: string, furnitureId: string, variantId: string) => void;
+  setActiveFurniture: (slotId: string, furnitureId: string, variantId: string, paletteId?: string) => void;
   clearFurnitureSlot: (slotId: string) => void;
   setCharacterTile: (tile: GridTile) => void;
 };
@@ -307,11 +307,11 @@ export const useHousingStore = create<HousingState>()(
         set((s) => (s.unlockedFurnitureIds.includes(id) ? s : { unlockedFurnitureIds: [...s.unlockedFurnitureIds, id] }));
       },
 
-      setActiveFurniture: (slotId, furnitureId, variantId) => {
+      setActiveFurniture: (slotId, furnitureId, variantId, paletteId) => {
         const id = `${furnitureId}_${variantId}`;
         if (!get().unlockedFurnitureIds.includes(id)) return;
         set((s) => ({
-          activeFurnitureBySlot: { ...s.activeFurnitureBySlot, [slotId]: { furnitureId, variantId } },
+          activeFurnitureBySlot: { ...s.activeFurnitureBySlot, [slotId]: { furnitureId, variantId, paletteId } },
         }));
       },
 

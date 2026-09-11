@@ -1,0 +1,42 @@
+{
+  "skeleton-Chair-Crescent Moon Chair_0": {
+    "anchorX": 80,
+    "anchorY": 146
+  },
+  "skeleton-Chair-GamerChair_0": {
+    "anchorX": 63.5,
+    "anchorY": 109
+  },
+  "skeleton-Chair-HalfPipeChair_0": {
+    "anchorX": 96,
+    "anchorY": 92
+  },
+  "skeleton-Chair-LeafChair_0": {
+    "anchorX": 65,
+    "anchorY": 139
+  },
+  "skeleton-Chair-WoodChair_0": {
+    "anchorX": 59.5,
+    "anchorY": 111
+  },
+  "skeleton-Lighting-Traffic Cone Lamp_0": {
+    "anchorX": 66,
+    "anchorY": 235.5
+  },
+  "skeleton-Storage-Apothecary_0": {
+    "anchorX": 86,
+    "anchorY": 153.5
+  },
+  "skeleton-Storage-Hollow Log Trunk_0": {
+    "anchorX": 98,
+    "anchorY": 85.5
+  },
+  "skeleton-Storage-Skate Locker_0": {
+    "anchorX": 83,
+    "anchorY": 155
+  },
+  "skeleton-Storage-Steamer Trunk_0": {
+    "anchorX": 101,
+    "anchorY": 114.5
+  }
+}

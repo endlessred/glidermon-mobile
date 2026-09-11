@@ -1,0 +1,46 @@
+ShadedFurnitureMarker.png
+size:383,1042
+filter:Linear,Linear
+pma:true
+skeleton-Chair-Crescent Moon Chair_0
+bounds:2,181,168,220
+rotate:90
+origin:79,-8
+skeleton-Chair-GamerChair_0
+bounds:233,496,131,187
+offsets:1,1,135,189
+origin:65,-3
+skeleton-Chair-HalfPipeChair_0
+bounds:2,2,193,177
+origin:97,2
+skeleton-Chair-LeafChair_0
+bounds:224,65,152,219
+offsets:0,0,153,219
+origin:66,-2
+skeleton-Chair-WoodChair_0
+bounds:235,685,140,183
+offsets:2,2,143,185
+origin:62,-8
+skeleton-Lighting-Traffic Cone Lamp_0
+bounds:2,870,170,289
+offsets:0,2,170,292
+rotate:90
+origin:65,-26
+skeleton-Storage-Apothecary_0
+bounds:2,351,162,222
+offsets:1,0,163,222
+rotate:90
+origin:87,-13
+skeleton-Storage-Hollow Log Trunk_0
+bounds:226,286,208,155
+offsets:1,0,210,155
+rotate:90
+origin:99,-12
+skeleton-Storage-Skate Locker_0
+bounds:2,707,161,231
+offsets:1,0,162,232
+rotate:90
+origin:83,-6
+skeleton-Storage-Steamer Trunk_0
+bounds:2,515,229,190
+origin:102,-6

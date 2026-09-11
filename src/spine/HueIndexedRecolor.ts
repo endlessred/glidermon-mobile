@@ -63,6 +63,18 @@ export type HueIndexedRecolorOptions = {
     tint?: THREE.Color | string | number;
     timeUniform?: { value: number };
   };
+  /**
+   * Default true: calls ensureSRGBTexture(baseMap) internally, which
+   * (among other hygiene settings) forces `flipY = false` to match this
+   * shader's own UV convention. Pass false when the caller shares `baseMap`
+   * across multiple consumers with hand-built UVs already authored against
+   * THREE's default `flipY = true` (e.g. a shared atlas page sampled by
+   * custom-UV'd plane geometry, see staticFurnitureBillboard3D.ts) --
+   * mutating a shared texture's flipY here would silently flip every other
+   * consumer of that same texture object. The caller is responsible for its
+   * own texture hygiene (colorSpace/wrap/filtering) in that case.
+   */
+  manageTexture?: boolean;
 };
 
 function toColorOrDefault(c: any, defaultValue: number): THREE.Color {
@@ -96,6 +108,7 @@ export function makeHueIndexedRecolorMaterial(
     useYellow: false,
     preserveDarkThreshold: 0.15,
     smoothOutlineEdges: false,
+    manageTexture: true,
     colors: {},
     ...(opts || {})
   };
@@ -122,7 +135,9 @@ export function makeHueIndexedRecolorMaterial(
   const shimmerTint = toColorOrDefault(o.shimmer?.tint, 0xffffff);
   const timeUniform = o.shimmer?.timeUniform ?? { value: 0 };
 
-  ensureSRGBTexture(baseMap);
+  if (o.manageTexture) {
+    ensureSRGBTexture(baseMap);
+  }
 
   if (o.smoothOutlineEdges) {
     // Trilinear mipmapping meaningfully improves minification of thin
