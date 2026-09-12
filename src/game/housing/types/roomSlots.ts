@@ -68,7 +68,15 @@ const TIER_1_SLOTS: RoomSlotDef[] = [
   { slotId: 'tableDesk', type: 'tableDesk', kind: 'floor', row: 1, col: 2 },
   { slotId: 'seating', type: 'seating', kind: 'floor', row: 1, col: 1 },
   { slotId: 'hobby', type: 'hobby', kind: 'floor', row: 0, col: 0 },
-  { slotId: 'rug', type: 'rug', kind: 'floor', row: 0, col: 2 },
+  // 2x2, anchored in front of the seating slot (1,1) and shifted toward
+  // tableDesk (1,2) -- (2,2), (2,3), (3,2), (3,3) -- so it reads as an area
+  // rug the chair and table both sit at the edge of, rather than a small mat
+  // tucked in the back corner. Deliberately overlaps storage's (2,3) and
+  // feature's (3,3) tiles -- the rug is exempt from assertNoSlotCollisions
+  // below since it always renders behind every other item
+  // (FurnitureDef.floorDecal), so whatever's placed there just sits on the
+  // rug's edge, same as a real room.
+  { slotId: 'rug', type: 'rug', kind: 'floor', row: 2, col: 2, footprint: { w: 2, h: 2 } },
   { slotId: 'wallDecor1', type: 'wallDecor', kind: 'wall', wall: 'leftBack', row: 3, col: 2 },
   { slotId: 'wallDecor2', type: 'wallDecor', kind: 'wall', wall: 'rightBack', row: 1, col: 3 },
 ];
@@ -84,7 +92,10 @@ const TIER_2_SLOTS: RoomSlotDef[] = [
   { slotId: 'tableDesk', type: 'tableDesk', kind: 'floor', row: 2, col: 3 },
   { slotId: 'seating', type: 'seating', kind: 'floor', row: 2, col: 2 },
   { slotId: 'hobby', type: 'hobby', kind: 'floor', row: 1, col: 1 },
-  { slotId: 'rug', type: 'rug', kind: 'floor', row: 1, col: 3 },
+  // 2x2, anchored in front of and shifted toward tableDesk from the seating
+  // slot (2,2) -- see TIER_1's rug comment above. No overlap with other
+  // slots at this tier (unlike Tier 1, purely incidental).
+  { slotId: 'rug', type: 'rug', kind: 'floor', row: 3, col: 2, footprint: { w: 2, h: 2 } },
   { slotId: 'wallDecor1', type: 'wallDecor', kind: 'wall', wall: 'leftBack', row: 4, col: 3 },
   { slotId: 'wallDecor2', type: 'wallDecor', kind: 'wall', wall: 'rightBack', row: 2, col: 4 },
 ];
@@ -160,6 +171,12 @@ function assertNoSlotCollisions(): void {
     };
     for (const slot of ROOM_SLOT_LAYOUTS[tier]) {
       if (slot.kind !== 'floor') continue;
+      // The rug is a floor decal (see FurnitureDef.floorDecal) -- it always
+      // renders behind every other item by design, so its footprint is
+      // allowed to overlap other slots' tiles (whatever's placed there just
+      // sits on the rug's edge, same as a real room). Exempt it from the
+      // no-overlap guard instead of flagging every intentional overlap.
+      if (slot.type === 'rug') continue;
       const w = slot.footprint?.w ?? 1;
       const h = slot.footprint?.h ?? 1;
       for (let dr = 0; dr < h; dr++) {

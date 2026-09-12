@@ -88,3 +88,11 @@ export function resolveSlotWorldPlacement(
 // slot and always wins against a "behind" one, regardless of skeleton size.
 export const RENDER_ORDER_BEHIND_CHARACTER = -1;
 export const RENDER_ORDER_IN_FRONT_OF_CHARACTER = 1000;
+// A floor decal (the rug) must always lose to every other CONTENT_LAYER
+// object, not just the character -- three.js sorts the opaque queue by
+// renderOrder before depth, so drawing it first (most negative renderOrder)
+// guarantees draw order alone puts it under RENDER_ORDER_BEHIND_CHARACTER
+// furniture too. It also never depth-writes (see tileSprite.ts's floorDecal
+// option), so nothing it draws can block a later opaque draw's depth test
+// even where their billboards visually overlap on screen.
+export const RENDER_ORDER_FLOOR_DECAL = RENDER_ORDER_BEHIND_CHARACTER - 1;

@@ -323,6 +323,14 @@ export interface FurnitureDef {
    * (e.g. the bed) need to read larger relative to their footprint.
    */
   desiredTileHeight?: number;
+  /**
+   * 3D-primitive renderer only: always renders behind every other room
+   * CONTENT item (other furniture, GliderMon) while still drawing in front
+   * of the room shell (floor/walls) -- for floor coverings like a rug, never
+   * for furniture with real volume. See RENDER_ORDER_FLOOR_DECAL in
+   * slotWorldPlacement3D.ts for how this is enforced.
+   */
+  floorDecal?: boolean;
 }
 
 export interface FurnitureCatalog {

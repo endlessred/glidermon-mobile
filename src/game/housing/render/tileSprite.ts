@@ -7,7 +7,7 @@ import * as THREE from "three";
 // margin without visibly fringing the art's own antialiased edges.
 const OPAQUE_CUTOUT_ALPHA_TEST = 0.5;
 
-export function makeSpritePlane(tex: THREE.Texture, w: number, h: number, opts?: { depthTest?: boolean; opaqueCutout?: boolean }) {
+export function makeSpritePlane(tex: THREE.Texture, w: number, h: number, opts?: { depthTest?: boolean; opaqueCutout?: boolean; floorDecal?: boolean }) {
   const geom = new THREE.PlaneGeometry(w, h);
   // Default (depthTest/depthWrite disabled): draw order is controlled
   // entirely via renderOrder (painter's algorithm), matching the proven
@@ -27,8 +27,17 @@ export function makeSpritePlane(tex: THREE.Texture, w: number, h: number, opts?:
   // *behind* the character has to join the opaque queue to compete on equal
   // terms.
   const opaqueCutout = opts?.opaqueCutout ?? false;
-  const mat = opaqueCutout
-    ? new THREE.MeshBasicMaterial({ map: tex, transparent: false, depthTest: true, depthWrite: true, alphaTest: OPAQUE_CUTOUT_ALPHA_TEST })
+  // floorDecal is the same opaque-cutout material (so it can still lose to
+  // the character's opaque skin), but never writes depth. Combined with
+  // RENDER_ORDER_FLOOR_DECAL (drawn first in the opaque queue), this means
+  // nothing it draws can ever block a later opaque object's depth test --
+  // every other item unconditionally paints over it wherever they overlap on
+  // screen, regardless of actual world position. Plain opaqueCutout furniture
+  // depth-writes because it only needs to beat the character, and furniture
+  // vs. furniture ordering elsewhere relies on the real depth buffer.
+  const floorDecal = opts?.floorDecal ?? false;
+  const mat = opaqueCutout || floorDecal
+    ? new THREE.MeshBasicMaterial({ map: tex, transparent: false, depthTest: true, depthWrite: !floorDecal, alphaTest: OPAQUE_CUTOUT_ALPHA_TEST })
     : new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthTest: depthEnabled, depthWrite: depthEnabled });
   const mesh = new THREE.Mesh(geom, mat);
   // default plane is centered; we want "feet" at (x,y): shift origin

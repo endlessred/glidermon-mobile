@@ -100,6 +100,10 @@ export async function buildStaticFurnitureSlotBillboard(
   // Same front/behind-the-character classification as
   // buildFurnitureSlotBillboard -- see that file for why renderOrder (not
   // depth-buffer occlusion alone) has to arbitrate against the character.
+  // No staticAtlas variant is a floor decal today (see FurnitureDef.floorDecal
+  // / RENDER_ORDER_FLOOR_DECAL) -- if one ever is, it needs the same
+  // always-behind branch buildFurnitureSlotBillboard has, not this
+  // character-relative comparison.
   const slotDepthScore = slotWorldPos.x + slotWorldPos.y + slotWorldPos.z;
   const characterDepthScore = characterWorldPos.x + characterWorldPos.z;
   const isBehindCharacter = !forceInFront && slotDepthScore <= characterDepthScore;

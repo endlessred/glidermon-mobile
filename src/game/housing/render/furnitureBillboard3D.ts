@@ -18,6 +18,7 @@ import {
   resolveSlotWorldPlacement,
   RENDER_ORDER_BEHIND_CHARACTER,
   RENDER_ORDER_IN_FRONT_OF_CHARACTER,
+  RENDER_ORDER_FLOOR_DECAL,
   BuiltFurnitureBillboard,
   WALL_DECOR_HEIGHT,
 } from './slotWorldPlacement3D';
@@ -89,12 +90,20 @@ export async function buildFurnitureSlotBillboard(
   // toward the camera" for any point is proportional to x+y+z. Comparing
   // that scalar against the character's tells us which side of the
   // character this slot renders on.
-  const slotDepthScore = slotWorldPos.x + slotWorldPos.y + slotWorldPos.z;
-  const characterDepthScore = characterWorldPos.x + characterWorldPos.z;
-  const layerRenderOrder =
-    forceInFront || slotDepthScore > characterDepthScore
-      ? RENDER_ORDER_IN_FRONT_OF_CHARACTER
-      : RENDER_ORDER_BEHIND_CHARACTER;
+  // A floor decal (the rug) always renders behind every other content item,
+  // never just the character -- skip the depth-score comparison entirely
+  // (and ignore forceInFront, which only makes sense for a seat).
+  let layerRenderOrder: number;
+  if (def.floorDecal) {
+    layerRenderOrder = RENDER_ORDER_FLOOR_DECAL;
+  } else {
+    const slotDepthScore = slotWorldPos.x + slotWorldPos.y + slotWorldPos.z;
+    const characterDepthScore = characterWorldPos.x + characterWorldPos.z;
+    layerRenderOrder =
+      forceInFront || slotDepthScore > characterDepthScore
+        ? RENDER_ORDER_IN_FRONT_OF_CHARACTER
+        : RENDER_ORDER_BEHIND_CHARACTER;
+  }
 
   const group = new THREE.Group();
   const updaters: Array<(dt: number) => void> = [];
@@ -159,6 +168,7 @@ export async function buildFurnitureSlotBillboard(
     const mesh = makeSpritePlane(texture, frameWidth, tex.height, {
       depthTest: true,
       opaqueCutout: layerRenderOrder === RENDER_ORDER_BEHIND_CHARACTER,
+      floorDecal: def.floorDecal,
     });
     mesh.renderOrder = layerRenderOrder;
     mesh.scale.set(scaleX, scaleFactor, scaleFactor);

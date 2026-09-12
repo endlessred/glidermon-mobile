@@ -202,6 +202,13 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
     skeleton: "Rug",
     footprints: [{ w: 1, h: 1, allowedRot: [0, 90] }],
     anchors: { dx: 0, dy: 0 },
+    // Slot footprint is 2x2 (roomSlots.ts) at Tiers 1/2 -- double the shared
+    // default (FURNITURE_DESIRED_TILE_HEIGHT = 0.9) so the same art scales up
+    // uniformly with the footprint's doubled width instead of stretching.
+    desiredTileHeight: 1.8,
+    // A rug is a floor covering, not furniture with volume -- it must always
+    // render behind everything else in the room. See FurnitureDef.floorDecal.
+    floorDecal: true,
     supportsLayers: ["under"],
     occlusion: "none",
     variants: [
