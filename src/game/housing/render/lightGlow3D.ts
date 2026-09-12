@@ -106,5 +106,14 @@ export function buildLightGlow(
   const mesh = new THREE.Mesh(geometry, material);
   mesh.position.set(mirrorX ? -localX : localX, localY, GLOW_LOCAL_Z_OFFSET);
   mesh.renderOrder = RENDER_ORDER_LIGHT_GLOW;
+  // Purely visual -- at a 2-tile radius this plane's real geometry footprint
+  // is much bigger than the lamp itself and would otherwise swallow taps
+  // meant for whatever's underneath/nearby (wall décor slots, other
+  // furniture) in Furnish Nest's raycast (IsometricRoomView3D.tsx intersects
+  // the whole furniture group recursively). A no-op raycast keeps it
+  // rendered/visible while making Raycaster.intersectObject(s) skip it
+  // entirely, same as it would if it simply weren't in the scene graph for
+  // hit-testing purposes.
+  mesh.raycast = () => {};
   return mesh;
 }
