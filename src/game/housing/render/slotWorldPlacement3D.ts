@@ -96,3 +96,12 @@ export const RENDER_ORDER_IN_FRONT_OF_CHARACTER = 1000;
 // option), so nothing it draws can block a later opaque draw's depth test
 // even where their billboards visually overlap on screen.
 export const RENDER_ORDER_FLOOR_DECAL = RENDER_ORDER_BEHIND_CHARACTER - 1;
+// A lamp's light glow must draw in front of literally everything else in the
+// room (character, all furniture, the Adventure Board) regardless of where
+// it's anchored. The Adventure Board's own "in front" mode tops out around
+// RENDER_ORDER_IN_FRONT_OF_CHARACTER + ~1 (BOARD_SURFACE_BIAS/BOARD_FRAME_BIAS
+// in adventureBoard3D.ts) and the Furnish-Nest slot-marker overlay a little
+// above that -- pick a value clearly clear of that band rather than one that
+// could tie with it. Paired with depthTest:false (see lightGlow3D.ts), so
+// it's also immune to the shared CONTENT_LAYER depth buffer.
+export const RENDER_ORDER_LIGHT_GLOW = 2000;

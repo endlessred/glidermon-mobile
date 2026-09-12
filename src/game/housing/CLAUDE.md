@@ -41,6 +41,7 @@ Key files:
 | `render/characterScale.ts` | `computeNativeCharacterHeight` |
 | `types/roomSlots.ts` | fixed furniture **and** character slots, per room-size tier |
 | `types/furnitureCatalog.ts` | `FURNITURE_CATALOG` — one entry per `SlotType`, 1–2 variants each |
+| `render/lightGlow3D.ts` | `buildLightGlow(socket, region, worldUnitsPerPixel, mirrorX)` — soft additive glow disc for a static-atlas lamp's light socket; see Recipes |
 
 ### Two-pass render: shell vs contents (`render/renderLayers.ts`)
 
@@ -404,6 +405,63 @@ furniture entry's `interaction.interactionAnchor` in `furnitureCatalog.ts`, set
 Add a `CharacterSlotDef` to the tier's array in `CHARACTER_SLOT_LAYOUTS`. Its
 tile must be walkable (not covered by furniture). Give it `interactions` only if
 a furniture slot is genuinely adjacent.
+
+### Add a light glow to a lamp (static-atlas lamps only)
+
+Only static-atlas furniture (`FurnitureVariant.staticAtlas`, e.g.
+`traffic_cone_lamp`) supports this — the older `restPoseAsset`/`layers` lamps
+(`lamp_table`, `lamp_classic`) already bake a soft translucent halo directly
+into their PNG's own alpha channel (confirmed by sampling
+`1x1_TableLamp_On.png` — alpha fades from 0 to 255 well outside the shade's
+hard edge). A static-atlas item can't do that: its art is flat
+`#ff0000`/`#00ff00`/`#0000ff` hue-indexed recolor masks (see
+`StaticFurnitureVisual`'s doc comment in `RoomConfig.ts`), and a soft alpha
+gradient baked into that art would get misread as part of the recolor mask.
+`render/lightGlow3D.ts` adds the same idea back as a separate, non-recolored,
+always-on-top overlay instead.
+
+1. Find the atlas region's `bounds:x,y,w,h` (page-space rect) and `rotate`
+   value (e.g. `rotate:90`) in `ShadedFurniture.atlas`.
+2. Crop that page rect out of `ShadedFurniture.png` and un-rotate it back to
+   upright (rotate the crop by `-`rotate, i.e. clockwise for `rotate:90` — the
+   same direction `scripts/buildFurnitureAtlasMetadata.ts`'s `toDisplayedLocal`
+   uses) so you're looking at the same top-left-origin/y-down, un-rotated
+   frame `anchorX`/`anchorY` are already defined in. No build step needed, a
+   throwaway script is enough:
+   ```python
+   from PIL import Image
+   img = Image.open('src/assets/Apartment/ShadedFurniture/ShadedFurniture.png')
+   crop = img.crop((x, y, x + w, y + h))                   # bounds from the .atlas entry
+   crop.rotate(-90, expand=True).save('lamp_upright.png')  # match the entry's rotate value
+   ```
+3. Open `lamp_upright.png` and read off the pixel coordinate of the
+   light-emission point (bulb / shade opening / etc.) in that image —
+   top-left origin, y-down, same units as the region's declared
+   `width`/`height`.
+4. Add `lightSocket: { x, y }` to that variant's `staticAtlas` in
+   `furnitureCatalog.ts`:
+   ```ts
+   staticAtlas: { atlasRegion: "skeleton-Lighting-Traffic Cone Lamp_0", lightSocket: { x: 53, y: 62 } },
+   ```
+5. Reload and check on-device (`glidermon://home`) —
+   `buildStaticFurnitureSlotBillboard` picks up `lightSocket` automatically and
+   adds the glow as a sibling of the lamp mesh, so it inherits the slot's
+   world position/rotation/`CONTENT_LAYER` for free. Nothing else to wire up.
+
+Defaults, overridable per-lamp on the same `lightSocket` object: radius
+`DEFAULT_LIGHT_GLOW_RADIUS` = 2 world units (`radius?`), tint `#fff3c4` warm
+white (`color?`). Overall brightness (`DEFAULT_LIGHT_GLOW_OPACITY` = 0.5,
+lowered from an initial 1.0 that read as too strong on-device) is currently a
+module constant in `lightGlow3D.ts`, not per-variant — adjust it there, or
+promote it to a per-socket field if a future lamp genuinely needs to look
+brighter/dimmer than the rest rather than every lamp needing retuning together.
+
+The glow always renders in front of *everything* in the room (character,
+furniture, the Adventure Board) via `RENDER_ORDER_LIGHT_GLOW`
+(`slotWorldPlacement3D.ts`) + `depthTest:false` — read that constant's comment
+before changing it, and never give anything else a `renderOrder` at or above
+it, or reuse a value at/below the Adventure Board's "in front" band
+(~1000–1000.6) for a new glow-like effect.
 
 ## Constraints / gotchas
 

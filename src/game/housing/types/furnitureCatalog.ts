@@ -290,7 +290,12 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
       // and for what recolorable/palettes do.
       {
         id: "traffic_cone_lamp", displayName: "Traffic Cone Lamp", cost: 180,
-        staticAtlas: { atlasRegion: "skeleton-Lighting-Traffic Cone Lamp_0" },
+        // lightSocket: measured off an un-rotated, upright crop of this
+        // region (bounds:2,870,170,289 rotate:90 in ShadedFurniture.atlas) --
+        // the red bulb/reflector inside the shade sits at (53, 62) in that
+        // 170x289, top-left-origin/y-down frame. Recrop and re-measure by eye
+        // if this art is ever replaced (see StaticFurnitureVisual.lightSocket).
+        staticAtlas: { atlasRegion: "skeleton-Lighting-Traffic Cone Lamp_0", lightSocket: { x: 53, y: 62 } },
         recolorable: true, palettes: FURNITURE_RECOLOR_PALETTES,
         rarity: "uncommon", tags: ["fun", "cheerful"],
         shopStock: [{ store: "luma", weight: 7 }, { store: "sable", weight: 3 }],

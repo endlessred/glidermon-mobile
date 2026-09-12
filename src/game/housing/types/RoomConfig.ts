@@ -199,6 +199,29 @@ export interface StaticFurnitureVisual {
    * set this only if a static-atlas item needs a footprint different from
    * its slot's, which no current item does. */
   footprint?: { width: number; depth: number };
+  /**
+   * Local pixel position of this variant's light-emission point (e.g. a
+   * lamp's bulb/shade opening), in the SAME top-left-origin/y-down,
+   * un-rotated pixel space as the atlas region's own declared width/height
+   * (see shadedFurnitureAtlas.ts's `anchorX`/`anchorY`) -- i.e. read this
+   * straight off the un-rotated, upright crop of the art (an image editor,
+   * or crop+un-rotate per that file's `rotate:90` convention and eyeball
+   * it) exactly like the anchor point is authored. Recompute by eye
+   * whenever the art changes; no build step required.
+   *
+   * When set, render/lightGlow3D.ts adds a soft additive glow disc at this
+   * point, always drawn in front of every other room-content item (see
+   * RENDER_ORDER_LIGHT_GLOW in slotWorldPlacement3D.ts) so it never gets
+   * hidden by the character or neighboring furniture.
+   */
+  lightSocket?: {
+    x: number;
+    y: number;
+    /** Glow radius in world units (tiles). Defaults to DEFAULT_LIGHT_GLOW_RADIUS (lightGlow3D.ts). */
+    radius?: number;
+    /** Glow tint, any THREE.Color-accepted string (hex/name). Defaults to a warm white. */
+    color?: string;
+  };
 }
 
 export interface FurnitureVariant {

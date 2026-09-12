@@ -16,6 +16,7 @@ import { resolveCosmeticRecolor } from '../../../data/cosmetics/palette';
 import { FurnitureVariant } from '../types/RoomConfig';
 import { RoomSlotDef } from '../types/roomSlots';
 import { RoomDims3D } from './grid3D';
+import { buildLightGlow } from './lightGlow3D';
 import {
   resolveSlotWorldPlacement,
   RENDER_ORDER_BEHIND_CHARACTER,
@@ -179,6 +180,10 @@ export async function buildStaticFurnitureSlotBillboard(
 
   const group = new THREE.Group();
   group.add(mesh);
+
+  if (staticAtlas.lightSocket) {
+    group.add(buildLightGlow(staticAtlas.lightSocket, region, scale, mirrorX));
+  }
 
   if (DEBUG_FURNITURE_ANCHORS && slot.kind === 'floor') {
     group.add(buildDebugAnchorMarker(slot.footprint ?? { w: 1, h: 1 }));
