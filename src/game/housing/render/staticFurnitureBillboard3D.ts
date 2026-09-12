@@ -26,13 +26,17 @@ import {
 // World units per source pixel, held uniform across every static-atlas item
 // so trimming never changes an item's apparent size relative to another --
 // the anchor system fixes *position*, this fixes *scale*, deliberately not
-// clamped per-item the way the older layers/restPoseAsset path is. Bumped
-// 25% (1/300 -> 1/240) after on-device review found the first-pass value
-// read 20-30% smaller than intended next to GliderMon/other furniture; a
-// leaf/gamer/half-pipe chair -- roughly 180-220px tall -- now lands around
-// 0.75-0.92 world units. Tune further on-device like
-// FURNITURE_DESIRED_TILE_HEIGHT if it still reads too big/small.
-const STATIC_FURNITURE_WORLD_UNITS_PER_PIXEL = 1 / 240;
+// clamped per-item the way the older layers/restPoseAsset path is.
+// Calibrated (not just eyeballed) by directly comparing carved_wood_chair
+// (this atlas's WoodChair region) against wood_chair_green -- the legacy
+// quad-renderer's item for the *same* chair geometry, just a different
+// export/color path -- placed in the same seating slot with the same fixed
+// camera: legacy rendered 140px tall (screen), this atlas's WoodChair
+// rendered only 120px tall at the old 1/240 scale. 1/240 * (140/120) = 7/1440
+// closes that gap so the two match. See shadedFurnitureAtlas.ts's
+// STATIC_FURNITURE_ANCHOR_Y_CORRECTION_PX for the matching position fix from
+// the same calibration pass.
+const STATIC_FURNITURE_WORLD_UNITS_PER_PIXEL = 7 / 1440;
 
 // Dev-only visualization: draws a small marker at each static-atlas item's
 // resolved anchor/slot origin (plus its 1x1 footprint diamond) so a

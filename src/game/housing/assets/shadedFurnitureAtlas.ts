@@ -16,6 +16,26 @@ import { TextureAtlas } from '@esotericsoftware/spine-core';
 
 const shadedFurnitureMetadata: Record<string, { anchorX: number; anchorY: number }> = require('./generated/shadedFurnitureMetadata.json');
 
+// Calibrated correction applied uniformly to every generated anchorY --
+// on-device comparison of carved_wood_chair (this atlas's WoodChair region)
+// against wood_chair_green (the legacy quad-renderer's *same* chair geometry,
+// restPoseAsset "1x1_WoodChair_Front_Green") found the marker-derived anchor
+// landing ~72px too far up the art: the legacy renderer's bottom-center pivot
+// plants a chair's feet exactly on the slot origin, but the raw marker anchor
+// was landing mid-seat, so every static-atlas item floated/sank relative to
+// where the equivalent legacy-rendered item would sit. Measured via a
+// temporary debug dot on both renderers (see git history for the calibration
+// script) at the shared "seating" slot: legacy chair's screen height 140px
+// (top 725 -> foot/anchor 865) vs this atlas's WoodChair at the old 1/240
+// scale, 120px (top 792 -> bottom 912, anchor dot at 864) -- a 47px screen
+// gap, ~72 source px at that scale. Confirmed sane: WoodChair's declared
+// height is 183px, and anchorY 111 + 72 = 183 lands exactly on the trimmed
+// image's own bottom edge, i.e. this reduces to the same "feet at the very
+// bottom of the trimmed art" rule the legacy renderer already uses. A single
+// pixel constant (not a percentage) because the drift measured as a fixed
+// pixel amount, not proportional to each item's own height.
+const STATIC_FURNITURE_ANCHOR_Y_CORRECTION_PX = 72;
+
 const atlasModule = require('../../../assets/Apartment/ShadedFurniture/ShadedFurniture.atlas');
 const textureModule = require('../../../assets/Apartment/ShadedFurniture/ShadedFurniture.png');
 
@@ -115,7 +135,7 @@ export async function getStaticFurnitureRegion(regionName: string): Promise<Stat
     width: region.width,
     height: region.height,
     anchorX: anchor.anchorX,
-    anchorY: anchor.anchorY,
+    anchorY: anchor.anchorY + STATIC_FURNITURE_ANCHOR_Y_CORRECTION_PX,
     rotated,
     page: {
       x: region.x,
