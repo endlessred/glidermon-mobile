@@ -60,7 +60,11 @@ export default function FurnitureInventoryPanel({ selectedSlot, draftPlacements,
           furnitureId,
           variantId: variant.id,
           name: variant.displayName,
-          previewAsset: variant.restPoseAsset ?? variant.layers?.[0]?.assetName ?? "",
+          // A staticAtlas variant has neither -- falls back to its own id,
+          // which getFurnitureImageSource (quadTextures.ts) resolves against
+          // the pre-rendered thumbnails in furnitureThumbnails.ts. Mirrors
+          // FURNITURE_SHOP_CATALOG's previewAsset in furnitureCatalog.ts.
+          previewAsset: variant.restPoseAsset ?? variant.layers?.[0]?.assetName ?? variant.id,
         });
       }
     }

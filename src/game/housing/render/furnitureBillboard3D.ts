@@ -73,7 +73,8 @@ export async function buildFurnitureSlotBillboard(
       dims,
       billboardQuaternion,
       characterWorldPos,
-      forceInFront
+      forceInFront,
+      def.floorDecal
     );
   }
 

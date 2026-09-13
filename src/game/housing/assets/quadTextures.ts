@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { housingCoreAtlasManifest, RoomAtlasEntry } from './generated/housingCoreAtlasManifest';
 import { starterFurnitureAtlasManifest } from './generated/starterFurnitureAtlasManifest';
+import { getStaticFurnitureThumbnail } from './furnitureThumbnails';
 
 export interface QuadTexture {
   texture: THREE.Texture;
@@ -102,6 +103,13 @@ export async function loadFurnitureTexture(assetName: string): Promise<QuadTextu
 // Plain RN <Image> source (a `require(...)` result, not a THREE texture) for
 // UI previews -- e.g. the shop's furniture catalog cards -- so they don't
 // need a WebGL context just to show a static thumbnail.
+//
+// `assetName` is the variant's `previewAsset` (FURNITURE_SHOP_CATALOG,
+// furnitureCatalog.ts) -- a restPoseAsset/layers filename stem for the
+// legacy quad-texture path, or (when a variant has neither, i.e. it's a
+// static-atlas item) the variant's own id, which the manifest never
+// contains -- so the static-atlas thumbnail lookup below only ever fires
+// for exactly the items that need it.
 export function getFurnitureImageSource(assetName: string): any | null {
-  return manifestByName.get(assetName)?.requirePath ?? null;
+  return manifestByName.get(assetName)?.requirePath ?? getStaticFurnitureThumbnail(assetName) ?? null;
 }

@@ -1,6 +1,6 @@
-// Static-atlas billboard renderer for the chair/storage/lighting slot types
-// (SLOT_TYPE_FOR_FURNITURE_ID) -- the "additive" path described in the
-// furniture-atlas-migration plan. Unlike buildFurnitureSlotBillboard's
+// Static-atlas billboard renderer for the chair/storage/lighting/rug/bed/
+// tableDesk slot types (SLOT_TYPE_FOR_FURNITURE_ID) -- the "additive" path
+// described in the furniture-atlas-migration plan. Unlike buildFurnitureSlotBillboard's
 // existing layers/restPoseAsset path (one PNG per item, bottom-center
 // pivot, per-item scale clamped to the slot's footprint), a static-atlas
 // item is a single trimmed region of the shared ShadedFurniture.atlas,
@@ -21,6 +21,7 @@ import {
   resolveSlotWorldPlacement,
   RENDER_ORDER_BEHIND_CHARACTER,
   RENDER_ORDER_IN_FRONT_OF_CHARACTER,
+  RENDER_ORDER_FLOOR_DECAL,
   BuiltFurnitureBillboard,
 } from './slotWorldPlacement3D';
 
@@ -84,7 +85,13 @@ export async function buildStaticFurnitureSlotBillboard(
   dims: RoomDims3D,
   billboardQuaternion: THREE.Quaternion,
   characterWorldPos: { x: number; z: number },
-  forceInFront = false
+  forceInFront = false,
+  /** Mirrors FurnitureDef.floorDecal (furnitureBillboard3D.ts) for the
+   * static-atlas rugs -- always renders behind every other CONTENT_LAYER
+   * item, not just the character, and never depth-writes. See
+   * RENDER_ORDER_FLOOR_DECAL's own comment for why draw order alone is
+   * enough to guarantee that regardless of world position. */
+  floorDecal = false
 ): Promise<BuiltFurnitureBillboard | null> {
   const staticAtlas = variant.staticAtlas;
   if (!staticAtlas) return null;
@@ -100,15 +107,19 @@ export async function buildStaticFurnitureSlotBillboard(
 
   // Same front/behind-the-character classification as
   // buildFurnitureSlotBillboard -- see that file for why renderOrder (not
-  // depth-buffer occlusion alone) has to arbitrate against the character.
-  // No staticAtlas variant is a floor decal today (see FurnitureDef.floorDecal
-  // / RENDER_ORDER_FLOOR_DECAL) -- if one ever is, it needs the same
-  // always-behind branch buildFurnitureSlotBillboard has, not this
-  // character-relative comparison.
+  // depth-buffer occlusion alone) has to arbitrate against the character. A
+  // floor decal (rug) always renders behind every other content item, never
+  // just the character -- skip the depth-score comparison entirely (and
+  // ignore forceInFront, which only makes sense for a seat), mirroring
+  // buildFurnitureSlotBillboard's own floorDecal branch.
   const slotDepthScore = slotWorldPos.x + slotWorldPos.y + slotWorldPos.z;
   const characterDepthScore = characterWorldPos.x + characterWorldPos.z;
-  const isBehindCharacter = !forceInFront && slotDepthScore <= characterDepthScore;
-  const renderOrder = isBehindCharacter ? RENDER_ORDER_BEHIND_CHARACTER : RENDER_ORDER_IN_FRONT_OF_CHARACTER;
+  const isBehindCharacter = floorDecal || (!forceInFront && slotDepthScore <= characterDepthScore);
+  const renderOrder = floorDecal
+    ? RENDER_ORDER_FLOOR_DECAL
+    : isBehindCharacter
+      ? RENDER_ORDER_BEHIND_CHARACTER
+      : RENDER_ORDER_IN_FRONT_OF_CHARACTER;
 
   const geometry = buildStaticFurnitureGeometry(region);
   // Mirrors makeSpritePlane's opaqueCutout material split (tileSprite.ts):
@@ -165,12 +176,17 @@ export async function buildStaticFurnitureSlotBillboard(
         map: region.texture,
         transparent: !isBehindCharacter,
         depthTest: true,
-        depthWrite: true,
+        // A floor decal never depth-writes -- combined with
+        // RENDER_ORDER_FLOOR_DECAL (drawn first in the opaque queue), nothing
+        // it draws can ever block a later opaque object's depth test, so
+        // every other item unconditionally paints over it. Mirrors
+        // tileSprite.ts's `depthWrite: !floorDecal`.
+        depthWrite: !floorDecal,
         ...(isBehindCharacter ? { alphaTest: 0.5 } : null),
       });
   if (recolor) {
     material.transparent = !isBehindCharacter;
-    material.depthWrite = true;
+    material.depthWrite = !floorDecal;
   }
 
   const scale = STATIC_FURNITURE_WORLD_UNITS_PER_PIXEL;

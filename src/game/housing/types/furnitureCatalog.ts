@@ -1,7 +1,7 @@
 import { FurnitureCatalog, FurnitureDef, FurnitureInteractionDef } from './RoomConfig';
 import { SlotType } from './roomSlots';
 import type { Rarity, ShopStockConfig } from '../../../data/shop/shopTypes';
-import { FURNITURE_RECOLOR_PALETTES } from '../furniture/FurnitureColors';
+import { furnitureOriginalPalette } from '../furniture/FurnitureColors';
 
 // Furniture catalog defining all available furniture items, one entry per
 // slot type (see roomSlots.ts) with 1-2 starter variants each, sourced from
@@ -51,33 +51,43 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
       // that file and scripts/buildFurnitureAtlasMetadata.ts. `recolorable` +
       // `palettes` let the player pick a colorway for this ONE owned item
       // (Furnish Nest's "Colors" action, mirroring Outfit's ColorwaySheet) --
-      // see FurnitureColors.ts' FURNITURE_RECOLOR_PALETTES for the shared
-      // palette list and why this art recolors this way.
+      // see FurnitureColors.ts' furnitureOriginalPalette() for why each
+      // item's "Original" entry is a hand-picked default rather than the
+      // raw #ff0000/#00ff00/#0000ff classification-mask colors, and
+      // FURNITURE_RECOLOR_PALETTES for the shared alternate colorways.
       {
         id: "leaf_chair", displayName: "Leaf Chair", cost: 170,
         staticAtlas: { atlasRegion: "skeleton-Chair-LeafChair_0" },
-        recolorable: true, palettes: FURNITURE_RECOLOR_PALETTES,
+        // Original: green leaf (red ch, dominant), a warm coral cushion/bud
+        // (green ch), small brown root-feet (blue ch).
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#4a7c3a', g: '#e8734a', b: '#5c4a2e' }),
         rarity: "uncommon", tags: ["nature", "cozy"],
         shopStock: [{ store: "luma", weight: 7 }, { store: "sable", weight: 3 }],
       },
       {
         id: "crescent_moon_chair", displayName: "Crescent Moon Chair", cost: 210,
         staticAtlas: { atlasRegion: "skeleton-Chair-Crescent Moon Chair_0" },
-        recolorable: true, palettes: FURNITURE_RECOLOR_PALETTES,
+        // Original: deep plum outer frame (red ch), midnight-navy cushion
+        // (blue ch), pale gold dangling stars (green ch).
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#3d2a5c', b: '#1a2340', g: '#f0d878' }),
         rarity: "uncommon", tags: ["mysterious", "night"],
         shopStock: [{ store: "sable", weight: 7 }, { store: "luma", weight: 3 }],
       },
       {
         id: "gamer_chair", displayName: "Gamer Chair", cost: 190,
         staticAtlas: { atlasRegion: "skeleton-Chair-GamerChair_0" },
-        recolorable: true, palettes: FURNITURE_RECOLOR_PALETTES,
+        // Original: charcoal-black body (red ch, dominant), steel-blue
+        // bolsters/base (blue ch), racing-red logo accent (green ch).
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#26262b', g: '#c92a2a', b: '#3a6ea5' }),
         rarity: "uncommon", tags: ["casual", "fun"],
         shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
       },
       {
         id: "half_pipe_chair", displayName: "Half-Pipe Chair", cost: 190,
         staticAtlas: { atlasRegion: "skeleton-Chair-HalfPipeChair_0" },
-        recolorable: true, palettes: FURNITURE_RECOLOR_PALETTES,
+        // Original: teal ramp shell (blue ch, dominant), punchy red cushion
+        // (red ch), lime sticker graphics (green ch).
+        recolorable: true, palettes: furnitureOriginalPalette({ b: '#2a8fae', r: '#d9342b', g: '#7dcf3f' }),
         rarity: "uncommon", tags: ["fun", "casual"],
         shopStock: [{ store: "luma", weight: 5 }, { store: "sable", weight: 5 }],
       },
@@ -86,7 +96,17 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
         staticAtlas: { atlasRegion: "skeleton-Chair-WoodChair_0" },
         // WoodChair only paints its red channel (confirmed by channel-usage
         // sampling) -- palette swaps just act as a stain-color change here.
-        recolorable: true, palettes: FURNITURE_RECOLOR_PALETTES,
+        // Original: warm wood brown.
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#8a5a2e' }),
+        rarity: "common", tags: ["casual"],
+        shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
+      },
+      {
+        id: "barstool", displayName: "Barstool", cost: 150,
+        staticAtlas: { atlasRegion: "skeleton-Chair-Barstool_0" },
+        // Original: classic diner red (the base/pedestal isn't part of the
+        // recolor mask -- it's a fixed neutral lavender-gray in the source art).
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#c92a2a' }),
         rarity: "common", tags: ["casual"],
         shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
       },
@@ -125,6 +145,45 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
         rarity: "uncommon",
         tags: ["cute", "cheerful"],
         shopStock: [{ store: "luma", weight: 7 }, { store: "sable", weight: 3 }],
+      },
+      // Static-atlas migration (ShadedFurniture.atlas) -- see the chair
+      // entry above for how staticAtlas differs from restPoseAsset/layers,
+      // and for what recolorable/palettes do.
+      {
+        id: "leaf_hammock_bed", displayName: "Leaf Hammock", cost: 250,
+        staticAtlas: { atlasRegion: "skeleton-Beds-Leaf Hammock_0" },
+        // Original: green leaf sling (green ch, dominant), coral flower
+        // accent (red ch), brown post caps (blue ch).
+        recolorable: true, palettes: furnitureOriginalPalette({ g: '#5a8f3d', r: '#e8734a', b: '#6b4226' }),
+        rarity: "uncommon", tags: ["nature", "cozy"],
+        shopStock: [{ store: "luma", weight: 7 }, { store: "sable", weight: 3 }],
+      },
+      {
+        id: "skater_bed", displayName: "Skater Bed", cost: 270,
+        staticAtlas: { atlasRegion: "skeleton-Beds-Skater Bed_0" },
+        // Original: skate-park blue deck (blue ch), lime sticker graphics
+        // (green ch), orange ramp wedge (red ch).
+        recolorable: true, palettes: furnitureOriginalPalette({ b: '#2a6fb0', g: '#8fd94a', r: '#e8630c' }),
+        rarity: "uncommon", tags: ["fun", "casual"],
+        shopStock: [{ store: "luma", weight: 5 }, { store: "sable", weight: 5 }],
+      },
+      {
+        id: "ornate_bed", displayName: "Ornate Bed", cost: 280,
+        staticAtlas: { atlasRegion: "skeleton-Beds-Ornate Bed_0" },
+        // Original: burgundy scalloped frame (red ch, dominant), navy
+        // bedding (blue ch).
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#7a2035', b: '#2a3d6b' }),
+        rarity: "uncommon", tags: ["cheerful", "cute"],
+        shopStock: [{ store: "luma", weight: 7 }, { store: "sable", weight: 3 }],
+      },
+      {
+        id: "celestial_canopy_bed", displayName: "Celestial Canopy Bed", cost: 340,
+        staticAtlas: { atlasRegion: "skeleton-Beds-Celestial Bed_0" },
+        // Original: navy posts/frame (red ch), rich red canopy drape (blue
+        // ch, dominant), gold star pattern (green ch).
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#2a3d7a', b: '#c9342b', g: '#f0d878' }),
+        rarity: "rare", tags: ["mysterious", "night"],
+        shopStock: [{ store: "sable", weight: 7 }, { store: "luma", weight: 3 }],
       },
     ]
   },
@@ -169,28 +228,36 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
       {
         id: "apothecary_cabinet", displayName: "Apothecary Cabinet", cost: 220,
         staticAtlas: { atlasRegion: "skeleton-Storage-Apothecary_0" },
-        recolorable: true, palettes: FURNITURE_RECOLOR_PALETTES,
+        // Original: dark walnut cabinet frame (red ch, dominant), fresh
+        // vine leaves (green ch), bottle-glass green jars (blue ch).
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#4a2f1f', b: '#2f6b4f', g: '#5a8f3d' }),
         rarity: "uncommon", tags: ["mysterious"],
         shopStock: [{ store: "sable", weight: 7 }, { store: "luma", weight: 3 }],
       },
       {
         id: "hollow_log_trunk", displayName: "Hollow Log Trunk", cost: 190,
         staticAtlas: { atlasRegion: "skeleton-Storage-Hollow Log Trunk_0" },
-        recolorable: true, palettes: FURNITURE_RECOLOR_PALETTES,
+        // Original: warm bark brown (red ch, dominant), fresh vine leaves
+        // (green ch).
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#7a5230', g: '#5a8f3d' }),
         rarity: "uncommon", tags: ["nature", "cozy"],
         shopStock: [{ store: "luma", weight: 7 }, { store: "sable", weight: 3 }],
       },
       {
         id: "skate_locker", displayName: "Skate Locker", cost: 180,
         staticAtlas: { atlasRegion: "skeleton-Storage-Skate Locker_0" },
-        recolorable: true, palettes: FURNITURE_RECOLOR_PALETTES,
+        // Original: cobalt-blue locker body (red ch), charcoal gear icons
+        // (blue ch), lime sticker accents (green ch).
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#2a5f9e', b: '#2c2c30', g: '#8fd94a' }),
         rarity: "common", tags: ["casual", "fun"],
         shopStock: [{ store: "luma", weight: 5 }, { store: "sable", weight: 5 }],
       },
       {
         id: "steamer_trunk", displayName: "Steamer Trunk", cost: 200,
         staticAtlas: { atlasRegion: "skeleton-Storage-Steamer Trunk_0" },
-        recolorable: true, palettes: FURNITURE_RECOLOR_PALETTES,
+        // Original: leather-brown trunk body (red ch, dominant), aged-brass
+        // hardware (blue ch), muted teal travel stickers (green ch).
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#6b4226', b: '#a8862f', g: '#4a7c6b' }),
         rarity: "common", tags: ["casual"],
         shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
       },
@@ -221,6 +288,87 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
         id: "rug_blue", displayName: "Blue Square Rug", cost: 130, skin: "SquareCarpet_Blue", restPoseAsset: "1x1_SquareCarpet_Blue",
         rarity: "common", tags: ["calm"],
         shopStock: [{ store: "luma", weight: 6 }, { store: "sable", weight: 4 }],
+      },
+      // Static-atlas migration (ShadedFurniture.atlas) -- see the chair
+      // entry above for how staticAtlas differs from restPoseAsset/layers,
+      // and for what recolorable/palettes do. floorDecal (declared once on
+      // this FurnitureDef, above) applies to these the same as the plain
+      // variants -- see staticFurnitureBillboard3D.ts's floorDecal handling.
+      {
+        id: "striped_carpet", displayName: "Striped Carpet", cost: 140,
+        staticAtlas: { atlasRegion: "skeleton-Rugs-Striped Carpet_0" },
+        // Original: terracotta -- single channel (the ribbed stripe look
+        // comes from the art's own shading bands, not multiple hues).
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#b0583a' }),
+        rarity: "common", tags: ["casual"],
+        shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
+      },
+      {
+        id: "rope_rug", displayName: "Rope Rug", cost: 150,
+        staticAtlas: { atlasRegion: "skeleton-Rugs-Rope Rug_0" },
+        // Original: natural jute tan -- single channel.
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#c9a876' }),
+        rarity: "common", tags: ["casual"],
+        shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
+      },
+      {
+        id: "shag_carpet", displayName: "Shag Carpet", cost: 150,
+        staticAtlas: { atlasRegion: "skeleton-Rugs-Shag Carpet_0" },
+        // Original: retro mustard-gold shag -- single channel.
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#d9a83d' }),
+        rarity: "common", tags: ["cozy"],
+        shopStock: [{ store: "luma", weight: 6 }, { store: "sable", weight: 4 }],
+      },
+      {
+        id: "fuzzy_rug", displayName: "Fuzzy Rug", cost: 150,
+        staticAtlas: { atlasRegion: "skeleton-Rugs-Fuzzy Rug_0" },
+        // Original: soft blush pink -- single channel.
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#e79ab5' }),
+        rarity: "common", tags: ["cozy", "cute"],
+        shopStock: [{ store: "luma", weight: 6 }, { store: "sable", weight: 4 }],
+      },
+      {
+        id: "patchwork_rug", displayName: "Patchwork Rug", cost: 170,
+        staticAtlas: { atlasRegion: "skeleton-Rugs-Patchwork_0" },
+        // Original: a coordinated quilt palette -- brick red, sage green,
+        // denim blue -- instead of the raw primary red/green/blue mask.
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#b0433a', b: '#4a6f9e', g: '#7a9c5c' }),
+        rarity: "uncommon", tags: ["fun", "cheerful"],
+        shopStock: [{ store: "luma", weight: 7 }, { store: "sable", weight: 3 }],
+      },
+      {
+        id: "woven_leaves_rug", displayName: "Woven Leaves Rug", cost: 170,
+        staticAtlas: { atlasRegion: "skeleton-Rugs-Woven Leaves_0" },
+        // Original: autumn leaf weave -- coral (red ch), green (green ch,
+        // dominant), brown (blue ch).
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#e8734a', g: '#4a7c3a', b: '#8a4a2e' }),
+        rarity: "uncommon", tags: ["nature"],
+        shopStock: [{ store: "luma", weight: 7 }, { store: "sable", weight: 3 }],
+      },
+      {
+        id: "embroidered_rug", displayName: "Embroidered Rug", cost: 170,
+        staticAtlas: { atlasRegion: "skeleton-Rugs-Embroidered_0" },
+        // Original: deep rose -- single channel.
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#a83d5c' }),
+        rarity: "uncommon", tags: ["cozy", "cheerful"],
+        shopStock: [{ store: "luma", weight: 6 }, { store: "sable", weight: 4 }],
+      },
+      {
+        id: "art_deco_rug", displayName: "Art Deco Rug", cost: 180,
+        staticAtlas: { atlasRegion: "skeleton-Rugs-Art Deco Rug_0" },
+        // Original: teal / gold / deep plum fan pattern.
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#2a8f8a', g: '#c9a24a', b: '#3d2a5c' }),
+        rarity: "uncommon", tags: ["moody", "artsy"],
+        shopStock: [{ store: "sable", weight: 6 }, { store: "luma", weight: 4 }],
+      },
+      {
+        id: "celestial_rug", displayName: "Celestial Rug", cost: 190,
+        staticAtlas: { atlasRegion: "skeleton-Rugs-Celestial Rug_0" },
+        // Original: midnight-navy field (blue ch, dominant), gold sun/moon
+        // medallion (red ch), pale gold border dots (green ch).
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#d9b354', g: '#f0d878', b: '#1a2350' }),
+        rarity: "uncommon", tags: ["mysterious", "night"],
+        shopStock: [{ store: "sable", weight: 7 }, { store: "luma", weight: 3 }],
       },
     ]
   },
@@ -264,6 +412,34 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
         rarity: "common", tags: ["casual"],
         shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
       },
+      // Static-atlas migration (ShadedFurniture.atlas) -- see the chair
+      // entry above for how staticAtlas differs from restPoseAsset/layers,
+      // and for what recolorable/palettes do.
+      {
+        id: "stump_table", displayName: "Stump Table", cost: 180,
+        staticAtlas: { atlasRegion: "skeleton-Tables-Stump Table_0" },
+        // Original: bark-brown trunk (red ch, dominant), mossy green top
+        // (green ch), small blue flowers (blue ch).
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#7a5230', g: '#5a8f3d', b: '#4a6fd9' }),
+        rarity: "uncommon", tags: ["nature", "cozy"],
+        shopStock: [{ store: "luma", weight: 7 }, { store: "sable", weight: 3 }],
+      },
+      {
+        id: "skateboard_table", displayName: "Skateboard Table", cost: 200,
+        staticAtlas: { atlasRegion: "skeleton-Tables-Skateboard Table_0" },
+        // Original: stacked skate decks -- blue, lime, red.
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#2a5f9e', g: '#8fd94a', b: '#c9342b' }),
+        rarity: "uncommon", tags: ["fun", "casual"],
+        shopStock: [{ store: "luma", weight: 5 }, { store: "sable", weight: 5 }],
+      },
+      {
+        id: "spellbook_table", displayName: "Spellbook Table", cost: 260,
+        staticAtlas: { atlasRegion: "skeleton-Tables-Spellbook Table_0" },
+        // Original: stacked spellbooks -- deep maroon, forest green, navy.
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#8a1f2b', g: '#4a7c3a', b: '#2a3d7a' }),
+        rarity: "rare", tags: ["mysterious", "artsy"],
+        shopStock: [{ store: "sable", weight: 7 }, { store: "luma", weight: 3 }],
+      },
     ]
   },
 
@@ -296,9 +472,64 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
         // 170x289, top-left-origin/y-down frame. Recrop and re-measure by eye
         // if this art is ever replaced (see StaticFurnitureVisual.lightSocket).
         staticAtlas: { atlasRegion: "skeleton-Lighting-Traffic Cone Lamp_0", lightSocket: { x: 53, y: 62 } },
-        recolorable: true, palettes: FURNITURE_RECOLOR_PALETTES,
+        // Original: safety-orange cone (red ch), cream reflective stripe
+        // (green ch), cheerful teal dome/shade (blue ch).
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#e8630c', g: '#f0ead6', b: '#2a8fae' }),
         rarity: "uncommon", tags: ["fun", "cheerful"],
         shopStock: [{ store: "luma", weight: 7 }, { store: "sable", weight: 3 }],
+      },
+      {
+        id: "modern_lamp", displayName: "Modern Lamp", cost: 150,
+        // lightSocket: this shade only paints its red channel across the
+        // whole drum, no distinct bulb -- measured as the centroid of the
+        // red-classified pixels (a script sampling ShadedFurniture.png,
+        // matching r>100/b<60/r>g+20 on an opaque pixel), same convention as
+        // the other new lamps below. Recrop and re-measure if this art changes.
+        staticAtlas: { atlasRegion: "skeleton-Lighting-Modern Lamp_0", lightSocket: { x: 48, y: 86 } },
+        // Original: cream drum shade -- single channel.
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#e8ded0' }),
+        rarity: "common", tags: ["casual"],
+        shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
+      },
+      {
+        id: "wood_lamp", displayName: "Wood Lamp", cost: 160,
+        staticAtlas: { atlasRegion: "skeleton-Lighting-Wood Lamp_0", lightSocket: { x: 53, y: 52 } },
+        // Original: warm brass/ochre bowl shade -- single channel (the
+        // tripod stem below isn't part of the mask, it's already a fixed
+        // tan in the source art).
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#b8895a' }),
+        rarity: "common", tags: ["nature", "casual"],
+        shopStock: [{ store: "luma", weight: 6 }, { store: "sable", weight: 4 }],
+      },
+      {
+        id: "cute_lamp", displayName: "Cute Lamp", cost: 190,
+        staticAtlas: { atlasRegion: "skeleton-Lighting-Cute Lamp_0", lightSocket: { x: 65, y: 84 } },
+        // Original: cheerful golden yellow -- single channel.
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#f2b705' }),
+        rarity: "uncommon", tags: ["cute", "cheerful"],
+        shopStock: [{ store: "luma", weight: 8 }, { store: "sable", weight: 2 }],
+      },
+      {
+        id: "rice_paper_lamp", displayName: "Rice Paper Lamp", cost: 210,
+        staticAtlas: { atlasRegion: "skeleton-Lighting-Rice Paper Lamp_0", lightSocket: { x: 72, y: 109 } },
+        // Original: cream paper lantern -- single channel.
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#e8ded0' }),
+        rarity: "uncommon", tags: ["calm", "artsy"],
+        shopStock: [{ store: "sable", weight: 5 }, { store: "luma", weight: 5 }],
+      },
+      {
+        id: "duo_lamp", displayName: "Duo Lamp", cost: 200,
+        // lightSocket: two separate shade openings -- a single socket only
+        // supports one glow disc, so this is the midpoint between them
+        // (centroid of all red-classified pixels combined). At the default
+        // 2-world-unit glow radius (lightGlow3D.ts) a single centered disc
+        // comfortably covers both shades instead of favoring one.
+        staticAtlas: { atlasRegion: "skeleton-Lighting-Duo Lamp_0", lightSocket: { x: 62, y: 47 } },
+        // Original: warm cream shades -- single channel (the stem isn't
+        // part of the mask, it's already a fixed plum-gray in the source art).
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#f0e6d2' }),
+        rarity: "uncommon", tags: ["moody"],
+        shopStock: [{ store: "sable", weight: 6 }, { store: "luma", weight: 4 }],
       },
     ]
   },
@@ -450,7 +681,11 @@ export const FURNITURE_SHOP_CATALOG: FurnitureShopItem[] = Object.values(FURNITU
     slotType: SLOT_TYPE_FOR_FURNITURE_ID[def.id],
     name: `${SLOT_TYPE_LABELS[SLOT_TYPE_FOR_FURNITURE_ID[def.id]]} – ${variant.displayName}`,
     cost: variant.cost,
-    previewAsset: variant.restPoseAsset ?? variant.layers?.[0]?.assetName ?? '',
+    // A staticAtlas variant has neither -- falls back to its own id, which
+    // getFurnitureImageSource (quadTextures.ts) resolves against the
+    // pre-rendered thumbnails in furnitureThumbnails.ts instead of the
+    // restPoseAsset manifest.
+    previewAsset: variant.restPoseAsset ?? variant.layers?.[0]?.assetName ?? variant.id,
     rarity: variant.rarity,
     tags: variant.tags,
     shopStock: variant.shopStock,

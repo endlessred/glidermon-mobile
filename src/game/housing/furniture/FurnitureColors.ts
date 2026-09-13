@@ -181,3 +181,29 @@ export const FURNITURE_RECOLOR_PALETTES: import("../../../data/cosmetics/palette
   { id: 'toxic_slime', name: 'Toxic Slime', colors: ['#6fbf3f', '#4a8a26', '#274a14'], channelColors: { r: '#6fbf3f', g: '#4a8a26', b: '#274a14' } },
   { id: 'cotton_candy', name: 'Cotton Candy', colors: ['#f4a6d9', '#a6d9f4', '#d9a6f4'], channelColors: { r: '#f4a6d9', g: '#a6d9f4', b: '#d9a6f4' } },
 ];
+
+/**
+ * Builds a per-item palette list whose "original" entry (DEFAULT_PALETTE_ID,
+ * palette.ts) is this item's own hand-picked default look instead of the
+ * flat #ff0000/#00ff00/#0000ff classification-mask colors literally baked
+ * into FURNITURE_RECOLOR_PALETTES' shared 'original' entry -- that raw mask
+ * is what an item shows before a player ever opens "Colors", so every
+ * recolorable item needs its own sensible default here (a natural wood
+ * brown, a leaf green, etc.), chosen by inspecting which parts of that
+ * item's art each channel actually paints (see
+ * scripts/buildFurnitureAtlasMetadata.ts's channel-usage sampling approach --
+ * the same technique was used offline to pick these). The remaining named
+ * palettes (sunset_coral, midnight_violet, ...) are shared unchanged so the
+ * "Colors" picker still offers every item the same alternate colorways.
+ */
+export function furnitureOriginalPalette(
+  originalChannelColors: import("../../../data/cosmetics/palette").MaskRecolor
+): import("../../../data/cosmetics/palette").CosmeticPalette[] {
+  const colors = [originalChannelColors.r, originalChannelColors.g, originalChannelColors.b].filter(
+    (c): c is string => !!c
+  );
+  return [
+    { id: 'original', name: 'Original', colors, channelColors: originalChannelColors },
+    ...FURNITURE_RECOLOR_PALETTES.slice(1),
+  ];
+}
