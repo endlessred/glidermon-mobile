@@ -75,6 +75,11 @@ export const GLUCOSE_GOAL_DURATION_MS = 5 * 60 * 60 * 1000; // 5 hours
 export const CHECK_IN_XP: Record<CheckInSlot, number> = { morning: 50, midday: 30, evening: 80 };
 export const CHECK_IN_ACORNS: Record<CheckInSlot, number> = { morning: 5, midday: 3, evening: 8 };
 
+/** Flat daily-acorn-cap multiplier bonus each completed check-in unlocks,
+ * regardless of slot or goal outcome (see computeCapMultiplier). Exported so
+ * the reward UI shows the real number. */
+export const CHECK_IN_CAP_BONUS = 0.17;
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const ymd = (d = new Date()) => {
@@ -111,35 +116,64 @@ export function latestGrading(today: DailyCheckIns): GradingCheckIn | null {
   return latest;
 }
 
+export interface GlucoseGoalEvaluation {
+  /** Readings found in the window. < 3 => low confidence (neutral 0.5 adherence). */
+  readingCount: number;
+  /** Actual time-in-range % over the window (70–180 mg/dL), 0..100 -- the real
+   * user-facing metric, distinct from `adherence`. */
+  actualInRangePct: number;
+  /** Readings above the no_highs limit (only meaningful for a no_highs goal). */
+  highsCount: number;
+  /** Readings below the no_lows limit (only meaningful for a no_lows goal). */
+  lowsCount: number;
+  /** Normalized progress toward the selected goal, 0..1 -- the value the cap
+   * multiplier uses at grading time. NOT a display percentage (e.g. for a
+   * "70% in range" goal this hits 1.0 as soon as actual TIR reaches 70%). */
+  adherence: number;
+}
+
 /**
- * Reads the gameStore CGM trail and returns a 0–1 adherence score for a goal.
- * Returns 0.5 (neutral partial credit) if fewer than 3 readings exist in the window.
+ * Reads the gameStore CGM trail and returns both the actual metrics for a
+ * glucose goal's window and the 0–1 normalized adherence score. `adherence`
+ * is 0.5 (neutral partial credit) when fewer than 3 readings exist.
  */
-function computeGlucoseAdherence(
+export function evaluateGlucoseGoal(
   goal: GlucoseGoal,
   fromMs: number,
   toMs: number
-): number {
+): GlucoseGoalEvaluation {
   const trail = useGameStore.getState().engine.trail;
   const readings = trail.filter(r => r.ts >= fromMs && r.ts <= toMs);
+  const n = readings.length;
 
-  if (readings.length < 3) return 0.5;
+  const inRange = readings.filter(r => r.mgdl >= 70 && r.mgdl <= 180).length;
+  const actualInRangePct = n > 0 ? (inRange / n) * 100 : 0;
+  const highLimit = goal.type === "no_highs" ? goal.target : 180;
+  const lowLimit = goal.type === "no_lows" ? goal.target : 70;
+  const highsCount = readings.filter(r => r.mgdl > highLimit).length;
+  const lowsCount = readings.filter(r => r.mgdl < lowLimit).length;
 
-  switch (goal.type) {
-    case "tir": {
-      const inRange = readings.filter(r => r.mgdl >= 70 && r.mgdl <= 180).length;
-      const actualPct = (inRange / readings.length) * 100;
-      return Math.min(1.0, actualPct / goal.target);
-    }
-    case "no_highs": {
-      const above = readings.filter(r => r.mgdl > goal.target).length;
-      return 1.0 - above / readings.length;
-    }
-    case "no_lows": {
-      const below = readings.filter(r => r.mgdl < goal.target).length;
-      return 1.0 - below / readings.length;
+  let adherence = 0.5;
+  if (n >= 3) {
+    switch (goal.type) {
+      case "tir":
+        adherence = Math.min(1.0, actualInRangePct / goal.target);
+        break;
+      case "no_highs":
+        adherence = 1.0 - highsCount / n;
+        break;
+      case "no_lows":
+        adherence = 1.0 - lowsCount / n;
+        break;
     }
   }
+
+  return { readingCount: n, actualInRangePct, highsCount, lowsCount, adherence };
+}
+
+/** 0–1 adherence score for a goal window (see evaluateGlucoseGoal). */
+function computeGlucoseAdherence(goal: GlucoseGoal, fromMs: number, toMs: number): number {
+  return evaluateGlucoseGoal(goal, fromMs, toMs).adherence;
 }
 
 /**
@@ -151,7 +185,7 @@ function computeCapMultiplier(today: DailyCheckIns): number {
   let m = 1.0;
 
   for (const slot of SLOT_ORDER) {
-    if (today[slot]) m += 0.17;
+    if (today[slot]) m += CHECK_IN_CAP_BONUS;
   }
 
   const grading = latestGrading(today);
@@ -181,6 +215,13 @@ export type CheckInState = {
   resetDailyIfNeeded: () => void;
   availableSlot: () => CheckInSlot | null;
   completeCheckIn: (slot: CheckInSlot, payload: CheckInPayload) => void;
+  /** Dev/test only: force today's slots back to empty so the check-in card
+   * reappears (used by the `glidermon://checkin` deep link). */
+  devClearToday: () => void;
+  /** Dev/test only: seed a completed goal-setting record (in the evening
+   * slot) + leave earlier slots open, so the next check-in runs the grading
+   * flow regardless of the time of day (`glidermon://checkin/grade`). */
+  devSeedGrading: () => void;
 };
 
 const STORE_VERSION = 3;
@@ -249,6 +290,26 @@ export const useCheckInStore = create<CheckInState>()(
 
         useProgressionStore.getState().setCheckInCapMultiplier(computeCapMultiplier(nextToday));
         useProgressionStore.getState().grantCheckInXp(CHECK_IN_XP[slot], CHECK_IN_ACORNS[slot]);
+      },
+
+      devClearToday: () => {
+        set({ today: emptyDay() });
+        useProgressionStore.getState().setCheckInCapMultiplier(1.0);
+      },
+
+      devSeedGrading: () => {
+        const startMs = Date.now() - 60 * 60 * 1000;
+        const day = emptyDay();
+        day.evening = {
+          kind: "goal_setting",
+          completedAt: new Date().toISOString(),
+          glucoseGoal: { type: "tir", target: 70, startMs, endMs: startMs + GLUCOSE_GOAL_DURATION_MS },
+          lifestyleGoals: [
+            { category: "meal", text: "Bolus before every meal" },
+            { category: "activity", text: "30-minute walk" },
+          ],
+        };
+        set({ today: day });
       },
     }),
     {

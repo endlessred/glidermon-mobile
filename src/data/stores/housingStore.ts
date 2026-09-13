@@ -4,6 +4,54 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { FloorSetName, WallSetName } from "../../game/housing/types/RoomConfig";
 import { DEFAULT_FLOOR_PATTERN_ID, DEFAULT_WALL_PATTERN_ID } from "../../game/housing/types/proceduralPatternCatalog";
+import {
+  getNestThemeById,
+  getUsableNestThemes,
+  getNestThemeWallPieceById,
+  getNestThemeFloorPieceById,
+  nestThemeWallLeftId,
+  nestThemeWallRightId,
+  nestThemeFloorId,
+} from "../../game/housing/types/nestThemeCatalog";
+import { isPremiumEntitled } from "../../game/housing/premiumEntitlement";
+
+// Shared "is this id allowed" gate for surface setters -- a Nest Theme piece
+// id (e.g. "nestTheme:mossy_grove:floor") is gated by its theme's own
+// premiumOnly/entitlement (the same check applyNestTheme already uses),
+// never by unlockedFloorPatternIds/unlockedWallPatternIds -- those two
+// arrays only ever hold plain proceduralPatternCatalog.ts ids, by design
+// (see nestThemeCatalog.ts's id-namespace comment). A plain catalog id falls
+// back to the existing unlocked-array check.
+function isFloorPatternIdUsable(id: string, unlockedFloorPatternIds: string[]): boolean {
+  const piece = getNestThemeFloorPieceById(id);
+  if (piece) {
+    const theme = getNestThemeById(piece.themeId);
+    return !!theme && (!theme.premiumOnly || isPremiumEntitled());
+  }
+  return unlockedFloorPatternIds.includes(id);
+}
+function isWallPatternIdUsable(id: string, unlockedWallPatternIds: string[]): boolean {
+  const piece = getNestThemeWallPieceById(id);
+  if (piece) {
+    const theme = getNestThemeById(piece.themeId);
+    return !!theme && (!theme.premiumOnly || isPremiumEntitled());
+  }
+  return unlockedWallPatternIds.includes(id);
+}
+// If floor+left+right exactly match one usable theme's three pieces, that
+// theme's id is the correct activeNestThemeId; otherwise the configuration
+// is genuinely mixed and it should be null. Computed fresh rather than
+// trusted from the caller, since a piecemeal edit can accidentally
+// reconstruct a theme (or drift away from one) without saying so explicitly.
+function matchingNestThemeId(floorPatternId: string, wallPatternIdLeft: string, wallPatternIdRight: string): string | null {
+  const theme = getUsableNestThemes().find(
+    (t) =>
+      nestThemeFloorId(t.id) === floorPatternId &&
+      nestThemeWallLeftId(t.id) === wallPatternIdLeft &&
+      nestThemeWallRightId(t.id) === wallPatternIdRight
+  );
+  return theme?.id ?? null;
+}
 
 export interface RoomSizeTier {
   width: number;
@@ -47,13 +95,34 @@ type HousingState = {
   // plan for why these two systems are deliberately not unified.
   activeFloorPatternId: string;
   activeWallPatternId: string;
+  // Per-screen-side wall selection -- the 3D-primitive room shell's two
+  // visible walls are NOT interchangeable the way `activeWallPatternId`
+  // above assumed (that field renders identically on both, fine for
+  // symmetric repeating/tileable patterns). An authored Nest Theme's two
+  // wall images are deliberately different, so the renderer needs a
+  // distinct selection per side -- see sceneBuilder3D.ts's
+  // wallPatternIdLeft/wallPatternIdRight and nestThemeCatalog.ts's
+  // left/right screen-wall naming. Added alongside (not replacing)
+  // `activeWallPatternId`, which existing repeating-material call sites
+  // (the shop, PatternSwatch) keep reading/writing unchanged --
+  // `setActiveWallPattern` sets all three fields together so a plain
+  // repeating wall pattern still looks identical on both walls exactly as
+  // before.
+  activeWallPatternIdLeft: string;
+  activeWallPatternIdRight: string;
+  // Which complete Nest Theme (if any) is currently equipped -- purely
+  // informational bookkeeping for a future "is this whole theme equipped"
+  // UI state; the renderer never reads it, only the three fields above.
+  // Not cleared by setActiveFloorPattern/setActiveWallPattern today (no UI
+  // surfaces it yet) -- revisit once mix-and-match equip UI exists.
+  activeNestThemeId: string | null;
   unlockedFloorPatternIds: string[];
   unlockedWallPatternIds: string[];
   // Slot-based furniture for the 3D-primitive room shell (roomSlots.ts) --
   // kept separate from `furniturePlacements` above, which the `quad`/`legacy`
   // renderers still use with their freeform row/col placement. Keyed by
   // slotId; a slot with no entry renders empty until purchased.
-  activeFurnitureBySlot: Record<string, { furnitureId: string; variantId: string }>;
+  activeFurnitureBySlot: Record<string, { furnitureId: string; variantId: string; paletteId?: string }>;
   unlockedFurnitureIds: string[]; // `${furnitureId}_${variantId}`
   // Glidermon's current floor tile in the 3D-primitive room shell (see
   // IsometricRoomView3D.tsx's wander scheduler). Persisted so he's found
@@ -70,10 +139,34 @@ type HousingState = {
   unlockWallPattern: (id: string) => void;
   setActiveFloorPattern: (id: string) => void;
   setActiveWallPattern: (id: string) => void;
+  /** Sets just the left or right wall, independently -- unlike
+   *  setActiveWallPattern (mirrors both), this is what lets a player pick a
+   *  different look per side. Accepts either a plain
+   *  proceduralPatternCatalog.ts id (gated by unlockedWallPatternIds) or a
+   *  Nest Theme wall-piece id (gated by that theme's own entitlement).
+   *  Clears activeNestThemeId to null -- see setActiveNestSurfaces below for
+   *  the atomic, theme-detecting alternative Furnish Nest actually commits
+   *  through. */
+  setActiveWallPatternLeft: (id: string) => void;
+  setActiveWallPatternRight: (id: string) => void;
+  /** Equips a complete Nest Theme's left wall, right wall, and floor pieces
+   *  together (see nestThemeCatalog.ts). No-ops silently if the theme id is
+   *  unknown, or if it's premiumOnly and the player isn't entitled -- the
+   *  renderer never does its own entitlement check, so this is the one gate. */
+  applyNestTheme: (themeId: string) => void;
+  /** Atomically commits a full room-shell configuration (floor + both walls)
+   *  in one `set()` -- the single write Furnish Nest's Done uses, instead of
+   *  three independent setter calls (one store notification/shell-rebuild
+   *  instead of up to three). No-ops entirely (nothing partially applied) if
+   *  any of the three ids fails its usability gate. Derives
+   *  activeNestThemeId itself: set to a theme's id only if all three
+   *  incoming ids exactly match that theme's three pieces, else null for a
+   *  genuinely mixed configuration -- never just nulled unconditionally. */
+  setActiveNestSurfaces: (surfaces: { floorPatternId: string; wallPatternIdLeft: string; wallPatternIdRight: string }) => void;
   placeFurniture: (placement: FurniturePlacement) => void;
   removeFurniture: (id: string) => void;
   unlockFurniture: (id: string) => void;
-  setActiveFurniture: (slotId: string, furnitureId: string, variantId: string) => void;
+  setActiveFurniture: (slotId: string, furnitureId: string, variantId: string, paletteId?: string) => void;
   clearFurnitureSlot: (slotId: string) => void;
   setCharacterTile: (tile: GridTile) => void;
 };
@@ -107,6 +200,9 @@ export const useHousingStore = create<HousingState>()(
       furniturePlacements: DEFAULT_FURNITURE,
       activeFloorPatternId: DEFAULT_FLOOR_PATTERN_ID,
       activeWallPatternId: DEFAULT_WALL_PATTERN_ID,
+      activeWallPatternIdLeft: DEFAULT_WALL_PATTERN_ID,
+      activeWallPatternIdRight: DEFAULT_WALL_PATTERN_ID,
+      activeNestThemeId: null,
       unlockedFloorPatternIds: [DEFAULT_FLOOR_PATTERN_ID],
       unlockedWallPatternIds: [DEFAULT_WALL_PATTERN_ID],
       activeFurnitureBySlot: DEFAULT_FURNITURE_BY_SLOT,
@@ -146,13 +242,55 @@ export const useHousingStore = create<HousingState>()(
       },
 
       setActiveFloorPattern: (id) => {
-        if (!get().unlockedFloorPatternIds.includes(id)) return;
+        if (!isFloorPatternIdUsable(id, get().unlockedFloorPatternIds)) return;
         set({ activeFloorPatternId: id });
       },
 
       setActiveWallPattern: (id) => {
         if (!get().unlockedWallPatternIds.includes(id)) return;
-        set({ activeWallPatternId: id });
+        // Applies to both walls at once -- this is the existing single-pick
+        // repeating-material path, which has always rendered identically on
+        // both sides (see activeWallPatternIdLeft/Right's comment above).
+        set({ activeWallPatternId: id, activeWallPatternIdLeft: id, activeWallPatternIdRight: id });
+      },
+
+      setActiveWallPatternLeft: (id) => {
+        if (!isWallPatternIdUsable(id, get().unlockedWallPatternIds)) return;
+        set({ activeWallPatternIdLeft: id, activeNestThemeId: null });
+      },
+
+      setActiveWallPatternRight: (id) => {
+        if (!isWallPatternIdUsable(id, get().unlockedWallPatternIds)) return;
+        set({ activeWallPatternIdRight: id, activeNestThemeId: null });
+      },
+
+      applyNestTheme: (themeId) => {
+        const theme = getNestThemeById(themeId);
+        if (!theme) return;
+        if (theme.premiumOnly && !isPremiumEntitled()) return;
+        set({
+          activeWallPatternIdLeft: nestThemeWallLeftId(theme.id),
+          activeWallPatternIdRight: nestThemeWallRightId(theme.id),
+          activeFloorPatternId: nestThemeFloorId(theme.id),
+          activeNestThemeId: theme.id,
+        });
+      },
+
+      setActiveNestSurfaces: ({ floorPatternId, wallPatternIdLeft, wallPatternIdRight }) => {
+        const { unlockedFloorPatternIds, unlockedWallPatternIds } = get();
+        if (
+          !isFloorPatternIdUsable(floorPatternId, unlockedFloorPatternIds) ||
+          !isWallPatternIdUsable(wallPatternIdLeft, unlockedWallPatternIds) ||
+          !isWallPatternIdUsable(wallPatternIdRight, unlockedWallPatternIds)
+        ) {
+          return;
+        }
+        set({
+          activeFloorPatternId: floorPatternId,
+          activeWallPatternIdLeft: wallPatternIdLeft,
+          activeWallPatternIdRight: wallPatternIdRight,
+          activeNestThemeId: matchingNestThemeId(floorPatternId, wallPatternIdLeft, wallPatternIdRight),
+        });
       },
 
       placeFurniture: (placement) => {
@@ -169,11 +307,11 @@ export const useHousingStore = create<HousingState>()(
         set((s) => (s.unlockedFurnitureIds.includes(id) ? s : { unlockedFurnitureIds: [...s.unlockedFurnitureIds, id] }));
       },
 
-      setActiveFurniture: (slotId, furnitureId, variantId) => {
+      setActiveFurniture: (slotId, furnitureId, variantId, paletteId) => {
         const id = `${furnitureId}_${variantId}`;
         if (!get().unlockedFurnitureIds.includes(id)) return;
         set((s) => ({
-          activeFurnitureBySlot: { ...s.activeFurnitureBySlot, [slotId]: { furnitureId, variantId } },
+          activeFurnitureBySlot: { ...s.activeFurnitureBySlot, [slotId]: { furnitureId, variantId, paletteId } },
         }));
       },
 
@@ -192,7 +330,7 @@ export const useHousingStore = create<HousingState>()(
     {
       name: "housing_store_v1",
       storage: createJSONStorage(() => AsyncStorage),
-      version: 4,
+      version: 5,
       migrate: (persisted: any, fromVersion: number) => {
         const s = persisted ?? {};
         s.roomSizeTier = typeof s.roomSizeTier === "number" ? s.roomSizeTier : 1;
@@ -230,6 +368,15 @@ export const useHousingStore = create<HousingState>()(
         s.characterTile = s.characterTile && typeof s.characterTile.row === "number" && typeof s.characterTile.col === "number"
           ? s.characterTile
           : DEFAULT_CHARACTER_TILE;
+
+        // v5: per-screen-side wall selection (Premium Nest Themes) + which
+        // theme (if any) is equipped, added alongside `activeWallPatternId`.
+        // A pre-v5 save has no notion of asymmetric walls, so both sides
+        // simply mirror the single value it already had -- zero visual
+        // change for existing players.
+        s.activeWallPatternIdLeft = typeof s.activeWallPatternIdLeft === "string" ? s.activeWallPatternIdLeft : s.activeWallPatternId;
+        s.activeWallPatternIdRight = typeof s.activeWallPatternIdRight === "string" ? s.activeWallPatternIdRight : s.activeWallPatternId;
+        s.activeNestThemeId = typeof s.activeNestThemeId === "string" ? s.activeNestThemeId : null;
         return s;
       },
       onRehydrateStorage: () => (state) => {

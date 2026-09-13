@@ -537,6 +537,21 @@ export class LifelikeIdleNoMix {
   // Behavior
   public snapToIdleBoundary = true; // set false to start one-shots immediately
 
+  // When false, the driver stops scheduling *ambient* life -- eye-looks,
+  // fidgets, FootLook, the reading sequence, and ambient body composites --
+  // and only keeps the track-0 carrier animation plus blinks running.
+  // Used where the character is a deliberate guide/actor for a specific
+  // moment (the check-in ritual) and should play only the animation it was
+  // handed, not wander off into reading a book mid-cheer. Explicit
+  // playReaction()/startInteraction() calls are unaffected.
+  private ambientBehaviorsEnabled = true;
+
+  setAmbientBehaviorsEnabled(enabled: boolean) {
+    if (this.ambientBehaviorsEnabled === enabled) return;
+    this.ambientBehaviorsEnabled = enabled;
+    if (!enabled) this.forceIdle(); // abort anything already mid-behavior
+  }
+
   constructor(stateData: AnimationStateData, skeleton?: Skeleton) {
     this.skeleton = skeleton;
     // No extra easing — your clips are self-contained
@@ -619,7 +634,7 @@ export class LifelikeIdleNoMix {
 
     // Look scheduling (only during idle behavior, NOT during FootLook, reading,
     // or anything else that's already driving the face track)
-    if (this.currentBehavior === BehaviorState.IDLE && !this.faceSeq.busy) {
+    if (this.ambientBehaviorsEnabled && this.currentBehavior === BehaviorState.IDLE && !this.faceSeq.busy) {
       this.tLook += dt;
       if (this.tLook >= this.nextLookAt) {
         if (!this.isPlaying(TRACK_FACE)) {
@@ -633,7 +648,7 @@ export class LifelikeIdleNoMix {
     }
 
     // Ambient fidgets -- only while plain idling, and only one at a time
-    if (this.currentBehavior === BehaviorState.IDLE) {
+    if (this.ambientBehaviorsEnabled && this.currentBehavior === BehaviorState.IDLE) {
       this.tFidget += dt;
       if (this.tFidget >= this.nextFidgetAt && this.secondaryTracksFree()) {
         const keys = Object.keys(AMBIENT_FIDGETS);
@@ -734,6 +749,7 @@ export class LifelikeIdleNoMix {
   }
 
   private updateIdleBehavior(dt: number) {
+    if (!this.ambientBehaviorsEnabled) return;
     this.tBehavior += dt;
     if (this.tBehavior >= this.nextBehaviorAt) {
       const choice = Math.random();

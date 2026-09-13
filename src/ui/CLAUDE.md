@@ -46,6 +46,36 @@ Navigation structure and routing logic.
 - **States**: `glucose_response` category goals get a gold left-edge accent (currently-actionable); mid-completion gets a pale-green tint (`PALE_GREEN` token) matching the rest of the handcrafted state language
 - **Integration**: `goalsStore.completeGoal` / `skipGoal` / `snoozeGoal`
 
+### Daily Adventure Board (`components/adventureBoard/`)
+
+The dynamic goal content is drawn **once** by a pure Skia routine and reused two
+ways: as a texture on an in-scene plane in the Home room (the real board), and as
+an on-screen `<Canvas>` in the Morning Check-In reveal. There is no RN overlay
+over the GL view any more — GliderMon and furniture depth-sort against the board
+in-world (`render/adventureBoard3D.ts`, see `game/housing/CLAUDE.md`).
+
+#### `AdventureBoardDrawing.ts`
+- **Purpose**: The ONE drawing layer — pure `@shopify/react-native-skia` imperative calls (`drawAdventureBoard(canvas, {model, density, width, height, revealStep?})`), no RN `View`/`Text`. `createAdventureBoardPicture(...)` wraps it in an `SkPicture` for on-screen use; `adventureBoardTexture.ts` runs it offscreen for the in-world plane. Draws `model` only — never touches goal/CGM/reward logic.
+- **Contents** (`density="full"`, Goals camera / check-in preview): a quiet cream sheet full-bleeding the frame opening — no stitched border, no per-item cards, one hairline divider. `not-planned` → "Plan today's adventures!" + a "Start Check-In" pill; `active`/`complete` → primary glucose row (big actual in-range % / count · short label + `Target: N%` · `On track`/`Off track` while the 5h window is open, `Done`/`Missed` after — **never a checkmark before the window ends**), then 2 minor-goal rows (completed first — ○ / green check), then `🌰 N today · +M more`, `DONE` stamp when complete. No title — the wooden plaque already says "Today's Adventures".
+- **`density="compact"`** (the small in-room texture when the Goals camera isn't active): one glance only — `Plan / today`, or the primary metric + `N left`, or `DONE!` in green. No goal rows.
+- **Reveal**: `revealStep` gates the full layout (primary → minor 1 → minor 2 → summary) for the check-in's staggered reveal; `undefined` shows everything.
+
+#### `adventureBoardTexture.ts` + `useAdventureBoardTextureSet.ts`
+- **Purpose**: `renderAdventureBoardTextureSet(model, version)` renders the compact + full boards to `Skia.Surface.MakeOffscreen`, reads the RGBA pixels back, and flips the rows (Skia is top-left origin, `THREE.DataTexture` samples bottom-left). The hook memoizes by `serializeAdventureBoardState(model)` — so the GPU texture regenerates **only** on a real board-state change (goal set, goal completed, acorns earned, window ended), never on GliderMon movement / camera pans / unrelated Home re-renders — defers the render off the commit path, and keeps the previous set until the new one is ready (no blank board).
+- Consumed by `HudScreen` → `IsometricRoomView3D`'s `boardTextures` prop → `adventureBoard3D.ts`'s `setTextures`.
+
+#### `AdventureBoardCanvas.tsx`
+- **Purpose**: On-screen `<Canvas><Picture>` of the same drawing, sized to the opening aspect via `onLayout`. Used only by the Morning Check-In reveal step (inside `DailyAdventureBoardPreview`'s wooden frame), so the ritual and the house board read as the same object.
+
+#### `AdventureBoardA11y.tsx`
+- **Purpose**: Non-visual (1×1, clipped) screen-reader summary of the board, mounted by `HudScreen` while the Goals camera is active — the in-scene texture carries no accessible text of its own. `accessibilityRole` "button" (opens Check-In) when a plan can still be made, else "summary".
+
+#### `useAdventureBoardModel()` (`data/selectors/adventureBoard.ts`)
+- A memoized projection of `goalsStore` + `checkInStore` + `progressionStore` + `gameStore` (no new store). CGM math stays in `checkInStore.evaluateGlucoseGoal`. `computeAcornsEarnedToday()` / `useDailyAcorns()` is the centralized "acorns earned today" value: `progressionStore.dailyEarned` (CGM ticks) **plus** each completed daily goal's reward **plus** `CHECK_IN_ACORNS` per completed slot — because `grantAcorns` / `grantCheckInXp` credit the balance but not `dailyEarned`. `serializeAdventureBoardState(m)` is the render-only version key (glucose % bucketed to 2% so CGM wobble doesn't churn the texture).
+
+#### `DailyAdventureBoardPreview.tsx`
+- **Purpose**: Craft "wooden frame + easel + plaque" wrapper for off-world use (check-in reveal today). The frame's own padding is the wooden border; `AdventureBoardCanvas` full-bleeds the opening inside it. The seam where a real render-target of the Spine frame could later drop in.
+
 ### Check-In Components (see `docs/superpowers/specs/2026-07-19-checkin-system-design.md`)
 
 #### `CheckInCard.tsx`
@@ -55,13 +85,21 @@ Navigation structure and routing logic.
 - **Integration**: Reads from `checkInStore`; `onPress` opens `CheckInFlowModal`
 
 #### `CheckInFlowModal.tsx`
-- **Purpose**: Multi-step guided check-in flow driven by GliderMon dialogue and animations, presented as a page-sheet modal
-- **Features**: Whichever check-in happens first that day runs `GoalSettingFlow` (set a glucose goal for the next 5 hours + optional meal/activity goals); later check-ins that day run `GradingFlow` (glucose recap + 3-way self-report: Yes/Partly/No). Both end on a shared `RewardStep` showing the real XP+acorns for that slot, dismissed explicitly (doesn't auto-close).
+- **Purpose**: Multi-step guided check-in flow driven by GliderMon dialogue and animations, presented as a page-sheet modal. Rebuilt on the hand-crafted `components/checkin/` kit (see below) — warm cream paper full-screen surface, dark-brown ink, felt CTAs — so the ritual matches Home/Outfit/Shop rather than the old white-surface/purple-button look.
+- **Features**: Whichever check-in happens first that day runs `GoalSettingFlow` (3 stops: greeting → one grouped goal surface [glucose goal, grouped Time-in-range/Highs/Lows, + optional meal/activity] → completion); later check-ins run `GradingFlow` (greeting → glucose recap bar → per-goal Yes/Partly/No self-report → completion). Both end on the shared `CheckInCompleteStep` (`CheckInDialogueCard` + `CheckInRewardCard` + "Done"), dismissed explicitly. XP is no longer shown here (leveling is being phased out — same call as Home); the store still grants it. `completeCheckIn` / acorn-spawn / session-freeze timing are unchanged from the pre-redesign flow.
 - **Props**: `{ visible: boolean; slot: CheckInSlot | null; onClose: () => void }`
-- **Integration**: Calls `checkInStore.completeCheckIn(slot, payload)` on submit; triggers the acorn-flight animation via `useAcornSource`
+- **Integration**: Calls `checkInStore.completeCheckIn(slot, payload)` on submit; triggers the acorn-flight animation via `useAcornSource`; hero shows the player's own `useActiveLocalOutfit()` character
+- **Dev deep links**: `glidermon://checkin` clears today's check-ins (so the card reappears and the next check-in runs goal-setting); `glidermon://checkin/grade` seeds a goal so the next check-in runs the grading flow regardless of time of day (`checkInStore.devClearToday` / `devSeedGrading`).
+
+#### `components/checkin/` — reusable daily-ritual kit
+- **Purpose**: The shared visual system for GliderMon's guided rituals (Morning check-in today; Midday/Evening reflection and future rituals reuse it). Sits on top of `components/handcrafted/` (CraftPanel, CraftActionButton, tokens) and adds only a small "morning" accent set (`checkin/tokens.ts`) — not a second design system.
+- **Components**: `CheckInFlowShell` (cream paper surface + fixed header/progress + a GliderMon hero kept mounted & stable across steps + a 180ms fade/slide step transition; `centered` for short steps, `scroll` for the goal picker; `heroSize` `"large"`/`"medium"`), `CheckInHeader` (cardstock strip, small SVG sunrise, quiet outlined close), `CheckInProgress` (dot/thread "N of M" marker — not a bar; done+current dots muted-green, future dots kraft), `GlidermonCheckInHero` (one centered `SpineCharacter` stage, transparent, memoised, `ambientIdle={false}` so the character plays only the step's animation — no fidgets/reading mixing into a cheer; `size` only changes the character scale, never the GL frame, so the canvas is never resized mid-flow), `CheckInDialogueCard` (GliderMon's line — cream or lavender note; `compact`/`popIn`/`popDelay`), `CheckInChoiceCard` (full-row-tappable goal option ≥52px, thin ink outline vs the panels' heavier one, cream idle / pale-green felt selected, quick press push + 1.015 select pop; `hideControl` for immediate-answer rows), `CheckInChoiceGroup` (uppercase section heading), `CheckInRewardCard` (kraft card, stitched star, felt acorn, big `+N` primary line + quiet `★ Daily acorn cap +0.17` secondary; card pop then acorn pop), `CheckInCompleteStep`, `CraftPrimaryButton` (semantic wrapper over `CraftActionButton`; `size="lg"` for a step's single CTA).
+- **Size hierarchy**: intro/completion = large hero + `size="lg"` CTA; goal picker / grading recap+report = `heroSize="medium"` so the choices lead. `CraftActionButton` gained a `size` prop (`"md"` default, `"lg"` = taller + bigger label) used app-wide-safely.
+- **Reward value**: `CheckInRewardCard`'s cap line shows the real `CHECK_IN_CAP_BONUS` (0.17) exported from `checkInStore` and used by `computeCapMultiplier` — not a hardcoded string. XP is not shown (leveling phased out); the store still grants it.
+- **Hero animations per step**: intro `Idle/IdleWave`, glucose/recap/self-report `Idle/Idle`, completion `CheckIn/Cheer`; grading intro is adherence-driven (`CheckIn/Cheer` / `Idle/IdleWave` / `High/HighWorriedFace`, evening `ReadBook/ReadBook`). With `ambientIdle={false}` these play clean on track 0 (looping) — `SpineCharacter` forwards the flag to `controller.idleDriver.setAmbientBehaviorsEnabled()`.
 
 #### `GoalPicker.tsx`
-- **Purpose**: Reusable goal selection list for glucose goals, meal goals, and activity goals
+- **Purpose**: Older reusable goal selection list (single-select rows). No longer used by `CheckInFlowModal` after the redesign (replaced by `checkin/CheckInChoiceCard` + `CheckInChoiceGroup`); kept for any other caller.
 - **Features**: Preset options + optional free-text custom goal; single-select with visual confirmation
 
 ### Feedback Components
@@ -101,9 +139,9 @@ Navigation structure and routing logic.
 
 ### `HudScreen.tsx` (Main/Home)
 - **Purpose**: Primary gameplay screen, redesigned to share the handcrafted/paper-craft visual language established on `EquipScreen.tsx` (see `handcrafted/` below), kept calmer/less decorated since it holds the daily health ritual
-- **Components** (fixed, non-scrolling top region): `HomeHeader` (compact kraft-cardstock name/acorn/streak strip), `NestCraftPanel` wrapping the room/pet 3D view, `CameraPresetTabs` (Nest / Glidermon presets, attached directly under the frame). Scrollable region below: `CheckInCard` (when a slot is available, shown above the goal board per the hierarchy), `DailyGoalBoard`.
+- **Components** (fixed, non-scrolling top region): `HomeHeader` (compact kraft-cardstock name/acorn/streak strip), `NestCraftPanel` wrapping the room/pet 3D view, `CameraPresetTabs` (Nest / Glidermon / Goals presets, attached directly under the frame). Scrollable region below: `CheckInCard` (when a slot is available, shown above the goal board per the hierarchy), `DailyGoalBoard`. The Adventure Board's goal content is a texture inside the GL scene now (no RN overlay); `HudScreen` feeds it via `boardTextures` (`useAdventureBoardTextureSet`) and mounts a non-visual `AdventureBoardA11y` while the Goals camera is active.
 - **Layout**: Hierarchy is Glidermon/Nest first, then the check-in ritual, then Today's Goals, then currency/streak (in the compact header), then decoration — roughly 70% clean paper surfaces / 20% texture / 10% decorative accents, deliberately less busy than Equip. No glucose display or level/XP bars on Home — glucose monitoring was moved off Home, and leveling is being phased out in favor of goal-based progression (`DailyGoalBoard` is the first concrete piece of that).
-- **Camera presets**: `cameraMode` (`"nest" | "glidermon"`) is local `HudScreen` state, only changed by an explicit tab press (never by incidental manual camera movement) — passed to `IsometricRoomView3D` as the controlled `zoomedIn` prop. "Nest" = standard wide overview; "Glidermon" activates the existing close/follow character camera (`IsometricRoomView3D`'s own camera math, untouched — see `src/game/CLAUDE.md`'s sibling doc / the component itself for `updateCameraForZoom`). The renderer's old internal "🔍 Zoom In" toggle button was removed in favor of this external, controlled prop.
+- **Camera presets**: `cameraMode` (`"nest" | "glidermon" | "goals"`) is local `HudScreen` state, only changed by an explicit tab press (never by incidental manual camera movement) — passed to `IsometricRoomView3D` as the controlled `cameraMode` prop. "Nest" = wide overview; "Glidermon" = the existing close/follow character camera (untouched); "Goals" smoothly frames the Daily Adventure Board (`getAdventureBoardSlot` → `adventureBoard3D` frame center) close enough to read the in-scene goal texture while keeping room context — it does *not* open a separate screen, and swaps the board texture to `full` density. See `src/game/housing/CLAUDE.md` for `updateCameraForZoom` / the board-surface plane.
 
 ### `ShopScreen.tsx`
 - **Purpose**: Entry point for the Shaded Shop -- keeps `ShadedShopViewport` (Luma/Sable in their 3D scene) visible full-bleed at all times; tapping either character opens that merchant's `components/shop/NpcStorePanel` as a bottom overlay (~62% of screen height) without hiding the scene above it
@@ -147,6 +185,8 @@ There is no router (`@react-navigation/*` is not wired up — a dead `AppNavigat
 adb shell am start -a android.intent.action.VIEW -d "glidermon://shop/luma"
 ```
 Supported today: `home`, `shop` (optionally `shop/luma|sable`, which opens straight to that merchant's `NpcStorePanel` and skips the Shaded Shop walk-up), `outfit`, `gallery`, `settings`. Arcade is deliberately excluded.
+
+Also `checkin` (clears today's check-ins so the Home check-in card reappears and the next check-in runs goal-setting) and `checkin/grade` (seeds a goal so the next check-in runs the grading flow regardless of time of day) — both land on HOME; see `checkInStore.devClearToday` / `devSeedGrading`.
 
 Also `streak/<started|continued|frozen|lost|commitment|milestone7|milestone30|milestone100|milestone365>` — jumps straight to a specific streak popup by forcing `streakStore` into that scenario (via `src/data/stores/streakTestScenarios.ts`, shared with `StreakTestButton.tsx`'s on-screen panel) and switching to HOME, e.g. `adb shell am start -a android.intent.action.VIEW -d "glidermon://streak/lost"`. Useful for screenshotting a specific splash without the on-screen test panel in the way (both the panel and the full-screen splash capture touch, so there's no way to toggle the panel off once a splash is showing).
 

@@ -1,31 +1,49 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
+import { Modal, View, Text, StyleSheet } from "react-native";
+import AdventureBoardCanvas from "./adventureBoard/AdventureBoardCanvas";
+import DailyAdventureBoardPreview from "./adventureBoard/DailyAdventureBoardPreview";
+import { useAdventureBoardModel } from "../../data/selectors/adventureBoard";
 import {
-  Modal, View, Text, TouchableOpacity, ScrollView,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import SpineCharacter from "../../game/view/SpineCharacter";
-import { GoalPicker } from "./GoalPicker";
+  REVEAL_PRIMARY, REVEAL_MINOR_1, REVEAL_MINOR_2, REVEAL_SUMMARY,
+} from "./adventureBoard/boardStyles";
 import {
   useCheckInStore, CheckInSlot, GlucoseGoal, LifestyleGoal,
-  findTodayGoalSetting, latestGrading, CHECK_IN_XP, CHECK_IN_ACORNS,
+  findTodayGoalSetting, latestGrading, CHECK_IN_ACORNS, CHECK_IN_CAP_BONUS,
 } from "../../data/stores/checkInStore";
-import { useTheme } from "../../data/hooks/useTheme";
 import { useAcornSource } from "../hooks/useAcornSource";
+import { useActiveLocalOutfit } from "../../data/stores/outfitStore";
+import CraftPanel from "./handcrafted/CraftPanel";
+import {
+  CheckInFlowShell,
+  CheckInDialogueCard,
+  CheckInChoiceCard,
+  CheckInChoiceGroup,
+  CheckInCompleteStep,
+  CraftPrimaryButton,
+  INK, INK_MUTED, FELT_GREEN, GOLD, CREAM_LIGHT,
+} from "./checkin";
 
 // ─── Glucose goal options ─────────────────────────────────────────────────────
-// Each goal now runs for a fixed 5-hour window from whichever check-in sets
-// it (see GLUCOSE_GOAL_DURATION_MS in checkInStore.ts), not open-ended.
+// Each goal runs for a fixed 5-hour window from whichever check-in sets it
+// (see GLUCOSE_GOAL_DURATION_MS in checkInStore.ts), not open-ended. The
+// canonical `label` is kept as the selection key so the submit lookup below
+// is unchanged; `short` is what the choice card displays.
 
-type GoalOption = { label: string; goal: Pick<GlucoseGoal, "type" | "target"> };
+type GoalOption = {
+  label: string;
+  short: string;
+  group: "tir" | "highs" | "lows";
+  goal: Pick<GlucoseGoal, "type" | "target">;
+};
 
 const GLUCOSE_OPTIONS: GoalOption[] = [
-  { label: "Stay in range 50% for 5 hours",  goal: { type: "tir",      target: 50 } },
-  { label: "Stay in range 70% for 5 hours",  goal: { type: "tir",      target: 70 } },
-  { label: "Stay in range 80% for 5 hours",  goal: { type: "tir",      target: 80 } },
-  { label: "No highs above 180 for 5 hours", goal: { type: "no_highs", target: 180 } },
-  { label: "No highs above 200 for 5 hours", goal: { type: "no_highs", target: 200 } },
-  { label: "No lows below 70 for 5 hours",   goal: { type: "no_lows",  target: 70 } },
-  { label: "No lows below 80 for 5 hours",   goal: { type: "no_lows",  target: 80 } },
+  { label: "Stay in range 50% for 5 hours",  short: "Stay in range 50%",  group: "tir",   goal: { type: "tir",      target: 50 } },
+  { label: "Stay in range 70% for 5 hours",  short: "Stay in range 70%",  group: "tir",   goal: { type: "tir",      target: 70 } },
+  { label: "Stay in range 80% for 5 hours",  short: "Stay in range 80%",  group: "tir",   goal: { type: "tir",      target: 80 } },
+  { label: "No highs above 180 for 5 hours", short: "No highs above 180", group: "highs", goal: { type: "no_highs", target: 180 } },
+  { label: "No highs above 200 for 5 hours", short: "No highs above 200", group: "highs", goal: { type: "no_highs", target: 200 } },
+  { label: "No lows below 70 for 5 hours",   short: "No lows below 70",   group: "lows",  goal: { type: "no_lows",  target: 70 } },
+  { label: "No lows below 80 for 5 hours",   short: "No lows below 80",   group: "lows",  goal: { type: "no_lows",  target: 80 } },
 ];
 
 const MEAL_GOALS: LifestyleGoal[] = [
@@ -42,95 +60,27 @@ const ACTIVITY_GOALS: LifestyleGoal[] = [
   { category: "activity", text: "Stretch for 10 minutes" },
 ];
 
-// ─── Shared UI helpers ────────────────────────────────────────────────────────
+const SLOT_TITLE: Record<CheckInSlot, string> = {
+  morning: "Morning Check-In",
+  midday: "Midday Check-In",
+  evening: "Evening Check-In",
+};
 
-function DialogueBubble({ text, colors, spacing, typography }: {
-  text: string;
-  colors: any;
-  spacing: any;
-  typography: any;
+// Every completed check-in adds the same flat cap bonus, regardless of slot
+// (see computeCapMultiplier in checkInStore).
+const CAP_BONUS_LABEL = `+${CHECK_IN_CAP_BONUS.toFixed(2)}`;
+
+// ─── Shared little surface ────────────────────────────────────────────────────
+
+function GoalSurface({ title, subtitle, children }: {
+  title: string; subtitle?: string; children: React.ReactNode;
 }) {
   return (
-    <View style={{
-      backgroundColor: (colors.accent.lavender ?? "#9b59b6") + "22",
-      borderRadius: 12,
-      borderLeftWidth: 3,
-      borderLeftColor: colors.accent.lavender ?? "#9b59b6",
-      padding: spacing.md,
-      marginVertical: spacing.sm,
-    }}>
-      <Text style={{ color: colors.text.primary, fontSize: typography.size.md, lineHeight: 22 }}>
-        {text}
-      </Text>
-    </View>
-  );
-}
-
-function NextButton({ onPress, disabled, label = "Next →", colors, spacing, typography, borderRadius, accentColor }: {
-  onPress: () => void; disabled?: boolean; label?: string;
-  colors: any; spacing: any; typography: any; borderRadius: any; accentColor: string;
-}) {
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      disabled={disabled}
-      activeOpacity={0.8}
-      style={{
-        backgroundColor: disabled ? "#444" : accentColor,
-        borderRadius: borderRadius.md,
-        paddingVertical: spacing.md,
-        alignItems: "center" as const,
-        marginTop: spacing.md,
-      }}
-    >
-      <Text style={{ color: "#fff", fontWeight: typography.weight.bold as any, fontSize: typography.size.md }}>
-        {label}
-      </Text>
-    </TouchableOpacity>
-  );
-}
-
-function RewardBadge({ xp, acorns, capNote, colors, spacing, typography }: {
-  xp: number; acorns: number; capNote: string; colors: any; spacing: any; typography: any;
-}) {
-  const accentColor = colors.accent.lavender ?? "#9b59b6";
-  return (
-    <View style={{
-      backgroundColor: accentColor + "22",
-      borderRadius: 12,
-      padding: spacing.md,
-      alignItems: "center" as const,
-      marginVertical: spacing.sm,
-    }}>
-      <Text style={{ color: "#7deba3", fontSize: 20, fontWeight: "800" }}>+{xp} XP · +{acorns} 🌰</Text>
-      <Text style={{ color: colors.text.secondary, fontSize: typography.size.sm, marginTop: 4 }}>
-        {capNote}
-      </Text>
-    </View>
-  );
-}
-
-/** Terminal step for both flows: shows the real reward for this slot, then
- * requires an explicit tap to close (so it's actually seen, unlike before
- * when the modal auto-closed the instant the check-in was submitted). */
-function RewardStep({ slot, dialogue, onDone, colors, spacing, typography, borderRadius, accentColor }: {
-  slot: CheckInSlot; dialogue: string; onDone: () => void;
-  colors: any; spacing: any; typography: any; borderRadius: any; accentColor: string;
-}) {
-  const capNote =
-    slot === "evening" ? "Cap fully updated" : "Cap +0.17 unlocked";
-  return (
-    <View style={{ alignItems: "center" as const, gap: spacing.md }}>
-      <SpineCharacter animation="CheckIn/Cheer" width={180} height={220} scale={0.35} />
-      <DialogueBubble text={dialogue} colors={colors} spacing={spacing} typography={typography} />
-      <RewardBadge
-        xp={CHECK_IN_XP[slot]}
-        acorns={CHECK_IN_ACORNS[slot]}
-        capNote={capNote}
-        colors={colors} spacing={spacing} typography={typography}
-      />
-      <NextButton onPress={onDone} label="Nice!" colors={colors} spacing={spacing} typography={typography} borderRadius={borderRadius} accentColor={accentColor} />
-    </View>
+    <CraftPanel texture="paper" stitched shadow="card" grainOpacity={0.1} inset={18} contentStyle={styles.surface}>
+      <Text style={styles.surfaceTitle}>{title}</Text>
+      {subtitle ? <Text style={styles.surfaceSub}>{subtitle}</Text> : null}
+      <View style={styles.surfaceBody}>{children}</View>
+    </CraftPanel>
   );
 }
 
@@ -143,9 +93,11 @@ type Props = {
 };
 
 export function CheckInFlowModal({ visible, slot, onClose }: Props) {
-  const { colors, spacing, typography, borderRadius } = useTheme();
   const { completeCheckIn, today } = useCheckInStore();
   const { sourceRef: acornSourceRef, spawnFromRef } = useAcornSource();
+  // Show the player's own equipped character as the guide, same source the
+  // Home room uses -- so hair/hat/outfit combos read correctly in the ritual.
+  const heroOutfit = useActiveLocalOutfit() ?? undefined;
 
   const [step, setStep] = useState(0);
   const [selectedGlucoseLabel, setSelectedGlucoseLabel] = useState<string | null>(null);
@@ -155,11 +107,9 @@ export function CheckInFlowModal({ visible, slot, onClose }: Props) {
   const [lifestyleProgress, setLifestyleProgress] = useState<number[]>([]); // 0, 0.5, or 1 per goal
 
   // Freeze which slot + which flow (goal-setting vs grading) for the whole
-  // session the instant it opens. Both `slot` (derived from availableSlot())
-  // and `findTodayGoalSetting(today)` change the moment completeCheckIn
-  // writes its record -- without freezing, submitting the check-in would
-  // immediately flip `slot` to null and yank the reward step away before
-  // the user ever saw it.
+  // session the instant it opens -- both `slot` and `findTodayGoalSetting`
+  // change the moment completeCheckIn writes its record, which would
+  // otherwise yank the reward step away before it's seen.
   const [session, setSession] = useState<{ slot: CheckInSlot; isGoalSetting: boolean } | null>(null);
 
   useEffect(() => {
@@ -185,11 +135,19 @@ export function CheckInFlowModal({ visible, slot, onClose }: Props) {
     onClose();
   }, [reset, onClose]);
 
-  const accentColor = colors.accent.lavender;
-  const bg = colors.background.primary;
-
   if (!session) return null;
   const { slot: activeSlot, isGoalSetting } = session;
+
+  const shared = {
+    title: SLOT_TITLE[activeSlot],
+    onClose: handleClose,
+    slot: activeSlot,
+    step, setStep,
+    acornSourceRef,
+    spawnFromRef,
+    completeCheckIn,
+    heroOutfit,
+  };
 
   return (
     <Modal
@@ -198,190 +156,249 @@ export function CheckInFlowModal({ visible, slot, onClose }: Props) {
       presentationStyle="pageSheet"
       onRequestClose={handleClose}
     >
-      <SafeAreaView style={{ flex: 1, backgroundColor: bg }}>
-        {/* Header */}
-        <View style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: spacing.md,
-          borderBottomWidth: 1,
-          borderBottomColor: colors.gray[200],
-        }}>
-          <Text style={{ color: colors.text.primary, fontSize: typography.size.lg, fontWeight: typography.weight.bold as any }}>
-            {activeSlot === "morning" ? "🌅 Morning Check-In"
-              : activeSlot === "midday" ? "☀️ Midday Check-In"
-              : "🌙 Evening Check-In"}
-          </Text>
-          <TouchableOpacity onPress={handleClose}>
-            <Text style={{ color: colors.text.secondary, fontSize: typography.size.md }}>✕</Text>
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}>
-          {isGoalSetting ? (
-            <GoalSettingFlow
-              slot={activeSlot}
-              step={step}
-              setStep={setStep}
-              selectedGlucoseLabel={selectedGlucoseLabel}
-              setSelectedGlucoseLabel={setSelectedGlucoseLabel}
-              selectedMealGoal={selectedMealGoal}
-              setSelectedMealGoal={setSelectedMealGoal}
-              selectedActivityGoal={selectedActivityGoal}
-              setSelectedActivityGoal={setSelectedActivityGoal}
-              showActivityPicker={showActivityPicker}
-              setShowActivityPicker={setShowActivityPicker}
-              onSubmit={(glucoseGoal: Pick<GlucoseGoal, "type" | "target">, lifestyleGoals: LifestyleGoal[]) => {
-                completeCheckIn(activeSlot, { kind: "goal_setting", glucoseGoal, lifestyleGoals });
-                spawnFromRef(CHECK_IN_ACORNS[activeSlot]);
-              }}
-              onDone={handleClose}
-              colors={colors}
-              spacing={spacing}
-              typography={typography}
-              borderRadius={borderRadius}
-              accentColor={accentColor}
-              acornSourceRef={acornSourceRef}
-            />
-          ) : (
-            <GradingFlow
-              slot={activeSlot}
-              step={step}
-              setStep={setStep}
-              lifestyleProgress={lifestyleProgress}
-              setLifestyleProgress={setLifestyleProgress}
-              today={today}
-              onSubmit={(progress: number[]) => {
-                completeCheckIn(activeSlot, { kind: "grading", lifestyleProgress: progress });
-                spawnFromRef(CHECK_IN_ACORNS[activeSlot]);
-              }}
-              onDone={handleClose}
-              colors={colors}
-              spacing={spacing}
-              typography={typography}
-              borderRadius={borderRadius}
-              accentColor={accentColor}
-              acornSourceRef={acornSourceRef}
-            />
-          )}
-        </ScrollView>
-      </SafeAreaView>
+      {isGoalSetting ? (
+        <GoalSettingFlow
+          {...shared}
+          selectedGlucoseLabel={selectedGlucoseLabel}
+          setSelectedGlucoseLabel={setSelectedGlucoseLabel}
+          selectedMealGoal={selectedMealGoal}
+          setSelectedMealGoal={setSelectedMealGoal}
+          selectedActivityGoal={selectedActivityGoal}
+          setSelectedActivityGoal={setSelectedActivityGoal}
+          showActivityPicker={showActivityPicker}
+          setShowActivityPicker={setShowActivityPicker}
+        />
+      ) : (
+        <GradingFlow
+          {...shared}
+          today={today}
+          lifestyleProgress={lifestyleProgress}
+          setLifestyleProgress={setLifestyleProgress}
+        />
+      )}
     </Modal>
   );
 }
 
 // ─── Goal-setting flow (whichever check-in is first that day) ────────────────
+// Three stops: greeting → set goal → done.
 
 function GoalSettingFlow({
-  slot,
-  step, setStep,
+  title, onClose, slot, step, setStep,
   selectedGlucoseLabel, setSelectedGlucoseLabel,
   selectedMealGoal, setSelectedMealGoal,
   selectedActivityGoal, setSelectedActivityGoal,
   showActivityPicker, setShowActivityPicker,
-  onSubmit, onDone,
-  colors, spacing, typography, borderRadius, accentColor,
-  acornSourceRef,
+  acornSourceRef, spawnFromRef, completeCheckIn, heroOutfit,
 }: any) {
-  // Step 0: Greeting
+  // Step 0: greeting
   if (step === 0) {
     const greeting =
       slot === "morning" ? "Good morning! Ready to plan a great day?"
       : slot === "midday" ? "Let's set today's goal now — better late than never!"
-      : "Let's set a goal for tonight!";
+      : "Let's set a goal for tonight.";
     return (
-      <View style={{ alignItems: "center" as const, gap: spacing.md }}>
-        <SpineCharacter animation="CheckIn/WakeUp" width={180} height={220} scale={0.35} />
-        <DialogueBubble text={greeting} colors={colors} spacing={spacing} typography={typography} />
-        <NextButton onPress={() => setStep(1)} label="Let's do it!" colors={colors} spacing={spacing} typography={typography} borderRadius={borderRadius} accentColor={accentColor} />
-      </View>
+      <CheckInFlowShell
+        title={title}
+        onClose={onClose}
+        progress={{ current: 1, total: 3 }}
+        heroAnimation="Idle/IdleWave"
+        stepKey="intro"
+        heroOutfit={heroOutfit}
+        centered
+      >
+        <CheckInDialogueCard tone="lavender" text={greeting} />
+        <CraftPrimaryButton label="Start Check-In" accent="sunrise" size="lg" onPress={() => setStep(1)} />
+      </CheckInFlowShell>
     );
   }
 
-  // Step 1: Glucose goal picker
+  // Step 1: pick the glucose goal (+ optional habit goal), one surface
   if (step === 1) {
-    return (
-      <View style={{ gap: spacing.md }}>
-        <SpineCharacter animation="Idle/Idle" width={120} height={140} scale={0.25} />
-        <GoalPicker
-          title="🩸 Glucose goal for the next 5 hours"
-          options={GLUCOSE_OPTIONS.map((o: GoalOption) => o.label)}
-          selected={selectedGlucoseLabel}
-          onSelect={setSelectedGlucoseLabel}
-        />
-        <NextButton onPress={() => setStep(2)} disabled={!selectedGlucoseLabel} colors={colors} spacing={spacing} typography={typography} borderRadius={borderRadius} accentColor={accentColor} />
-      </View>
-    );
-  }
+    const glucoseOption = GLUCOSE_OPTIONS.find(o => o.label === selectedGlucoseLabel);
 
-  // Step 2: Lifestyle goal picker
-  if (step === 2) {
+    const submit = () => {
+      if (!glucoseOption) return;
+      const lifestyleGoals: LifestyleGoal[] = [];
+      const mealMatch = selectedMealGoal ? MEAL_GOALS.find(g => g.text === selectedMealGoal) : undefined;
+      const activityMatch = selectedActivityGoal ? ACTIVITY_GOALS.find(g => g.text === selectedActivityGoal) : undefined;
+      if (mealMatch) lifestyleGoals.push(mealMatch);
+      if (activityMatch) lifestyleGoals.push(activityMatch);
+      completeCheckIn(slot, { kind: "goal_setting", glucoseGoal: glucoseOption.goal, lifestyleGoals });
+      spawnFromRef(CHECK_IN_ACORNS[slot as CheckInSlot]);
+      setStep(2);
+    };
+
+    const groups: { key: GoalOption["group"]; label: string }[] = [
+      { key: "tir", label: "Time in range" },
+      { key: "highs", label: "Highs" },
+      { key: "lows", label: "Lows" },
+    ];
+
+    const toggleMeal = (text: string) =>
+      setSelectedMealGoal((cur: string | null) => (cur === text ? null : text));
+    const toggleActivity = (text: string) =>
+      setSelectedActivityGoal((cur: string | null) => (cur === text ? null : text));
+
     return (
-      <View style={{ gap: spacing.md }}>
-        <SpineCharacter animation="Idle/Idle" width={120} height={140} scale={0.25} />
-        <GoalPicker
-          title="🍽️ Meal goal (optional)"
-          options={MEAL_GOALS.map(g => g.text)}
-          selected={selectedMealGoal}
-          onSelect={setSelectedMealGoal}
-        />
-        {!showActivityPicker ? (
-          <TouchableOpacity onPress={() => setShowActivityPicker(true)} style={{ alignItems: "center" as const, padding: spacing.sm }}>
-            <Text style={{ color: accentColor, fontSize: typography.size.sm }}>+ Add activity goal</Text>
-          </TouchableOpacity>
-        ) : (
-          <GoalPicker
-            title="🏃 Activity goal (optional)"
-            options={ACTIVITY_GOALS.map(g => g.text)}
-            selected={selectedActivityGoal}
-            onSelect={setSelectedActivityGoal}
-          />
-        )}
-        <View ref={acornSourceRef}>
-          <NextButton
-            onPress={() => {
-              const glucoseOption = GLUCOSE_OPTIONS.find(o => o.label === selectedGlucoseLabel);
-              if (!glucoseOption) return;
-              const lifestyleGoals: LifestyleGoal[] = [];
-              const mealMatch = selectedMealGoal ? MEAL_GOALS.find(g => g.text === selectedMealGoal) : undefined;
-              const activityMatch = selectedActivityGoal ? ACTIVITY_GOALS.find(g => g.text === selectedActivityGoal) : undefined;
-              if (mealMatch) lifestyleGoals.push(mealMatch);
-              if (activityMatch) lifestyleGoals.push(activityMatch);
-              onSubmit(glucoseOption.goal, lifestyleGoals);
-              setStep(3);
-            }}
-            label="Confirm →"
-            colors={colors} spacing={spacing} typography={typography} borderRadius={borderRadius} accentColor={accentColor}
+      <CheckInFlowShell
+        title={title}
+        onClose={onClose}
+        progress={{ current: 2, total: 3 }}
+        heroAnimation="Idle/Idle"
+        stepKey="goal"
+        heroOutfit={heroOutfit}
+        heroSize="medium"
+        scroll
+      >
+        <GoalSurface title="Your glucose goal" subtitle="Choose a goal for the next 5 hours">
+          {groups.map(g => (
+            <CheckInChoiceGroup key={g.key} label={g.label}>
+              {GLUCOSE_OPTIONS.filter(o => o.group === g.key).map(o => (
+                <CheckInChoiceCard
+                  key={o.label}
+                  label={o.short}
+                  selected={selectedGlucoseLabel === o.label}
+                  onPress={() => setSelectedGlucoseLabel(o.label)}
+                />
+              ))}
+            </CheckInChoiceGroup>
+          ))}
+        </GoalSurface>
+
+        <GoalSurface title="Add a habit goal" subtitle="Optional — one meal focus for today">
+          <CheckInChoiceGroup label="Meals">
+            {MEAL_GOALS.map(g => (
+              <CheckInChoiceCard
+                key={g.text}
+                label={g.text}
+                selected={selectedMealGoal === g.text}
+                onPress={() => toggleMeal(g.text)}
+              />
+            ))}
+          </CheckInChoiceGroup>
+
+          {showActivityPicker ? (
+            <CheckInChoiceGroup label="Activity">
+              {ACTIVITY_GOALS.map(g => (
+                <CheckInChoiceCard
+                  key={g.text}
+                  label={g.text}
+                  selected={selectedActivityGoal === g.text}
+                  onPress={() => toggleActivity(g.text)}
+                />
+              ))}
+            </CheckInChoiceGroup>
+          ) : (
+            <Text
+              style={styles.addActivity}
+              onPress={() => setShowActivityPicker(true)}
+              accessibilityRole="button"
+            >
+              + Add an activity goal
+            </Text>
+          )}
+        </GoalSurface>
+
+        <View ref={acornSourceRef} collapsable={false}>
+          <CraftPrimaryButton
+            label="Set my goal"
+            accent="green"
+            size="lg"
+            disabled={!selectedGlucoseLabel}
+            onPress={submit}
           />
         </View>
-      </View>
+      </CheckInFlowShell>
     );
   }
 
-  // Step 3: Reward
-  if (step === 3) {
+  // Step 2: Adventure Board reveal -- the plan just set becomes a physical
+  // board being set up. Same shared component + view model as the house board.
+  if (step === 2) {
     return (
-      <RewardStep
-        slot={slot}
-        dialogue="Goal set! Keep it up — you're on track for a great day!"
-        onDone={onDone}
-        colors={colors} spacing={spacing} typography={typography} borderRadius={borderRadius} accentColor={accentColor}
-      />
+      <CheckInFlowShell
+        title={title}
+        onClose={onClose}
+        progress={{ current: 3, total: 3 }}
+        heroAnimation="CheckIn/Cheer"
+        stepKey="board"
+        heroOutfit={heroOutfit}
+        heroSize="small"
+        scroll
+      >
+        <BoardRevealStep onContinue={() => setStep(3)} />
+      </CheckInFlowShell>
     );
   }
 
-  return null;
+  // Step 3: done
+  const doneMsg =
+    slot === "morning" ? "You're ready for the morning."
+    : slot === "midday" ? "You're set for the afternoon."
+    : "You're set for tonight.";
+  return (
+    <CheckInFlowShell
+      title={title}
+      onClose={onClose}
+      progress={null}
+      heroAnimation="CheckIn/Cheer"
+      stepKey="complete"
+      heroOutfit={heroOutfit}
+      centered
+    >
+      <CheckInCompleteStep
+        title="Goal set!"
+        message={doneMsg}
+        acorns={CHECK_IN_ACORNS[slot as CheckInSlot]}
+        capBonus={CAP_BONUS_LABEL}
+        onDone={onClose}
+      />
+    </CheckInFlowShell>
+  );
 }
 
-// ─── Grading flow (2nd/3rd check-ins of the day) ──────────────────────────────
+// ─── Adventure Board reveal step ────────────────────────────────────────────
+// Staggered ~600ms reveal of the just-set plan. Timers are cleared on unmount
+// so closing the modal mid-reveal can't setState on an unmounted flow.
+
+function BoardRevealStep({ onContinue }: { onContinue: () => void }) {
+  const model = useAdventureBoardModel();
+  const [reveal, setReveal] = useState(0);
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  useEffect(() => {
+    const order = [REVEAL_PRIMARY, REVEAL_MINOR_1, REVEAL_MINOR_2, REVEAL_SUMMARY];
+    order.forEach((s, i) => {
+      timersRef.current.push(setTimeout(() => setReveal(s), 160 * (i + 1)));
+    });
+    const timers = timersRef.current;
+    return () => {
+      timers.forEach(clearTimeout);
+      timersRef.current = [];
+    };
+  }, []);
+
+  return (
+    <>
+      {/* A small craft note, not a full dialogue panel -- the board is the event. */}
+      <Text style={styles.revealNote}>Setting up today's adventures…</Text>
+      <DailyAdventureBoardPreview>
+        <AdventureBoardCanvas model={model} density="full" revealStep={reveal} />
+      </DailyAdventureBoardPreview>
+      <View style={styles.revealContinue}>
+        <CraftPrimaryButton label="Continue" accent="green" size="lg" onPress={onContinue} />
+      </View>
+    </>
+  );
+}
+
+// ─── Grading flow (2nd/3rd check-ins of the day) ─────────────────────────────
 
 function GradingFlow({
-  slot, step, setStep,
+  title, onClose, slot, step, setStep,
   lifestyleProgress, setLifestyleProgress,
-  today, onSubmit, onDone,
-  colors, spacing, typography, borderRadius, accentColor,
-  acornSourceRef,
+  today, acornSourceRef, spawnFromRef, completeCheckIn, heroOutfit,
 }: any) {
   const goalSetting = findTodayGoalSetting(today);
   const lifestyleGoals: LifestyleGoal[] = goalSetting?.lifestyleGoals ?? [];
@@ -389,18 +406,19 @@ function GradingFlow({
 
   const glucoseAdherence = priorGrading?.glucoseAdherence ?? null;
   const greetingAnimation =
-    glucoseAdherence === null ? "Idle/IdleWave"
+    slot === "evening" ? "ReadBook/ReadBook"
+    : glucoseAdherence === null ? "Idle/IdleWave"
     : glucoseAdherence >= 0.8 ? "CheckIn/Cheer"
     : glucoseAdherence >= 0.5 ? "Idle/IdleWave"
     : "High/HighWorriedFace";
 
-  // Evening previously reused the morning "wake up" clip because a
-  // dedicated wind-down animation was never made -- ReadBook/ReadBook is a
-  // thematically better fit for a wind-down moment and already exists in
-  // the character's animation set, no new art asset needed.
-  const eveningAnimation = "ReadBook/ReadBook";
+  const submitGrading = (progress: number[]) => {
+    completeCheckIn(slot, { kind: "grading", lifestyleProgress: progress });
+    spawnFromRef(CHECK_IN_ACORNS[slot as CheckInSlot]);
+    setStep(3);
+  };
 
-  // Step 0: greeting with glucose-based reaction
+  // Step 0: greeting with a glucose-based reaction
   if (step === 0) {
     const dialogue = slot === "evening"
       ? "You made it through the day! Let's see how you did."
@@ -413,23 +431,26 @@ function GradingFlow({
       : "Let's see how things are going.";
 
     return (
-      <View style={{ alignItems: "center" as const, gap: spacing.md }}>
-        <SpineCharacter
-          animation={slot === "evening" ? eveningAnimation : greetingAnimation}
-          width={180}
-          height={220}
-          scale={0.35}
-        />
-        <DialogueBubble text={dialogue} colors={colors} spacing={spacing} typography={typography} />
-        <NextButton onPress={() => setStep(1)} label="Let's check in" colors={colors} spacing={spacing} typography={typography} borderRadius={borderRadius} accentColor={accentColor} />
-      </View>
+      <CheckInFlowShell
+        title={title}
+        onClose={onClose}
+        progress={{ current: 1, total: 3 }}
+        heroAnimation={greetingAnimation}
+        stepKey="grade-intro"
+        heroOutfit={heroOutfit}
+        centered
+      >
+        <CheckInDialogueCard tone="lavender" text={dialogue} />
+        <CraftPrimaryButton label="Let's check in" accent="sunrise" size="lg" onPress={() => setStep(1)} />
+      </CheckInFlowShell>
     );
   }
 
-  // Step 1: Glucose recap bar
+  // Step 1: glucose recap
   if (step === 1) {
     const adherence = priorGrading?.glucoseAdherence ?? 0.5;
     const pct = Math.round(adherence * 100);
+    const barColor = adherence >= 0.8 ? FELT_GREEN : adherence >= 0.5 ? GOLD : "#D98A73";
     const goalLabel = !goalSetting
       ? "No goal set today"
       : goalSetting.glucoseGoal.type === "tir"
@@ -438,112 +459,172 @@ function GradingFlow({
       ? `Goal: no highs above ${goalSetting.glucoseGoal.target} (5h)`
       : `Goal: no lows below ${goalSetting.glucoseGoal.target} (5h)`;
 
-    return (
-      <View style={{ gap: spacing.md }}>
-        <Text style={{ color: colors.text.primary, fontSize: typography.size.lg, fontWeight: typography.weight.bold as any }}>
-          📊 Glucose check-in
-        </Text>
-        <View style={{ height: 8, borderRadius: 4, backgroundColor: colors.background.secondary, overflow: "hidden" }}>
-          <View style={{
-            height: "100%" as any,
-            width: `${pct}%` as any,
-            backgroundColor: adherence >= 0.8 ? "#7deba3" : adherence >= 0.5 ? "#f0c040" : "#e07070",
-            borderRadius: 4,
-          }} />
-        </View>
-        <Text style={{ color: adherence >= 0.7 ? "#7deba3" : colors.text.secondary, fontWeight: typography.weight.bold as any }}>
-          {pct}% adherence
-        </Text>
-        <Text style={{ color: colors.text.secondary, fontSize: typography.size.sm }}>{goalLabel}</Text>
-        <View ref={lifestyleGoals.length === 0 ? acornSourceRef : undefined}>
-          <NextButton onPress={() => {
-            if (lifestyleGoals.length === 0) {
-              onSubmit([]);
-              setStep(3);
-            } else {
-              setLifestyleProgress([]);
-              setStep(2);
-            }
-          }} colors={colors} spacing={spacing} typography={typography} borderRadius={borderRadius} accentColor={accentColor} />
-        </View>
-      </View>
-    );
-  }
-
-  // Step 2: Self-report lifestyle goals (one at a time), with partial credit
-  if (step === 2 && lifestyleGoals.length > 0) {
-    const activeIdx = lifestyleProgress.length;
-
-    // All goals answered — submit
-    if (activeIdx >= lifestyleGoals.length) {
-      onSubmit(lifestyleProgress);
-      setStep(3);
-      return null;
-    }
-
-    const goal = lifestyleGoals[activeIdx];
-
-    const answer = (val: number) => {
-      const next = [...lifestyleProgress, val];
-      if (next.length >= lifestyleGoals.length) {
-        onSubmit(next);
-        setStep(3);
+    const next = () => {
+      if (lifestyleGoals.length === 0) {
+        submitGrading([]);
       } else {
-        setLifestyleProgress(next);
+        setLifestyleProgress([]);
+        setStep(2);
       }
     };
 
     return (
-      <View style={{ gap: spacing.md }}>
-        <Text style={{ color: colors.text.primary, fontSize: typography.size.lg, fontWeight: typography.weight.bold as any }}>
-          {goal.category === "meal" ? "🍽️" : "🏃"} {goal.text}
-        </Text>
-        <Text style={{ color: colors.text.secondary, fontSize: typography.size.md }}>
-          {slot !== "evening" ? "How's this going so far?" : "Did you manage this today?"}
-        </Text>
-        <View
-          ref={activeIdx === lifestyleGoals.length - 1 ? acornSourceRef : undefined}
-          style={{ flexDirection: "row" as const, gap: spacing.sm }}
-        >
-          <TouchableOpacity
-            onPress={() => answer(1)}
-            style={{ flex: 1, backgroundColor: "#2d4a2d", borderRadius: borderRadius.md, padding: spacing.sm, alignItems: "center" as const, borderWidth: 1, borderColor: "#4a9" }}
-          >
-            <Text style={{ fontSize: 18 }}>✓</Text>
-            <Text style={{ color: "#4a9", fontSize: typography.size.xs, fontWeight: typography.weight.bold as any }}>Yes</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => answer(0.5)}
-            style={{ flex: 1, backgroundColor: "#4a3f1f", borderRadius: borderRadius.md, padding: spacing.sm, alignItems: "center" as const, borderWidth: 1, borderColor: "#c93" }}
-          >
-            <Text style={{ fontSize: 18 }}>~</Text>
-            <Text style={{ color: "#c93", fontSize: typography.size.xs, fontWeight: typography.weight.bold as any }}>Partly</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => answer(0)}
-            style={{ flex: 1, backgroundColor: "#2a1f1f", borderRadius: borderRadius.md, padding: spacing.sm, alignItems: "center" as const, borderWidth: 1, borderColor: "#944" }}
-          >
-            <Text style={{ fontSize: 18 }}>✗</Text>
-            <Text style={{ color: "#944", fontSize: typography.size.xs, fontWeight: typography.weight.bold as any }}>
-              {slot !== "evening" ? "Not yet" : "No"}
-            </Text>
-          </TouchableOpacity>
+      <CheckInFlowShell
+        title={title}
+        onClose={onClose}
+        progress={{ current: 2, total: 3 }}
+        heroAnimation="Idle/Idle"
+        stepKey="grade-recap"
+        heroOutfit={heroOutfit}
+        heroSize="medium"
+        centered
+      >
+        <GoalSurface title="Glucose check-in" subtitle={goalLabel}>
+          <View style={styles.barTrack}>
+            <View style={[styles.barFill, { width: `${Math.max(4, pct)}%` as any, backgroundColor: barColor }]} />
+          </View>
+          <Text style={[styles.barLabel, { color: adherence >= 0.7 ? INK : INK_MUTED }]}>
+            {pct}% on track
+          </Text>
+        </GoalSurface>
+
+        <View ref={lifestyleGoals.length === 0 ? acornSourceRef : undefined} collapsable={false}>
+          <CraftPrimaryButton label="Continue" accent="green" size="lg" onPress={next} />
         </View>
-      </View>
+      </CheckInFlowShell>
     );
   }
 
-  // Step 3: Reward
-  if (step === 3) {
+  // Step 2: self-report each lifestyle goal, one at a time (partial credit)
+  if (step === 2 && lifestyleGoals.length > 0) {
+    const activeIdx = lifestyleProgress.length;
+
+    if (activeIdx >= lifestyleGoals.length) {
+      submitGrading(lifestyleProgress);
+      return null;
+    }
+
+    const goal = lifestyleGoals[activeIdx];
+    const isLast = activeIdx === lifestyleGoals.length - 1;
+
+    const answer = (val: number) => {
+      const nextProgress = [...lifestyleProgress, val];
+      if (nextProgress.length >= lifestyleGoals.length) {
+        submitGrading(nextProgress);
+      } else {
+        setLifestyleProgress(nextProgress);
+      }
+    };
+
+    const answers: { label: string; val: number }[] = [
+      { label: "Yes", val: 1 },
+      { label: "Partly", val: 0.5 },
+      { label: slot === "evening" ? "No" : "Not yet", val: 0 },
+    ];
+
     return (
-      <RewardStep
-        slot={slot}
-        dialogue={slot === "evening" ? "Great job today! See you tomorrow! 🌙" : "Nice check-in — keep it up!"}
-        onDone={onDone}
-        colors={colors} spacing={spacing} typography={typography} borderRadius={borderRadius} accentColor={accentColor}
-      />
+      <CheckInFlowShell
+        title={title}
+        onClose={onClose}
+        progress={{ current: 3, total: 3 }}
+        heroAnimation="Idle/Idle"
+        stepKey={`grade-report-${activeIdx}`}
+        heroOutfit={heroOutfit}
+        heroSize="medium"
+        centered
+      >
+        <CheckInDialogueCard
+          title={goal.text}
+          text={slot !== "evening" ? "How's this going so far?" : "Did you manage this today?"}
+        />
+        <View ref={isLast ? acornSourceRef : undefined} collapsable={false} style={{ gap: 9 }}>
+          {answers.map(a => (
+            <CheckInChoiceCard
+              key={a.label}
+              label={a.label}
+              selected={false}
+              hideControl
+              onPress={() => answer(a.val)}
+            />
+          ))}
+        </View>
+      </CheckInFlowShell>
     );
   }
 
-  return null;
+  // Step 3: done
+  const doneMsg = slot === "evening" ? "Great job today — see you tomorrow." : "Nice check-in — keep it up.";
+  return (
+    <CheckInFlowShell
+      title={title}
+      onClose={onClose}
+      progress={null}
+      heroAnimation="CheckIn/Cheer"
+      stepKey="grade-complete"
+      heroOutfit={heroOutfit}
+      centered
+    >
+      <CheckInCompleteStep
+        title={slot === "evening" ? "Day complete!" : "Checked in!"}
+        message={doneMsg}
+        acorns={CHECK_IN_ACORNS[slot as CheckInSlot]}
+        capBonus={CAP_BONUS_LABEL}
+        onDone={onClose}
+      />
+    </CheckInFlowShell>
+  );
 }
+
+const styles = StyleSheet.create({
+  surface: {
+    flex: 0,
+  },
+  surfaceTitle: {
+    color: INK,
+    fontSize: 19,
+    fontWeight: "800",
+  },
+  surfaceSub: {
+    color: INK_MUTED,
+    fontSize: 13.5,
+    marginTop: 4,
+    lineHeight: 18,
+  },
+  surfaceBody: {
+    marginTop: 14,
+    gap: 18,
+  },
+  addActivity: {
+    color: INK_MUTED,
+    fontSize: 14,
+    fontWeight: "700",
+    paddingVertical: 8,
+  },
+  barTrack: {
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: INK,
+    backgroundColor: CREAM_LIGHT,
+    overflow: "hidden",
+  },
+  barFill: {
+    height: "100%",
+    borderRadius: 3,
+  },
+  barLabel: {
+    fontSize: 14,
+    fontWeight: "800",
+    marginTop: 9,
+  },
+  revealNote: {
+    fontSize: 13.5,
+    fontWeight: "700",
+    color: INK_MUTED,
+    textAlign: "center",
+    marginBottom: 22,
+  },
+  revealContinue: {
+    marginTop: 4,
+  },
+});

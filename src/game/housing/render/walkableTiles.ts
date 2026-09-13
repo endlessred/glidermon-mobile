@@ -2,7 +2,7 @@
 // the current room tier minus whatever's covered by an occupied floor-kind
 // slot (including multi-tile footprints like the bed). Wall-kind slots don't
 // occupy a floor tile so they're not excluded here.
-import { getSlotsForTier, getCharacterSlotsForTier, CharacterSlotDef } from '../types/roomSlots';
+import { getSlotsForTier, getCharacterSlotsForTier, getSystemSlotsForTier, CharacterSlotDef } from '../types/roomSlots';
 import { getFurnitureInteraction } from '../types/furnitureCatalog';
 import { SUPPORTED_INTERACTION_BEHAVIORS } from '../../view/lifelikeIdle_noMix';
 import { ROOM_SIZE_TIERS } from '../../../data/stores/housingStore';
@@ -16,6 +16,11 @@ export function getWalkableTiles(
 ): GridTile[] {
   const dims = ROOM_SIZE_TIERS[roomSizeTier] ?? ROOM_SIZE_TIERS[0];
   const occupied = new Set<string>();
+  // System furnishings (e.g. the Daily Adventure Board) permanently occupy
+  // their tile -- GliderMon may never wander onto / overlap them.
+  for (const sys of getSystemSlotsForTier(roomSizeTier)) {
+    occupied.add(`${sys.row},${sys.col}`);
+  }
   for (const slot of getSlotsForTier(roomSizeTier)) {
     if (slot.kind !== 'floor') continue;
     if (!activeFurnitureBySlot[slot.slotId]) continue;

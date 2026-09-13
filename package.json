@@ -10,6 +10,7 @@
     "iostunnel": "expo start --tunnel -c",
     "prebuild": "expo prebuild",
     "lint": "echo 'add eslint if you want'",
+    "furniture:build-atlas-metadata": "tsx scripts/buildFurnitureAtlasMetadata.ts",
     "claude": "claude"
   },
   "dependencies": {
@@ -68,10 +69,13 @@
     "react-dom": "19.1.0"
   },
   "devDependencies": {
+    "@types/pngjs": "^6.0.5",
     "@types/react": "~19.1.13",
     "@types/react-native": "~0.73.0",
     "@types/three": "^0.180.0",
     "@types/web-bluetooth": "^0.0.21",
+    "pngjs": "^7.0.0",
+    "tsx": "^4.23.13",
     "typescript": "^5.9.3"
   }
 }

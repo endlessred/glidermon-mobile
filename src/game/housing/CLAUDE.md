@@ -34,23 +34,89 @@ Key files:
 | `render/grid3D.ts` | `gridToWorld(row, col, dims, footprint?)` → world `{x, z}`. **The single source of truth for "where is tile (row,col)".** `TILE_SIZE = 1`. No screen projection, no skirt/pivot math (unlike `quad`). |
 | `render/sceneBuilder3D.ts` | floor tiles + 2 back walls from a `RoomGridConfig` |
 | `render/proceduralTextures.ts` / `types/proceduralPatternCatalog.ts` | floor/wall patterns (procedural, **not** the asset-backed `FloorSetName`/`WallSetName` the other renderers use) |
+| `render/renderLayers.ts` | the two-pass split (below) — `ROOM_SHELL_LAYER`, `CONTENT_LAYER`, `assignLayer()` |
 | `render/furnitureBillboard3D.ts` | `buildFurnitureSlotBillboard(slot, furnitureId, variantId, dims, billboardQ, characterWorldPos, forceInFront?)` — one camera-facing billboard per occupied slot, composited from `restPoseAsset` / `layers` |
 | `render/billboard3D.ts` | `computeBillboardQuaternion(CAMERA_OFFSET)` — one shared rotation for every billboard (character, furniture, treetop) |
 | `render/walkableTiles.ts` | wander destinations + furniture-interaction resolution (see below) |
 | `render/characterScale.ts` | `computeNativeCharacterHeight` |
 | `types/roomSlots.ts` | fixed furniture **and** character slots, per room-size tier |
 | `types/furnitureCatalog.ts` | `FURNITURE_CATALOG` — one entry per `SlotType`, 1–2 variants each |
+| `render/lightGlow3D.ts` | `buildLightGlow(socket, region, worldUnitsPerPixel, mirrorX)` — soft additive glow disc for a static-atlas lamp's light socket; see Recipes |
+
+### Two-pass render: shell vs contents (`render/renderLayers.ts`)
+
+The room shell (floor + walls, real `BoxGeometry` with a depth buffer) and room
+contents (GliderMon, furniture, wall art, the Adventure Board — all billboards)
+render in **two separate passes with two separate depth buffers**, not one:
+
+```ts
+renderer.clear(true, true, true);
+camera.layers.set(ROOM_SHELL_LAYER);
+renderer.render(scene, camera);   // floor, walls, treetop backdrop
+renderer.clearDepth();
+scene.background = null;         // else the sky quad repaints over pass 1
+camera.layers.set(CONTENT_LAYER);
+renderer.render(scene, camera);  // GliderMon, furniture, wall art, the board
+scene.background = skyTexture;   // restored for next frame's pass 1
+```
+
+**Why**: a billboard is a flat plane with one depth value across its whole
+face, while the shell's wall/floor surface depth varies continuously across
+its own face. At the angles this fixed isometric camera favors, that mismatch
+let a wall's near corner win the depth test against part of a tall/billboarded
+object while losing against another part of the same object — the wall
+visibly sliced through it (this is exactly the failure `treetopBackdrop3D.ts`
+worked around one object at a time before this existed, and what eventually
+also hit the Adventure Board and tall furniture). Splitting the passes makes
+it structurally impossible: contents never share a depth buffer with the
+shell, so the shell can never clip them.
+
+**Layer assignment** — every object gets `assignLayer(root, LAYER)` (recursive,
+sets `.layers` on every descendant) right after it's added to the scene, at
+**every** build/rebuild site (initial `handleContextCreate`, the shell-pattern
+rebuild effect, the furniture rebuild inside `populateFurnitureGroup`, both
+board build/rebuild sites, the character):
+- `ROOM_SHELL_LAYER`: the shell group, and the treetop backdrop (it
+  deliberately depth-tests against the walls — see `treetopBackdrop3D.ts` — so
+  it must share pass 1's depth buffer, not pass 2's).
+- `CONTENT_LAYER`: furniture (`populateFurnitureGroup`, floor + wall-mounted),
+  GliderMon (`characterGroup`), the Adventure Board (`board.group` — frame
+  **and** writing-surface plane together).
+- Lights (`ambient`/`sun`) call `.layers.enableAll()` — the shell's
+  `MeshStandardMaterial` floor/walls need them in pass 1; contents are unlit
+  `MeshBasicMaterial` so this is belt-and-suspenders.
+- The board-tap `Raycaster` needs `raycaster.layers.set(CONTENT_LAYER)` before
+  every `intersectObject` call — it defaults to layer 0 only and would
+  silently miss `boardSurfaceMesh` otherwise (see `tryBoardTap`).
+
+**Contents still share ONE depth buffer with each other** in pass 2 — this
+change is purely about the shell. GliderMon ↔ furniture ↔ Adventure Board
+occlusion is entirely unaffected: same `renderOrder` bands, same
+`depthTest`/opaque-cutout-queue logic as before (see the Adventure Board
+section below and `furnitureBillboard3D.ts`'s `RENDER_ORDER_BEHIND_CHARACTER` /
+`RENDER_ORDER_IN_FRONT_OF_CHARACTER`).
+
+**Adding a new content object**: call `assignLayer(theGroupYouJustAdded,
+CONTENT_LAYER)` right after `scene.add(...)` — forgetting it makes the object
+invisible in both passes (it stays on the default layer 0, which the camera
+never renders once `camera.layers.set` is in play) rather than merely
+mis-ordered, so the failure is loud, not subtle.
 
 ### Camera
 
 Fixed isometric orthographic camera, direction always `-CAMERA_OFFSET`
-(`(10,10,10)`), only the look-at point moves. Two modes via the `zoomedIn` prop
-(driven by `CameraPresetTabs` on Home — "Nest" = overview, "Glidermon" = close
-follow):
+(`(10,10,10)`), only the look-at point moves. Three modes via the `cameraMode` prop (`'nest' | 'glidermon' | 'goals'`, driven
+by `CameraPresetTabs` on Home; the older `zoomedIn` boolean still works as a
+fallback):
 
-- Overview: frustum fit to the room's projected bounding box.
-- Zoomed: frames `characterTargetRef` (character mid-height), eased over
-  `CAMERA_PAN_DURATION_SECONDS` when he moves.
+- `nest` (overview): frustum fit to the room's projected bounding box.
+- `glidermon` (zoomed): frames `characterTargetRef` (character mid-height), eased
+  over `CAMERA_PAN_DURATION_SECONDS` when he moves.
+- `goals`: frames the Adventure Board's wooden frame
+  (`goalsTargetRef` = `frameCenterWorld` from `adventureBoard3D`), fitting
+  both projected width and height with `GOALS_MARGIN_RATIO` of context, eased the
+  same way, and switches the board texture to `full` density. The goal content
+  is a texture inside the scene now — no screen-space projection / RN overlay.
 
 **Anything that moves the character's render position must also call the
 effect-local `aimCameraAt(x, z)`** or the follow-camera aims at the wrong spot
@@ -84,6 +150,83 @@ To retune a layout: edit the tier's array in `roomSlots.ts`. `bed` has
 `footprint: { w: 1, h: 2 }` (runs along the row axis — headboard one tile
 further back). Coordinates want an on-device pass; `glidermon://home` +
 screenshots.
+
+## System furnishings (`roomSlots.ts` → `getSystemSlotsForTier`)
+
+Fixed objects the game places itself, **separate from the player-swappable
+furniture** (`RoomSlotDef` / `activeFurnitureBySlot` / the shop) — kept as their
+own `SystemSlotDef` concept rather than a new `SlotType` so the furniture
+catalog's `Record<SlotType, …>` maps don't need fake entries. Their tiles are
+force-marked non-walkable in `walkableTiles.ts` (GliderMon never idles on them).
+
+Today there's one: the **Daily Adventure Board** (`slotId: 'adventureBoard'`),
+front-left corner of tier 1 (`(3,0)`; tiers 0/2 fall back to an open left-side
+tile). Rendered by `render/adventureBoard3D.ts` as **one world entity with two
+layers**, both children of the same billboard-rotated, floor-grounded group:
+
+1. `boardSurfaceMesh` — a `PlaneGeometry` showing the dynamic goal UI as a
+   texture. The pixels are drawn offscreen with Skia
+   (`ui/components/adventureBoard/AdventureBoardDrawing.ts` +
+   `adventureBoardTexture.ts`), handed in via `IsometricRoomView3D`'s
+   `boardTextures` prop, and uploaded here into a `THREE.DataTexture`
+   (`setTextures`). Sized from the measured `Placeholder` local AABB expanded by
+   `BOARD_OPENING_OVERSCAN` (`render/adventureBoardLayout.ts`), recessed behind
+   the frame by `BOARD_UI_LOCAL_DEPTH_OFFSET` along the billboard normal so the
+   wooden lip sits proud of it. `setDensity('full'|'compact')` swaps which
+   pre-rendered texture shows (Goals camera → full).
+2. `spineMesh` — the authored Spine frame / easel / leaves / sticky-notes, drawn
+   **in front of** the surface. Its transparent opening lets the surface show
+   through; wood / leaves / notes occlude the surface's overscanned edges. The
+   `Placeholder` slot itself is hidden (`o.visible = false`) — it's only an
+   alignment guide.
+
+**Depth vs GliderMon — the queue-flip.** His body/skin slots are OPAQUE-queue
+materials (hue-indexed recolor, `normalizeMaterialForSlot`), and three.js draws
+the whole opaque queue before the whole transparent queue regardless of
+`renderOrder` — so a *transparent* board can never sort behind his skin, it
+always draws in the later pass and covers him. `setDepthClass('front'|'behind')`
+classifies the whole board against GliderMon by isometric depth
+(`classifyBoardDepth`, same `x+z` formula as `furnitureBillboard3D.ts`) and
+switches **both** layers' materials to match — exactly what `tileSprite.ts`'s
+`opaqueCutout` does for furniture:
+- **behind** GliderMon → `transparent:false, depthTest:true, depthWrite:true`
+  (frame art gets `alphaTest` 0.5 hard cutout), `renderOrder` in `[-1, 0)`. Now
+  in the opaque queue, so his opaque skin (drawn after, `depthTest:false`)
+  paints over it, and the real depth buffer sorts it against the walls / bed /
+  rug behind it.
+- **in front of** GliderMon → `transparent:true, depthTest:true,
+  depthWrite:false`, `renderOrder` ~1000 (surface) / ~1001 (frame), so it draws
+  after *all* his slots including the transparent face / hat / shoes.
+`BOARD_SURFACE_BIAS` / `BOARD_FRAME_BIAS` keep both layers strictly between
+furniture's "behind" band (`-1`) and his slot range (~2-70): surface just below
+frame (lip covers the writing surface), whole board above the furniture behind
+it. The `needsUpdate` on a mode switch only fires when the class actually
+changes (rare — a wander onto/off the tiles in front of the easel).
+
+Sized as a world object (~1.7 world units — ~90% of the original 1.9, a
+first-pass shrink so it doesn't visually dominate the room next to GliderMon/
+furniture — via `BOARD_DESIRED_WORLD_HEIGHT`, the one source of truth for its
+size). **Vertical placement is derived, then calibrated:** after the group is
+built + billboard-rotated, its lowest measured world point is dropped onto the
+floor plane (`world y = 0`) via a `THREE.Box3` union over the visible slot
+geometries, lifted by `BOARD_GROUND_EPSILON`. The Easel art itself draws its
+two front legs at different heights in local Spine units (~46-unit gap
+measured off the WoodEasel mesh) — a flat camera-facing billboard has one
+rigid Y, so that single-point measurement only plants the shorter-drawn leg;
+the other reads as floating by the remaining gap, and empirically by more
+than the raw leg-to-leg gap alone accounts for. `BOARD_GROUND_EXTRA_DROP` is
+the one on-device-tuned calibration knob for the residual — an additional
+world-unit nudge applied on top of the derived grounding, tuned by eye until
+both legs read as planted. Retune this constant (never a one-off
+`position.y -=` elsewhere) if the board moves, rescales, or the art changes.
+`getAdventureBoardSlot(tier)` is the single source of
+truth for its position — the Goals camera preset (aims at `frameCenterWorld`,
+fits `frameWorldSize`) derives from the built object, so moving the board moves
+everything with no compensating offsets elsewhere. A tap on the room view while
+the Goals camera frames a not-yet-planned board raycasts `boardSurfaceMesh`
+(`boardInteractive` / `onBoardTap` props, movement-thresholded vs a drag) to open
+the Morning Check-In. A dev-only `assertNoSlotCollisions()` in `roomSlots.ts`
+flags overlaps.
 
 ## Character-slot + furniture-interaction system
 
@@ -262,6 +405,63 @@ furniture entry's `interaction.interactionAnchor` in `furnitureCatalog.ts`, set
 Add a `CharacterSlotDef` to the tier's array in `CHARACTER_SLOT_LAYOUTS`. Its
 tile must be walkable (not covered by furniture). Give it `interactions` only if
 a furniture slot is genuinely adjacent.
+
+### Add a light glow to a lamp (static-atlas lamps only)
+
+Only static-atlas furniture (`FurnitureVariant.staticAtlas`, e.g.
+`traffic_cone_lamp`) supports this — the older `restPoseAsset`/`layers` lamps
+(`lamp_table`, `lamp_classic`) already bake a soft translucent halo directly
+into their PNG's own alpha channel (confirmed by sampling
+`1x1_TableLamp_On.png` — alpha fades from 0 to 255 well outside the shade's
+hard edge). A static-atlas item can't do that: its art is flat
+`#ff0000`/`#00ff00`/`#0000ff` hue-indexed recolor masks (see
+`StaticFurnitureVisual`'s doc comment in `RoomConfig.ts`), and a soft alpha
+gradient baked into that art would get misread as part of the recolor mask.
+`render/lightGlow3D.ts` adds the same idea back as a separate, non-recolored,
+always-on-top overlay instead.
+
+1. Find the atlas region's `bounds:x,y,w,h` (page-space rect) and `rotate`
+   value (e.g. `rotate:90`) in `ShadedFurniture.atlas`.
+2. Crop that page rect out of `ShadedFurniture.png` and un-rotate it back to
+   upright (rotate the crop by `-`rotate, i.e. clockwise for `rotate:90` — the
+   same direction `scripts/buildFurnitureAtlasMetadata.ts`'s `toDisplayedLocal`
+   uses) so you're looking at the same top-left-origin/y-down, un-rotated
+   frame `anchorX`/`anchorY` are already defined in. No build step needed, a
+   throwaway script is enough:
+   ```python
+   from PIL import Image
+   img = Image.open('src/assets/Apartment/ShadedFurniture/ShadedFurniture.png')
+   crop = img.crop((x, y, x + w, y + h))                   # bounds from the .atlas entry
+   crop.rotate(-90, expand=True).save('lamp_upright.png')  # match the entry's rotate value
+   ```
+3. Open `lamp_upright.png` and read off the pixel coordinate of the
+   light-emission point (bulb / shade opening / etc.) in that image —
+   top-left origin, y-down, same units as the region's declared
+   `width`/`height`.
+4. Add `lightSocket: { x, y }` to that variant's `staticAtlas` in
+   `furnitureCatalog.ts`:
+   ```ts
+   staticAtlas: { atlasRegion: "skeleton-Lighting-Traffic Cone Lamp_0", lightSocket: { x: 53, y: 62 } },
+   ```
+5. Reload and check on-device (`glidermon://home`) —
+   `buildStaticFurnitureSlotBillboard` picks up `lightSocket` automatically and
+   adds the glow as a sibling of the lamp mesh, so it inherits the slot's
+   world position/rotation/`CONTENT_LAYER` for free. Nothing else to wire up.
+
+Defaults, overridable per-lamp on the same `lightSocket` object: radius
+`DEFAULT_LIGHT_GLOW_RADIUS` = 2 world units (`radius?`), tint `#fff3c4` warm
+white (`color?`). Overall brightness (`DEFAULT_LIGHT_GLOW_OPACITY` = 0.5,
+lowered from an initial 1.0 that read as too strong on-device) is currently a
+module constant in `lightGlow3D.ts`, not per-variant — adjust it there, or
+promote it to a per-socket field if a future lamp genuinely needs to look
+brighter/dimmer than the rest rather than every lamp needing retuning together.
+
+The glow always renders in front of *everything* in the room (character,
+furniture, the Adventure Board) via `RENDER_ORDER_LIGHT_GLOW`
+(`slotWorldPlacement3D.ts`) + `depthTest:false` — read that constant's comment
+before changing it, and never give anything else a `renderOrder` at or above
+it, or reuse a value at/below the Adventure Board's "in front" band
+(~1000–1000.6) for a new glow-like effect.
 
 ## Constraints / gotchas
 

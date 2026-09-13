@@ -38,6 +38,6 @@ The app registers the `glidermon://` scheme for jumping straight to a surface du
 ```bash
 adb shell am start -a android.intent.action.VIEW -d "glidermon://shop/floors"
 ```
-Supported today: `home`, `shop` (optionally `shop/cosmetics|floors|walls`), `outfit`, `gallery`, `settings`. This works whether the app is already running or not.
+Supported today: `home`, `shop` (optionally `shop/cosmetics|floors|walls`), `outfit`, `gallery`, `settings`. This works whether the app is already running or not. Also `checkin` / `checkin/grade` for exercising the Morning Check-In flow (goal-setting vs grading) without waiting for the right time window — see the Deep links note in [src/ui/CLAUDE.md](src/ui/CLAUDE.md).
 
 If you're working on a surface (tab) that doesn't have a link yet, add one — see the "Deep links" note under Navigation Structure in [src/ui/CLAUDE.md](src/ui/CLAUDE.md) for where the mapping lives and how to extend it.

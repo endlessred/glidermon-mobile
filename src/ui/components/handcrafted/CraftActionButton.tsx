@@ -15,6 +15,15 @@ type Props = {
   onPress?: () => void;
   disabled?: boolean;
   tone?: CraftActionButtonTone;
+  /** "lg" gives a taller button with a larger label -- for a screen's single
+   * primary CTA (e.g. the check-in flow). Default "md". */
+  size?: "md" | "lg";
+  /** Visually subdues the button (reduced opacity) WITHOUT disabling
+   * interaction -- distinct from `disabled`, which also blocks onPress and
+   * swaps to a flat kraft-tan fill. Use this for "nothing to confirm yet,
+   * but still tappable" states (e.g. a toolbar's primary action before any
+   * change has been made). */
+  dim?: boolean;
   style?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
 };
@@ -29,7 +38,8 @@ const FILL_BY_TONE: Record<CraftActionButtonTone, string> = {
 // press-scale feedback -- originally built inline for CraftCelebrationModal,
 // extracted here so any screen needing a "real button" (not a tab) gets the
 // same hand-made feel instead of a flat digital button.
-export default function CraftActionButton({ label, caption, icon, onPress, disabled, tone = "gold", style, accessibilityLabel }: Props) {
+export default function CraftActionButton({ label, caption, icon, onPress, disabled, tone = "gold", size = "md", dim, style, accessibilityLabel }: Props) {
+  const lg = size === "lg";
   const pressScale = useRef(new Animated.Value(1)).current;
   const pressTranslateY = useRef(new Animated.Value(0)).current;
 
@@ -58,11 +68,12 @@ export default function CraftActionButton({ label, caption, icon, onPress, disab
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ disabled: !!disabled }}
       hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-      style={[{ alignSelf: "stretch" }, style]}
+      style={[{ alignSelf: "stretch" }, dim && !disabled && styles.dim, style]}
     >
       <Animated.View
         style={[
           styles.button,
+          lg && styles.buttonLg,
           { backgroundColor: FILL_BY_TONE[tone] },
           disabled && styles.disabled,
           { transform: [{ scale: pressScale }, { translateY: pressTranslateY }] },
@@ -71,7 +82,7 @@ export default function CraftActionButton({ label, caption, icon, onPress, disab
         {!disabled && <Image source={felt} resizeMode="cover" style={styles.grain} />}
         <View style={styles.labelRow}>
           {icon ? <Text style={[styles.icon, disabled && styles.labelDisabled]}>{icon}</Text> : null}
-          <Text style={[styles.label, disabled && styles.labelDisabled]}>{label}</Text>
+          <Text style={[styles.label, lg && styles.labelLg, disabled && styles.labelDisabled]}>{label}</Text>
         </View>
         {caption ? <Text style={[styles.caption, disabled && styles.captionDisabled]}>{caption}</Text> : null}
       </Animated.View>
@@ -96,11 +107,18 @@ const styles = {
     shadowRadius: 5,
     elevation: 3,
   },
+  buttonLg: {
+    paddingVertical: 15,
+    minHeight: 54,
+  },
   disabled: {
     backgroundColor: KRAFT_TAN,
     opacity: 0.6,
     shadowOpacity: 0,
     elevation: 0,
+  },
+  dim: {
+    opacity: 0.55,
   },
   grain: {
     position: "absolute" as const,
@@ -123,6 +141,9 @@ const styles = {
     color: INK,
     fontWeight: "800" as const,
     fontSize: 15,
+  },
+  labelLg: {
+    fontSize: 17,
   },
   labelDisabled: {
     color: INK_MUTED,

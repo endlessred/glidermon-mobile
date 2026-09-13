@@ -53,3 +53,34 @@ export function loadFloorMaterialTexture(materialId: string): Promise<THREE.Text
 export function loadWallMaterialTexture(materialId: string): Promise<THREE.Texture> | null {
   return loadById(materialId);
 }
+
+// Premium/authored Nest Theme surfaces (nestThemeCatalog.ts's 'fullWall'/
+// 'fullFloor' pieces) share this file's expo-three loadAsync + cache pattern,
+// but use ClampToEdgeWrapping -- a single authored composition is mapped once
+// across the whole surface, never tiled, unlike the RepeatWrapping materials
+// above. Cached by the theme-piece id (nestThemeWallLeftId/.../nestThemeFloorId)
+// rather than the require() source, matching this file's existing
+// cache-by-catalog-id convention -- and, same as loadDiffuseTexture's
+// texture, callers MUST use the returned texture directly and never
+// .clone() it.
+const premiumTextureCache = new Map<string, Promise<THREE.Texture>>();
+
+async function loadClampedTexture(source: any): Promise<THREE.Texture> {
+  const { loadAsync } = require('expo-three');
+  const texture: THREE.Texture = await loadAsync(source);
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.generateMipmaps = false;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  (texture as any).colorSpace = (THREE as any).SRGBColorSpace ?? (THREE as any).sRGBEncoding;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+export function loadPremiumSurfaceTexture(cacheKey: string, source: any): Promise<THREE.Texture> {
+  if (!premiumTextureCache.has(cacheKey)) {
+    premiumTextureCache.set(cacheKey, loadClampedTexture(source));
+  }
+  return premiumTextureCache.get(cacheKey)!;
+}

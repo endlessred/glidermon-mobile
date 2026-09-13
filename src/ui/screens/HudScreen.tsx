@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, ScrollView, useWindowDimensions } from "react-native";
+import { View, ScrollView, useWindowDimensions, BackHandler, Platform } from "react-native";
 import { useGalleryStore } from "../../data/stores/galleryStore";
 import { useTheme } from "../../data/hooks/useTheme";
 import { useComplimentShower } from "../components/ComplimentShower";
@@ -20,6 +20,11 @@ const SHOW_FURNITURE_DEV_PANEL = false;
 import HomeHeader from "../components/HomeHeader";
 import NestCraftPanel from "../components/NestCraftPanel";
 import CameraPresetTabs, { CameraMode } from "../components/CameraPresetTabs";
+import FurnishToolbar from "../components/FurnishToolbar";
+import FurnishInventoryArea from "../components/furnish/FurnishInventoryArea";
+import { useAdventureBoardTextureSet } from "../components/adventureBoard/useAdventureBoardTextureSet";
+import AdventureBoardA11y from "../components/adventureBoard/AdventureBoardA11y";
+import { useAdventureBoardNotPlanned } from "../../data/selectors/adventureBoard";
 import { useAcornBadgeAnchor } from "../hooks/useAcornBadgeAnchor";
 import { CheckInCard } from "../components/CheckInCard";
 import DailyGoalBoard from "../components/DailyGoalBoard";
@@ -27,6 +32,10 @@ import { CheckInFlowModal } from "../components/CheckInFlowModal";
 import StreakDetailModal from "../components/StreakDetailModal";
 import { useCheckInStore } from "../../data/stores/checkInStore";
 import FurnitureDevPanel from "../components/FurnitureDevPanel";
+import CraftConfirmModal from "../components/handcrafted/CraftConfirmModal";
+import { useFurnishSession } from "../hooks/useFurnishSession";
+import { useUiChromeStore } from "../../data/stores/uiChromeStore";
+import { useHousingStore } from "../../data/stores/housingStore";
 
 // Same mint used on the Equip screen -- ties Home into the same crafted
 // visual system without making every screen identical.
@@ -59,12 +68,72 @@ export default function HudScreen() {
   // Only reflects a deliberate tab press, never changes on its own.
   const [cameraMode, setCameraMode] = useState<CameraMode>("nest");
 
+  // In-world Adventure Board: the dynamic goal UI is a Skia-drawn texture on a
+  // plane inside the room scene (not an RN overlay), so it depth-sorts against
+  // Glidermon / furniture. Textures regenerate only on board-state changes.
+  const boardTextures = useAdventureBoardTextureSet();
+  const boardNotPlanned = useAdventureBoardNotPlanned();
+  const boardInteractive = cameraMode === "goals" && boardNotPlanned && !!availableSlot;
+
   // Glidermon room fills roughly the same vertical budget it always has;
   // its GL view is sized to whatever that box measures out to via
   // onLayout, rather than a fixed pixel size.
   const [roomBoxSize, setRoomBoxSize] = useState<{ width: number; height: number } | null>(null);
+
+  // ===== Furnish Nest: contextual slot-based furniture editor, reached from
+  // the Nest tab's contextual menu (CameraPresetTabs). See useFurnishSession
+  // for the draft-session model; nothing is written to housingStore until
+  // Done. =====
+  const furnish = useFurnishSession();
+  const setHideGlobalNav = useUiChromeStore((s) => s.setHideGlobalNav);
+  const roomSizeTier = useHousingStore((s) => s.roomSizeTier);
+  const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
+
+  useEffect(() => {
+    setHideGlobalNav(furnish.active);
+    return () => setHideGlobalNav(false);
+  }, [furnish.active, setHideGlobalNav]);
+
+  // Furnish always starts from (and stays on) the normal Nest overview --
+  // Glidermon/Goals camera tabs are hidden anyway while editing, this just
+  // guarantees the state is correct if the player was on one beforehand.
+  useEffect(() => {
+    if (furnish.active) setCameraMode("nest");
+  }, [furnish.active]);
+
+  const requestExitFurnish = () => {
+    if (!furnish.dirty) {
+      furnish.discard();
+      return;
+    }
+    setDiscardConfirmOpen(true);
+  };
+
+  // Android hardware back mirrors Cancel while furnishing -- never silently
+  // discards unsaved changes.
+  useEffect(() => {
+    if (Platform.OS !== "android" || !furnish.active) return;
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      requestExitFurnish();
+      return true;
+    });
+    return () => subscription.remove();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [furnish.active, furnish.dirty]);
+
   // The Nest is the visual hero of Home -- sized a bit larger than a plain
   // third of the screen so it reads as more visually important.
+  //
+  // NOTE: does NOT grow while Furnish Nest is active. The spec asks for the
+  // room to grow ~10-15% taller while furnishing, but on-device testing
+  // (Android emulator, expo-gl) showed the underlying GL surface's own
+  // buffer never resizes after creation -- growing this box just left an
+  // unpainted band above the room, since the rendered content stayed
+  // pinned at its original pixel size. Making it grow correctly would
+  // require remounting IsometricRoomView3D (a new GL context -- texture/
+  // Spine reload) on every Furnish enter/exit, which reads as a worse
+  // regression than a same-size preview. See IsometricRoomView3D.tsx's
+  // syncGlSizeIfChanged for the full account.
   const roomSectionHeight = Math.round((height / 3) * 1.12);
   const roomCardWidth = width - spacing.lg * 2;
 
@@ -121,7 +190,16 @@ export default function HudScreen() {
                   height={roomBoxSize.height}
                   characterScale={0.35}
                   outfit={localOutfit ?? undefined}
-                  zoomedIn={cameraMode === "glidermon"}
+                  cameraMode={cameraMode}
+                  boardTextures={boardTextures}
+                  boardInteractive={boardInteractive}
+                  onBoardTap={() => setCheckInOpen(true)}
+                  furnishMode={furnish.active}
+                  draftFurnitureBySlot={furnish.active ? furnish.draftPlacements : null}
+                  selectedSlotId={furnish.selectedSlotId}
+                  draftSurfaces={furnish.active ? furnish.draftSurfaces : null}
+                  selectedSurface={furnish.selectedSurface}
+                  onSelectTarget={furnish.selectTarget}
                 />
               ) : (
                 <IsometricRoomView
@@ -134,33 +212,66 @@ export default function HudScreen() {
                 />
               )
             )}
+
           </View>
         </NestCraftPanel>
 
-        <CameraPresetTabs
-          mode={cameraMode}
-          onSelectNest={() => setCameraMode("nest")}
-          onSelectGlidermon={() => setCameraMode("glidermon")}
+        {/* Non-visual screen-reader summary of the in-world board while the
+            Goals camera frames it (its text is now a GL texture). Furnish
+            forces the Nest camera, so `active` is already false while
+            editing -- no extra guard needed here. */}
+        <AdventureBoardA11y
+          active={HOUSING_RENDERER === 'primitive3d' && cameraMode === 'goals'}
+          onStartCheckIn={boardInteractive ? () => setCheckInOpen(true) : undefined}
         />
+
+        {furnish.active ? (
+          <FurnishToolbar onCancel={requestExitFurnish} onDone={furnish.commit} dirty={furnish.dirty} />
+        ) : (
+          <CameraPresetTabs
+            mode={cameraMode}
+            onSelectNest={() => setCameraMode("nest")}
+            onSelectGlidermon={() => setCameraMode("glidermon")}
+            onSelectGoals={() => setCameraMode("goals")}
+            nestContextualActions={[{ id: "furnish", label: "Furnish Nest", icon: "🪑", onPress: furnish.enter }]}
+          />
+        )}
       </View>
 
-      {/* ===== Rest of the HUD, scrollable below the Nest ===== */}
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{
-          paddingHorizontal: spacing.lg,
-          paddingTop: spacing.md + 6,
-          gap: spacing.lg + 6,
-          paddingBottom: spacing['3xl'],
-        }}
-      >
-        {/* ===== Check-In Card: a deliberate special interaction, shown
-            above Today's Goals whenever a slot is currently relevant ===== */}
-        {availableSlot && <CheckInCard onPress={() => setCheckInOpen(true)} />}
+      {/* ===== Rest of the HUD, scrollable below the Nest -- replaced by the
+          furniture inventory panel while Furnish Nest is active ===== */}
+      {furnish.active ? (
+        <View style={{ flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.lg }}>
+          <FurnishInventoryArea
+            selectedTarget={furnish.selectedTarget}
+            roomSizeTier={roomSizeTier}
+            draftPlacements={furnish.draftPlacements}
+            onSelectFurniture={furnish.placeFurniture}
+            onRemoveFurniture={furnish.removeFurniture}
+            onSelectPalette={furnish.setPalette}
+            draftSurfaces={furnish.draftSurfaces}
+            onPreviewSurface={furnish.placeSurface}
+            onApplyTheme={furnish.applyThemeDraft}
+          />
+        </View>
+      ) : (
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            paddingHorizontal: spacing.lg,
+            paddingTop: spacing.md + 6,
+            gap: spacing.lg + 6,
+            paddingBottom: spacing['3xl'],
+          }}
+        >
+          {/* ===== Check-In Card: a deliberate special interaction, shown
+              above Today's Goals whenever a slot is currently relevant ===== */}
+          {availableSlot && <CheckInCard onPress={() => setCheckInOpen(true)} />}
 
-        {/* ===== Today's Goals: one coherent handcrafted board ===== */}
-        <DailyGoalBoard />
-      </ScrollView>
+          {/* ===== Today's Goals: one coherent handcrafted board ===== */}
+          <DailyGoalBoard />
+        </ScrollView>
+      )}
 
       {/* Compliment Shower Animation Overlay */}
       {ComplimentShowerComponent}
@@ -174,6 +285,19 @@ export default function HudScreen() {
       <StreakDetailModal
         visible={streakDetailOpen}
         onClose={() => setStreakDetailOpen(false)}
+      />
+
+      <CraftConfirmModal
+        visible={discardConfirmOpen}
+        title="Discard Nest changes?"
+        message="Your furniture and room-style changes will be reverted."
+        confirmLabel="Discard"
+        cancelLabel="Keep Editing"
+        onConfirm={() => {
+          setDiscardConfirmOpen(false);
+          furnish.discard();
+        }}
+        onCancel={() => setDiscardConfirmOpen(false)}
       />
     </View>
   );

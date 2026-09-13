@@ -131,3 +131,53 @@ export function createCustomFurnitureColors(mainColor: number, shadowColor?: num
     g: shadowColor || generateShadowColor(mainColor),
   };
 }
+
+/**
+ * Premade colorways for the static-atlas furniture path (ShadedFurniture.atlas
+ * -- see render/staticFurnitureBillboard3D.ts). Unlike FURNITURE_COLOR_SCHEMES
+ * above (a flat main+shadow pair for the legacy Spine mask-recolor shader,
+ * MaskRecolor.ts), this art is painted in three independent flat
+ * classification colors (confirmed by sampling the source PNG directly --
+ * see buildFurnitureAtlasMetadata.ts's channel-usage notes), recolored via
+ * the hue-indexed shader (HueIndexedRecolor.ts) already used for GliderMon's
+ * own skin/outfit recoloring and the legacy wall-furniture shader path
+ * (WallFurnitureLoader.ts).
+ *
+ * Reuses the exact `CosmeticPalette` type Outfit's colorways use
+ * (data/cosmetics/palette.ts) rather than a parallel furniture-only shape --
+ * `resolveCosmeticRecolor`/`resolveSelectedPalette`/`isPaletteLocked`/
+ * `ColorwaySheet`/`PaletteCard` all work against this structurally, with no
+ * furniture-specific branching needed. `channelColors.r/g/b` map onto this
+ * art's red/green/blue classification channels the same way they map onto a
+ * cosmetic's guide-art channels; `a`/yellow is unused here (no furniture item
+ * uses a 4th channel). "original" (matching palette.ts's DEFAULT_PALETTE_ID)
+ * reproduces the as-authored literal red/green/blue look, so a freshly
+ * placed item's default appearance doesn't change.
+ *
+ * One shared array reused across every recolorable furniture item the same
+ * way HAIR_PALETTES (cosmeticsStore.ts) is shared across many hair-style
+ * cosmetics, rather than curating a subset per item -- not every item uses
+ * all three channels (e.g. carved_wood_chair only paints its red channel),
+ * but recoloring an unused channel is harmless, it just has no pixels to
+ * apply to for that item.
+ *
+ * Named/weighted by mood (see [[feedback-luma-sable-personality]] --
+ * Luma = cheery/bright/nature, Sable = goth/moody/dark) for when this list
+ * needs shop-facing weighting elsewhere; the picker itself shows all of them
+ * to everyone.
+ */
+export const FURNITURE_RECOLOR_PALETTES: import("../../../data/cosmetics/palette").CosmeticPalette[] = [
+  { id: 'original', name: 'Original', colors: ['#ff0000', '#00ff00', '#0000ff'], channelColors: { r: '#ff0000', g: '#00ff00', b: '#0000ff' } },
+  { id: 'sunset_coral', name: 'Sunset Coral', colors: ['#e8734a', '#f2b705', '#7a4ca0'], channelColors: { r: '#e8734a', g: '#f2b705', b: '#7a4ca0' } },
+  { id: 'midnight_violet', name: 'Midnight Violet', colors: ['#4a2e6b', '#2f1f45', '#1a1030'], channelColors: { r: '#4a2e6b', g: '#2f1f45', b: '#1a1030' } },
+  { id: 'forest_moss', name: 'Forest Moss', colors: ['#6f8f4e', '#3f5c34', '#8a6b3f'], channelColors: { r: '#6f8f4e', g: '#3f5c34', b: '#8a6b3f' } },
+  { id: 'ocean_teal', name: 'Ocean Teal', colors: ['#2f7f8a', '#1c5560', '#0d3138'], channelColors: { r: '#2f7f8a', g: '#1c5560', b: '#0d3138' } },
+  { id: 'blush_pink', name: 'Blush', colors: ['#e79ab5', '#f6d3de', '#c96a94'], channelColors: { r: '#e79ab5', g: '#f6d3de', b: '#c96a94' } },
+  { id: 'charcoal_slate', name: 'Charcoal Slate', colors: ['#4a4a52', '#33333a', '#1c1c22'], channelColors: { r: '#4a4a52', g: '#33333a', b: '#1c1c22' } },
+  { id: 'golden_amber', name: 'Golden Amber', colors: ['#d99a2b', '#a8671e', '#4a2f14'], channelColors: { r: '#d99a2b', g: '#a8671e', b: '#4a2f14' } },
+  { id: 'blood_crimson', name: 'Blood Crimson', colors: ['#8a1f2b', '#4a1017', '#1a0a0d'], channelColors: { r: '#8a1f2b', g: '#4a1017', b: '#1a0a0d' } },
+  { id: 'mint_frost', name: 'Mint Frost', colors: ['#7fd9c4', '#a8ecd9', '#4fa694'], channelColors: { r: '#7fd9c4', g: '#a8ecd9', b: '#4fa694' } },
+  { id: 'royal_cobalt', name: 'Royal Cobalt', colors: ['#2c4a8a', '#1a2f5c', '#0d1a33'], channelColors: { r: '#2c4a8a', g: '#1a2f5c', b: '#0d1a33' } },
+  { id: 'toxic_slime', name: 'Toxic Slime', colors: ['#6fbf3f', '#4a8a26', '#274a14'], channelColors: { r: '#6fbf3f', g: '#4a8a26', b: '#274a14' } },
+  { id: 'cotton_candy', name: 'Cotton Candy', colors: ['#f4a6d9', '#a6d9f4', '#d9a6f4'], channelColors: { r: '#f4a6d9', g: '#a6d9f4', b: '#d9a6f4' } },
+];
