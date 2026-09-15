@@ -502,6 +502,11 @@ export class LifelikeIdleNoMix {
   // default name.
   private leftHandPrevAttachment: Attachment | null = null;
   private rightHandPrevAttachment: Attachment | null = null;
+  // Whichever handPose is currently swapped in (if any) -- normally reverted
+  // by armsSeq's own onDone when its hold finishes naturally, but forceIdle()
+  // stops armsSeq directly (TrackSequencer.stop() discards onDone without
+  // calling it), so it needs this to revert the swap itself. See forceIdle().
+  private activeHandPose: Composite["handPose"] | null = null;
 
   // Tuning knobs (seconds)
   private blinkRange: Range = [2, 6];
@@ -675,6 +680,7 @@ export class LifelikeIdleNoMix {
    * was there first so revertHandPose() can restore it exactly. */
   private applyHandPose(handPose?: Composite["handPose"]) {
     if (!handPose || !this.skeleton) return;
+    this.activeHandPose = handPose;
     if (handPose.left) {
       const slot = this.skeleton.findSlot("L_Hand");
       if (slot) {
@@ -704,6 +710,7 @@ export class LifelikeIdleNoMix {
       const slot = this.skeleton.findSlot("R_Hand");
       if (slot) slot.pose.setAttachment(this.rightHandPrevAttachment);
     }
+    if (this.activeHandPose === handPose) this.activeHandPose = null;
   }
 
   private secondaryTracksFree() {
@@ -1021,6 +1028,22 @@ export class LifelikeIdleNoMix {
 
   /** Force return to idle (interrupt current behavior) */
   forceIdle() {
+    // ReadBook/PullOutBook|ReadBook|TurnPage swap a book onto RHandProp
+    // (Spine attachment keyframes) and only clear it again via
+    // PutAwayBook's own final keyframe -- clearTrack(TRACK_OVERLAY) below
+    // skips straight past that if reading is interrupted mid-sequence,
+    // which otherwise leaves the book stuck in his hand indefinitely (e.g.
+    // the housing room's furniture-tap-to-interact forceIdle()'ing him out
+    // of an ambient behavior to start a furniture interaction).
+    if (this.currentBehavior === BehaviorState.READING_SEQUENCE) {
+      this.skeleton?.setAttachment("RHandProp", null);
+    }
+    // Same issue for a reaction's handPose (thumbsUpCheer, pointAndLeft, ...):
+    // armsSeq.stop() below discards its onDone (which would otherwise call
+    // revertHandPose) without calling it, so the normal revert-on-completion
+    // path never runs on a forced interruption.
+    if (this.activeHandPose) this.revertHandPose(this.activeHandPose);
+
     this.currentBehavior = BehaviorState.IDLE;
     this.bodyComposite = null;
     this.fireBodyCompositeDone("interrupted");
@@ -1051,6 +1074,15 @@ export class LifelikeIdleNoMix {
       // ambient behaviors, interrupting FootLook/Reading/whatever is active --
       // including an in-progress furniture interaction, whose cleanup callback
       // must still run.
+      //
+      // If that "whatever" is mid-reading, startBodyComposite's own
+      // setAnimation(TRACK_OVERLAY, ...) below is about to replace the
+      // ReadBook/* entry outright -- same as forceIdle()'s clearTrack, it
+      // skips straight past PutAwayBook's own attachment-clearing keyframe,
+      // so the book gets left stuck in his hand unless cleared here too.
+      if (this.currentBehavior === BehaviorState.READING_SEQUENCE) {
+        this.skeleton?.setAttachment("RHandProp", null);
+      }
       this.fireBodyCompositeDone("interrupted");
       this.currentBehavior = BehaviorState.IDLE; // reset so startBodyComposite is allowed
       this.startBodyComposite(reaction);
