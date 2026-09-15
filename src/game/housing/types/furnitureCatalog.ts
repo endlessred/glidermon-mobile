@@ -579,9 +579,11 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
         interactiveHobbySpine: { attachment: "BoomBox", interactionKind: "dance", itemAnimation: HOBBY_ANIM.boomBoxDance },
         // Inherits the FurnitureDef's default `interaction` (behavior:
         // "dance") below -- same as hobby_piano/hobby_record_player above.
-        // Original: rad red case (red ch, dominant), lime-green speaker/knob
-        // accents (green ch), cobalt-blue handle/trim (blue ch).
-        recolorable: true, palettes: furnitureOriginalPalette({ r: '#d9342b', g: '#3ba53b', b: '#2a5f9e' }),
+        // Original: a blacked-out skate-punk boombox rather than a literal
+        // red/green/blue reading of the mask -- charcoal case (red ch,
+        // dominant), hot-pink knob accent (green ch), electric-cyan
+        // handle/trim (blue ch).
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#242428', g: '#e6317f', b: '#29d9e6' }),
         rarity: "uncommon", tags: ["fun", "loud", "energetic"],
         shopStock: [{ store: "luma", weight: 6 }, { store: "sable", weight: 4 }],
       },
@@ -590,9 +592,11 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
         interactiveHobbySpine: { attachment: "MushroomRecordPlayer", interactionKind: "dance", itemAnimation: HOBBY_ANIM.mushroomRecordPlayerDance },
         // Inherits the FurnitureDef's default `interaction` (behavior:
         // "dance") below.
-        // Original: wood record-player base (red ch), toadstool-green cap
-        // (green ch, dominant), blueberry/spot blue (blue ch).
-        recolorable: true, palettes: furnitureOriginalPalette({ r: '#6b4226', g: '#5a8f3d', b: '#3a4fae' }),
+        // Original: a storybook fungus rather than a literal green/blue
+        // reading of the mask -- honey-wood record-player base (red ch),
+        // deep plum-magenta cap (green ch, dominant), warm gold spots/
+        // berries (blue ch).
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#a8742e', g: '#7a3568', b: '#f0d068' }),
         rarity: "uncommon", tags: ["nature", "fun", "whimsical"],
         shopStock: [{ store: "luma", weight: 7 }, { store: "sable", weight: 3 }],
       },
@@ -603,10 +607,11 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
         // lifelikeIdle_noMix.ts's INTERACTION_BEHAVIORS and
         // IsometricRoomView3D.tsx's tarot orchestration.
         interaction: { behavior: "tarotThink", animation: "tarotThink", interactionSide: "front" },
-        // Original: burgundy wood rim/candle wax (red ch), gold celestial
-        // stars/moons/candle flame (green ch), midnight-indigo cloth (blue
-        // ch, dominant).
-        recolorable: true, palettes: furnitureOriginalPalette({ r: '#7a1f2b', g: '#e0c060', b: '#1a2350' }),
+        // Original: deep aubergine wood rim/candle wax (red ch, not
+        // burgundy-red), gold celestial stars/moons/candle flame (green ch),
+        // midnight indigo-violet cloth (blue ch, dominant) -- a mystic
+        // palette rather than a literal red/blue reading of the mask.
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#3d1a35', g: '#e0c060', b: '#211a42' }),
         rarity: "rare", tags: ["mysterious", "night"],
         shopStock: [{ store: "sable", weight: 7 }, { store: "luma", weight: 3 }],
       },
@@ -619,9 +624,11 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
         // walkableTiles.ts's resolveSlotInteractions / SUPPORTED_INTERACTION_BEHAVIORS).
         // TODO: add Witchy Potion Station hobby interaction once Spine animation is authored.
         interaction: { behavior: "none" },
-        // Original: wood platform/bottle caps (red ch), bubbling potion +
-        // plants (green ch), cauldron/glass bottles (blue ch, dominant).
-        recolorable: true, palettes: furnitureOriginalPalette({ r: '#6b4226', g: '#5aa83f', b: '#3a2f6b' }),
+        // Original: aged dark-oak platform/bottle caps (red ch), bubbling
+        // potion green + plants (green ch), witch-purple cauldron/glass
+        // bottles (blue ch, dominant) -- purple/green apothecary tones
+        // instead of a literal red/blue reading of the mask.
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#4a3020', g: '#4a9c3f', b: '#3a2a5c' }),
         rarity: "uncommon", tags: ["mysterious", "spooky"],
         shopStock: [{ store: "sable", weight: 8 }, { store: "luma", weight: 2 }],
       },

@@ -1,20 +1,24 @@
-// Static-atlas furniture (staticFurnitureBillboard3D.ts) has no
-// restPoseAsset/layers PNG of its own -- it's a trimmed region of the shared
-// ShadedFurniture.atlas, recolored at render time. UI surfaces that need a
-// plain RN <Image> preview (Shop cards, Furnish Nest inventory cards --
-// getFurnitureImageSource in quadTextures.ts) can't do that GPU recolor, so
-// each recolorable static-atlas variant gets a pre-rendered PNG here instead:
-// the atlas region cropped, un-rotated, and recolored with that variant's own
-// "Original" palette (furnitureOriginalPalette() in FurnitureColors.ts) using
-// the exact same math as HueIndexedRecolor.ts's shader (see the offline
+// Static-atlas furniture (staticFurnitureBillboard3D.ts) and the
+// interactive hobby Spine items (render/interactiveHobbyItem3D.ts) both
+// have no restPoseAsset/layers PNG of their own -- one is a trimmed region
+// of the shared ShadedFurniture.atlas, the other an attachment on the
+// shared Hobby Spine skeleton's HobbyItem slot, both recolored at render
+// time. UI surfaces that need a plain RN <Image> preview (Shop cards,
+// Furnish Nest inventory cards -- getFurnitureImageSource in
+// quadTextures.ts) can't do that GPU recolor, so each recolorable variant
+// of either kind gets a pre-rendered PNG here instead: the source region
+// cropped, un-rotated, and recolored with that variant's own "Original"
+// palette (furnitureOriginalPalette() in FurnitureColors.ts) using the
+// exact same math as HueIndexedRecolor.ts's shader (see the offline
 // generation script noted below), then trimmed to its opaque bounds.
 //
-// Regenerate a thumbnail after either the atlas art or a variant's Original
-// palette changes -- there's no build-time hook for this yet, it's a manual
-// offline step (crop the atlas region per scripts/buildFurnitureAtlasMetadata.ts's
-// bounds/rotate convention, replicate the shader's un-premultiply ->
-// SRGBToLinear -> hue-classify -> recolor -> LinearToSRGB pipeline, trim to
-// getbbox()). Keyed by variant id, not atlas region name, since a few
+// Regenerate a thumbnail after either the source art or a variant's
+// Original palette changes -- there's no build-time hook for this yet,
+// it's a manual offline step (crop the region -- ShadedFurniture.atlas per
+// scripts/buildFurnitureAtlasMetadata.ts's bounds/rotate convention, or the
+// Hobby Spine atlas's own bounds -- replicate the shader's un-premultiply
+// -> SRGBToLinear -> hue-classify -> recolor -> LinearToSRGB pipeline, trim
+// to getbbox()). Keyed by variant id, not atlas region name, since a few
 // variants share underlying art concepts but always have distinct ids.
 const FURNITURE_THUMBNAILS: Record<string, any> = {
   leaf_chair: require('./generated/furnitureThumbnails/leaf_chair.png'),
@@ -49,6 +53,19 @@ const FURNITURE_THUMBNAILS: Record<string, any> = {
   cute_lamp: require('./generated/furnitureThumbnails/cute_lamp.png'),
   rice_paper_lamp: require('./generated/furnitureThumbnails/rice_paper_lamp.png'),
   duo_lamp: require('./generated/furnitureThumbnails/duo_lamp.png'),
+  // Interactive hobby-slot Spine items (render/interactiveHobbyItem3D.ts) --
+  // not static-atlas art, but the same "no restPoseAsset/layers" gap applies
+  // (see getFurnitureImageSource in quadTextures.ts): these are attachments
+  // on the shared HobbyItem slot's MeshAttachments, not simple atlas
+  // regions, so their thumbnails are cropped straight from the Hobby Spine
+  // atlas's source pages (hobby.png/hobby_4.png/hobby_5.png) instead of
+  // ShadedFurniture.atlas, recolored with the same Original palette each
+  // variant uses in furnitureCatalog.ts (furnitureOriginalPalette() calls
+  // on the hobby_* variants).
+  hobby_boombox: require('./generated/furnitureThumbnails/hobby_boombox.png'),
+  hobby_mushroom_record_player: require('./generated/furnitureThumbnails/hobby_mushroom_record_player.png'),
+  hobby_tarot_table: require('./generated/furnitureThumbnails/hobby_tarot_table.png'),
+  hobby_witchy_potion_station: require('./generated/furnitureThumbnails/hobby_witchy_potion_station.png'),
 };
 
 /** Looks up a pre-rendered thumbnail by variant id. Returns null for any

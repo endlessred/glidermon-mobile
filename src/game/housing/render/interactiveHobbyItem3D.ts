@@ -32,7 +32,7 @@ import { loadSpineFromExpoAssets } from '../../../spine/loaders';
 import { SkeletonMesh, normalizeMaterialForSlot } from '../../../spine/SpineThree';
 import { makeHueIndexedRecolorMaterial } from '../../../spine/HueIndexedRecolor';
 import { resolveCosmeticRecolor } from '../../../data/cosmetics/palette';
-import { RoomDims3D } from './grid3D';
+import { RoomDims3D, TILE_SIZE } from './grid3D';
 import { RoomSlotDef } from '../types/roomSlots';
 import {
   FurnitureVariant,
@@ -81,7 +81,15 @@ const TRACK_MUSIC = 1;
 // one scale keeps their authored relative sizes intact. Tuned on-device
 // (glidermon://home after DEBUG_FORCE_HOBBY_ITEM below); adjust here, not
 // per-item, if the whole set reads too big/small next to other furniture.
-const HOBBY_DESIRED_WORLD_HEIGHT = 1.05;
+// (Was 1.05 -- on-device review called the whole set ~25% too big.)
+const HOBBY_DESIRED_WORLD_HEIGHT = 1.05 * 0.75;
+
+// How far below the slot's own floor-level origin the whole item sits --
+// on-device review called the default (grounded flush at y=0, same as
+// every other floor slot) ~25% of a tile too high. Floor slots are the
+// only kind this controller ever renders at (see roomSlots.ts's `hobby`
+// entry), so a flat offset is fine -- no wall-slot case to account for.
+const HOBBY_VERTICAL_OFFSET = -TILE_SIZE * 0.25;
 
 // Fallback only -- used if `Cards/Tarot Card Reveal` is missing from the
 // loaded skeleton (so revealSceneTimelines is null and there's no real
@@ -296,7 +304,7 @@ export async function buildInteractiveHobbyItem3D(
   const { position, quaternion } = resolveSlotWorldPlacement(slot, dims, billboardQuaternion);
   const group = new THREE.Group();
   group.quaternion.copy(quaternion);
-  group.position.set(position.x, position.y, position.z);
+  group.position.set(position.x, position.y + HOBBY_VERTICAL_OFFSET, position.z);
   group.add(mesh);
   group.userData.slotId = slot.slotId;
 
