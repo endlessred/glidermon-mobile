@@ -24,7 +24,7 @@ import { createTreetopBackdrop3D } from '../render/treetopBackdrop3D';
 import { ROOM_SHELL_LAYER, CONTENT_LAYER, assignLayer } from '../render/renderLayers';
 import { getSlotsForTier, getCharacterSlotsForTier, RoomSlotDef } from '../types/roomSlots';
 import { getFurnitureDef } from '../types/furnitureCatalog';
-import { getWanderDestinations } from '../render/walkableTiles';
+import { getWanderDestinations, resolveSlotInteractions } from '../render/walkableTiles';
 import {
   buildInteractiveHobbyItem3D,
   InteractiveHobbyItem3D,
@@ -1418,6 +1418,88 @@ export default function IsometricRoomView3D({
     return false;
   }, []);
 
+  // Tap (outside Furnish Nest only) -> raycast the furniture layer -> if the
+  // hit slot has an occupant with a supported character-slot interaction
+  // (the same eligibility resolveSlotInteractions.ts uses for the wander
+  // scheduler -- occupied + SUPPORTED_INTERACTION_BEHAVIORS), relocate
+  // GliderMon to the adjacent character slot and start it. Reuses the exact
+  // same pendingInteractionRef + characterTile-effect path the wander
+  // scheduler already drives, so the hobby dance/tarot coordination,
+  // anchor/flip, and cleanup all just work here with no furniture-type-
+  // specific code -- see that effect for how it special-cases hobbyController.
+  //
+  // Declines (returns false, falls through to tryBoardTap -- harmless, that
+  // raycasts an unrelated mesh) when: the tap didn't hit furniture at all;
+  // the hit furniture has no adjacent character slot in this room tier;
+  // that slot is empty or its behavior isn't supported yet
+  // (WitchyPotionStation's 'none', bed's 'sleep', an unsupported
+  // 'campfire', ...); or GliderMon is already mid furniture-interaction
+  // (interactingRef). That last case is deliberately NOT interrupted here --
+  // yanking him off an active interaction via a stray tap elsewhere would
+  // fight interactionTransformRef (which the render loop re-asserts every
+  // frame from the OLD interaction's anchor) against the characterTile
+  // effect's new position, producing exactly the jittering/leftover-frame
+  // conflict this feature needs to avoid. An ambient (non-furniture)
+  // behavior -- reading, a fidget -- IS interrupted (forceIdle()) so a tap
+  // reads as responsive instead of silently failing to land; that's safe
+  // specifically because interactingRef is already known false by then, so
+  // there's no interactionTransformRef in play to fight.
+  const tryFurnitureInteractionTap = useCallback(
+    (localX: number, localY: number): boolean => {
+      if (furnishModeRef.current) return false;
+      if (interactingRef.current) return false;
+      const camera = cameraRef.current;
+      const furnitureGroup = furnitureGroupRef.current;
+      const dims = roomDimsRef.current;
+      if (!camera || !furnitureGroup || !dims) return false;
+      const { w, h } = layoutSizeRef.current;
+      if (w <= 0 || h <= 0) return false;
+      const ndc = new THREE.Vector2((localX / w) * 2 - 1, -((localY / h) * 2 - 1));
+      raycasterRef.current.layers.set(CONTENT_LAYER);
+      raycasterRef.current.setFromCamera(ndc, camera);
+      const hits = raycasterRef.current.intersectObject(furnitureGroup, true);
+
+      let tappedSlotId: string | null = null;
+      for (const hit of hits) {
+        let obj: THREE.Object3D | null = hit.object;
+        while (obj && obj.parent !== furnitureGroup) obj = obj.parent;
+        const slotId = obj?.userData?.slotId;
+        if (typeof slotId === 'string') {
+          tappedSlotId = slotId;
+          break;
+        }
+      }
+      if (!tappedSlotId) return false;
+
+      const activeFurnitureBySlot = useHousingStore.getState().activeFurnitureBySlot;
+      const charSlot = getCharacterSlotsForTier(roomSizeTier).find((cs) =>
+        cs.interactions?.some((i) => i.furnitureSlotId === tappedSlotId)
+      );
+      if (!charSlot) return false;
+      const resolved = resolveSlotInteractions(charSlot, activeFurnitureBySlot);
+      const interaction = resolved.find((r) => r.furnitureSlotId === tappedSlotId);
+      if (!interaction) return false;
+
+      if (__DEV__) {
+        console.log(`[housing3D] tap -> interact "${interaction.behavior}" @ ${tappedSlotId}, tile (${charSlot.row},${charSlot.col})`);
+      }
+      spineRef.current?.idleDriver.forceIdle();
+      recentFurnitureRef.current = [interaction.furnitureSlotId, ...recentFurnitureRef.current].slice(
+        0,
+        RECENT_FURNITURE_MEMORY
+      );
+      pendingInteractionRef.current = {
+        behaviorKey: interaction.behavior,
+        furnitureSlotId: interaction.furnitureSlotId,
+        anchor: interaction.interactionAnchor,
+        flipX: interaction.characterFlipX,
+      };
+      useHousingStore.getState().setCharacterTile({ row: charSlot.row, col: charSlot.col });
+      return true;
+    },
+    [roomSizeTier]
+  );
+
   const tryBoardTap = useCallback((localX: number, localY: number) => {
     if (!boardInteractiveRef.current || !onBoardTapRef.current) return;
     const camera = cameraRef.current;
@@ -1849,10 +1931,12 @@ export default function IsometricRoomView3D({
       // Tap detection for: the in-world Adventure Board (Goals +
       // not-planned); while Furnish Nest is active, furniture/slot-marker
       // selection; and, outside Furnish Nest, toggling a tapped lamp's
-      // light. Always claims the responder (this view is a fixed,
-      // non-scrolling panel -- see HudScreen.tsx -- so there's no drag/scroll
-      // to conflict with); a quick tap that barely moves raycasts, anything
-      // larger is left alone (no room drag today, but future-proof).
+      // light or -- for furniture with an adjacent character-slot
+      // interaction (chair, hobby) -- sending GliderMon to use it. Always
+      // claims the responder (this view is a fixed, non-scrolling panel --
+      // see HudScreen.tsx -- so there's no drag/scroll to conflict with); a
+      // quick tap that barely moves raycasts, anything larger is left alone
+      // (no room drag today, but future-proof).
       onStartShouldSetResponder={() => true}
       onResponderGrant={(e) => {
         tapStartRef.current = {
@@ -1870,7 +1954,10 @@ export default function IsometricRoomView3D({
         if (Math.hypot(dx, dy) > 12 || Date.now() - s.t > 600) return;
         if (furnishModeRef.current) {
           tryFurnishTap(e.nativeEvent.locationX, e.nativeEvent.locationY);
-        } else if (!tryLampTap(e.nativeEvent.locationX, e.nativeEvent.locationY)) {
+        } else if (
+          !tryLampTap(e.nativeEvent.locationX, e.nativeEvent.locationY) &&
+          !tryFurnitureInteractionTap(e.nativeEvent.locationX, e.nativeEvent.locationY)
+        ) {
           tryBoardTap(e.nativeEvent.locationX, e.nativeEvent.locationY);
         }
       }}
