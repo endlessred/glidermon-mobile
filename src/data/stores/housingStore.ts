@@ -128,6 +128,13 @@ type HousingState = {
   // IsometricRoomView3D.tsx's wander scheduler). Persisted so he's found
   // wherever he last wandered to rather than resetting every app launch.
   characterTile: GridTile;
+  // Per-slot lamp on/off state (static-atlas lighting items only -- see
+  // StaticFurnitureVisual.lightSocket in RoomConfig.ts and
+  // render/lightGlow3D.ts). Absent/false = lit (the historical always-on
+  // behavior), so existing saves and every non-lamp slot need no entry.
+  // Toggled by tapping a placed lamp outside Furnish Nest -- see
+  // IsometricRoomView3D.tsx's tryLampTap.
+  lampOffBySlot: Record<string, boolean>;
   _hasHydrated: boolean;
 
   unlockRoomTier: (tier: number) => void;
@@ -169,6 +176,10 @@ type HousingState = {
   setActiveFurniture: (slotId: string, furnitureId: string, variantId: string, paletteId?: string) => void;
   clearFurnitureSlot: (slotId: string) => void;
   setCharacterTile: (tile: GridTile) => void;
+  /** Flips a placed lamp's light on/off. The caller (the in-world tap
+   *  handler) is responsible for only invoking this on a slot that's
+   *  actually a lamp -- this just flips the flag unconditionally. */
+  toggleLamp: (slotId: string) => void;
 };
 
 const DEFAULT_FLOOR_SETS: FloorSetName[] = ["YellowCarpet", "RedCarpet"];
@@ -208,6 +219,7 @@ export const useHousingStore = create<HousingState>()(
       activeFurnitureBySlot: DEFAULT_FURNITURE_BY_SLOT,
       unlockedFurnitureIds: DEFAULT_UNLOCKED_FURNITURE_IDS,
       characterTile: DEFAULT_CHARACTER_TILE,
+      lampOffBySlot: {},
       _hasHydrated: false,
 
       unlockRoomTier: (tier) => {
@@ -326,11 +338,15 @@ export const useHousingStore = create<HousingState>()(
       setCharacterTile: (tile) => {
         set({ characterTile: tile });
       },
+
+      toggleLamp: (slotId) => {
+        set((s) => ({ lampOffBySlot: { ...s.lampOffBySlot, [slotId]: !s.lampOffBySlot[slotId] } }));
+      },
     }),
     {
       name: "housing_store_v1",
       storage: createJSONStorage(() => AsyncStorage),
-      version: 5,
+      version: 6,
       migrate: (persisted: any, fromVersion: number) => {
         const s = persisted ?? {};
         s.roomSizeTier = typeof s.roomSizeTier === "number" ? s.roomSizeTier : 1;
@@ -377,6 +393,10 @@ export const useHousingStore = create<HousingState>()(
         s.activeWallPatternIdLeft = typeof s.activeWallPatternIdLeft === "string" ? s.activeWallPatternIdLeft : s.activeWallPatternId;
         s.activeWallPatternIdRight = typeof s.activeWallPatternIdRight === "string" ? s.activeWallPatternIdRight : s.activeWallPatternId;
         s.activeNestThemeId = typeof s.activeNestThemeId === "string" ? s.activeNestThemeId : null;
+
+        // v6: per-slot lamp on/off state -- absent means lit, so a pre-v6
+        // save (no lamps ever turned off) needs only an empty object.
+        s.lampOffBySlot = s.lampOffBySlot && typeof s.lampOffBySlot === "object" ? s.lampOffBySlot : {};
         return s;
       },
       onRehydrateStorage: () => (state) => {

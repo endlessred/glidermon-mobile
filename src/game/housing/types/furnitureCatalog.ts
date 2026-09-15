@@ -1,4 +1,4 @@
-import { FurnitureCatalog, FurnitureDef, FurnitureInteractionDef } from './RoomConfig';
+import { FurnitureCatalog, FurnitureDef, FurnitureInteractionDef, HOBBY_ANIM } from './RoomConfig';
 import { SlotType } from './roomSlots';
 import type { Rarity, ShopStockConfig } from '../../../data/shop/shopTypes';
 import { furnitureOriginalPalette } from '../furniture/FurnitureColors';
@@ -544,7 +544,14 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
     // Both starter variants (record player, piano) map to 'dance' for now --
     // 'dance' is a placeholder composite (no dedicated clip yet). A variant
     // can override this later (e.g. an easel -> 'paint').
-    interaction: { behavior: "dance", animation: "dance", interactionSide: "front" },
+    // characterFlipX: the 'home' character slot sits one tile toward +col
+    // from 'hobby' (roomSlots.ts) -- without the flip GliderMon faces the
+    // camera generically instead of turning toward the furniture he's
+    // supposedly using. Declared at the def level (not per-variant) so every
+    // hobby interaction inherits it via getFurnitureInteraction's shallow
+    // merge, including TarotTable's variant-level override below (which
+    // replaces behavior/animation but not this).
+    interaction: { behavior: "dance", animation: "dance", interactionSide: "front", characterFlipX: true },
     variants: [
       {
         id: "hobby_piano", displayName: "Piano", cost: 200, skin: "Piano_Brown", restPoseAsset: "1x1_Piano_Brown",
@@ -555,6 +562,68 @@ export const FURNITURE_CATALOG: FurnitureCatalog = {
         id: "hobby_record_player", displayName: "Record Player", cost: 200, skin: "RecordPlayerOff_Brown", restPoseAsset: "1x1_RecordPlayerOff_Brown",
         rarity: "uncommon", tags: ["fun", "nostalgic", "cheerful"],
         shopStock: [{ store: "luma", weight: 6 }, { store: "sable", weight: 4 }],
+      },
+      // Interactive hobby-slot Spine items (render/interactiveHobbyItem3D.ts)
+      // -- one shared skeleton, one `HobbyItem` slot, four selectable
+      // attachments. Unlike every other variant above (a static billboard),
+      // these coordinate a GliderMon behavior with the furniture's own Spine
+      // animation when the hobby interaction is chosen. `interaction` here
+      // still drives the generic character-slot eligibility/behavior system
+      // (walkableTiles.ts) exactly like the legacy variants above;
+      // `interactiveHobbySpine` is the renderer's own registry of which
+      // attachment + coordinated sequence each variant maps to -- see
+      // RoomConfig.ts's InteractiveHobbySpineDescriptor doc comment for why
+      // this is kept separate rather than inferred from displayName/id.
+      {
+        id: "hobby_boombox", displayName: "Boombox", cost: 220,
+        interactiveHobbySpine: { attachment: "BoomBox", interactionKind: "dance", itemAnimation: HOBBY_ANIM.boomBoxDance },
+        // Inherits the FurnitureDef's default `interaction` (behavior:
+        // "dance") below -- same as hobby_piano/hobby_record_player above.
+        // Original: rad red case (red ch, dominant), lime-green speaker/knob
+        // accents (green ch), cobalt-blue handle/trim (blue ch).
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#d9342b', g: '#3ba53b', b: '#2a5f9e' }),
+        rarity: "uncommon", tags: ["fun", "loud", "energetic"],
+        shopStock: [{ store: "luma", weight: 6 }, { store: "sable", weight: 4 }],
+      },
+      {
+        id: "hobby_mushroom_record_player", displayName: "Mushroom Record Player", cost: 230,
+        interactiveHobbySpine: { attachment: "MushroomRecordPlayer", interactionKind: "dance", itemAnimation: HOBBY_ANIM.mushroomRecordPlayerDance },
+        // Inherits the FurnitureDef's default `interaction` (behavior:
+        // "dance") below.
+        // Original: wood record-player base (red ch), toadstool-green cap
+        // (green ch, dominant), blueberry/spot blue (blue ch).
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#6b4226', g: '#5a8f3d', b: '#3a4fae' }),
+        rarity: "uncommon", tags: ["nature", "fun", "whimsical"],
+        shopStock: [{ store: "luma", weight: 7 }, { store: "sable", weight: 3 }],
+      },
+      {
+        id: "hobby_tarot_table", displayName: "Tarot Table", cost: 260,
+        interactiveHobbySpine: { attachment: "TarotTable", interactionKind: "tarot" },
+        // 'tarotThink' -- the two-phase shuffle/reveal sequence -- see
+        // lifelikeIdle_noMix.ts's INTERACTION_BEHAVIORS and
+        // IsometricRoomView3D.tsx's tarot orchestration.
+        interaction: { behavior: "tarotThink", animation: "tarotThink", interactionSide: "front" },
+        // Original: burgundy wood rim/candle wax (red ch), gold celestial
+        // stars/moons/candle flame (green ch), midnight-indigo cloth (blue
+        // ch, dominant).
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#7a1f2b', g: '#e0c060', b: '#1a2350' }),
+        rarity: "rare", tags: ["mysterious", "night"],
+        shopStock: [{ store: "sable", weight: 7 }, { store: "luma", weight: 3 }],
+      },
+      {
+        id: "hobby_witchy_potion_station", displayName: "Witchy Potion Station", cost: 250,
+        interactiveHobbySpine: { attachment: "WitchyPotionStation", interactionKind: "none" },
+        // No interaction animation exists yet -- 'none' isn't a key in
+        // SUPPORTED_INTERACTION_BEHAVIORS, so the hobby character slot simply
+        // stays a plain idle position when this is equipped (see
+        // walkableTiles.ts's resolveSlotInteractions / SUPPORTED_INTERACTION_BEHAVIORS).
+        // TODO: add Witchy Potion Station hobby interaction once Spine animation is authored.
+        interaction: { behavior: "none" },
+        // Original: wood platform/bottle caps (red ch), bubbling potion +
+        // plants (green ch), cauldron/glass bottles (blue ch, dominant).
+        recolorable: true, palettes: furnitureOriginalPalette({ r: '#6b4226', g: '#5aa83f', b: '#3a2f6b' }),
+        rarity: "uncommon", tags: ["mysterious", "spooky"],
+        shopStock: [{ store: "sable", weight: 8 }, { store: "luma", weight: 2 }],
       },
     ]
   },

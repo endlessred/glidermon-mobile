@@ -91,7 +91,13 @@ export async function buildStaticFurnitureSlotBillboard(
    * item, not just the character, and never depth-writes. See
    * RENDER_ORDER_FLOOR_DECAL's own comment for why draw order alone is
    * enough to guarantee that regardless of world position. */
-  floorDecal = false
+  floorDecal = false,
+  /** Whether this lamp's light-glow overlay (if it has one -- see
+   * staticAtlas.lightSocket) starts visible. Ignored for a variant with no
+   * lightSocket. Toggled later in place by IsometricRoomView3D.tsx's
+   * lampOffBySlot effect (via the glow mesh's userData.isLightGlow tag
+   * below), not by rebuilding this billboard. */
+  lit = true
 ): Promise<BuiltFurnitureBillboard | null> {
   const staticAtlas = variant.staticAtlas;
   if (!staticAtlas) return null;
@@ -198,7 +204,13 @@ export async function buildStaticFurnitureSlotBillboard(
   group.add(mesh);
 
   if (staticAtlas.lightSocket) {
-    group.add(buildLightGlow(staticAtlas.lightSocket, region, scale, mirrorX));
+    const glow = buildLightGlow(staticAtlas.lightSocket, region, scale, mirrorX);
+    glow.visible = lit;
+    // Lets the tap-to-toggle effect (IsometricRoomView3D.tsx) find this mesh
+    // among the slot group's children without knowing anything else about
+    // this billboard's structure -- see tryLampTap / the lampOffBySlot effect.
+    glow.userData.isLightGlow = true;
+    group.add(glow);
   }
 
   if (DEBUG_FURNITURE_ANCHORS && slot.kind === 'floor') {

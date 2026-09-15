@@ -23,7 +23,13 @@ import { createSkyTexture, getSkyPalette, paintSky, rgbToHex } from '../render/s
 import { createTreetopBackdrop3D } from '../render/treetopBackdrop3D';
 import { ROOM_SHELL_LAYER, CONTENT_LAYER, assignLayer } from '../render/renderLayers';
 import { getSlotsForTier, getCharacterSlotsForTier, RoomSlotDef } from '../types/roomSlots';
+import { getFurnitureDef } from '../types/furnitureCatalog';
 import { getWanderDestinations } from '../render/walkableTiles';
+import {
+  buildInteractiveHobbyItem3D,
+  InteractiveHobbyItem3D,
+  TarotCardId,
+} from '../render/interactiveHobbyItem3D';
 import {
   buildAdventureBoard3D,
   AdventureBoardObject,
@@ -126,6 +132,19 @@ const DEBUG_FORCE_INTERACTION: { furnitureSlotId: string; behaviorKey: string } 
 // furnitureCatalog.ts and set DEBUG_FORCE_INTERACTION back to null.
 const DEBUG_INTERACTION_ANCHOR = { xOffset: 0.06, yOffset: -0.05, zOffset: 0.17 };
 const DEBUG_INTERACTION_FLIP_X = true;
+
+// --- DEV: interactive hobby item testing aid -------------------------------
+// When non-null, unlocks + equips this hobby variant into the `hobby` slot
+// on mount (DEV only, never touches DEFAULT_FURNITURE_BY_SLOT/the permanent
+// default) so each new item can be exercised without a shop purchase. Set
+// back to null before finishing -- see src/game/housing/CLAUDE.md and the
+// interactive-hobby-item spec's "Testing controls" section.
+const DEBUG_FORCE_HOBBY_ITEM:
+  | 'hobby_boombox'
+  | 'hobby_mushroom_record_player'
+  | 'hobby_tarot_table'
+  | 'hobby_witchy_potion_station'
+  | null = null;
 // -----------------------------------------------------------------------
 
 function randInMs([min, max]: [number, number]): number {
@@ -223,9 +242,19 @@ const SKY_UPDATE_INTERVAL_MS = 30000;
 // Disposes every mesh's geometry + material(s) under `group` and removes
 // them, without touching `group` itself -- used to clear out the previous
 // furniture set before rebuilding it in response to a store change.
+//
+// A child tagged `userData.persistentContent` (an interactive hobby item's
+// group -- see HobbyControllerCacheEntry below) is only ever detached here,
+// never disposed: its Spine controller is reused across rebuilds (wander
+// re-classifies front/behind every relocation, which would otherwise tear
+// down and rebuild the skeleton mid-animation) and re-added by
+// populateFurnitureGroup itself. Its own dispose() is called explicitly
+// wherever the cache actually invalidates the entry (occupant changed) or
+// the component unmounts.
 function clearGroup(group: THREE.Group) {
   for (const child of [...group.children]) {
     group.remove(child);
+    if (child.userData?.persistentContent) continue;
     child.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       if (mesh.geometry) mesh.geometry.dispose();
@@ -234,6 +263,18 @@ function clearGroup(group: THREE.Group) {
       else material?.dispose();
     });
   }
+}
+
+// One cache entry per hobby-type slot currently occupied by an
+// interactiveHobbySpine variant -- keyed by slotId in the ref
+// populateFurnitureGroup's callers thread through (hobbyControllersRef).
+// Reused across ordinary rebuilds (wander, unrelated furniture/palette
+// changes) as long as the occupant (variantId + paletteId) hasn't actually
+// changed; disposed and rebuilt only when it has.
+interface HobbyControllerCacheEntry {
+  variantId: string;
+  paletteId?: string;
+  controller: InteractiveHobbyItem3D;
 }
 
 // (Re)builds every occupied slot's billboard into `group` and returns the
@@ -256,12 +297,75 @@ async function populateFurnitureGroup(
   billboardQuaternion: THREE.Quaternion,
   characterWorldPos: { x: number; z: number },
   /** Slot ids to force in front of the character (the seat he's sitting in). */
-  forceInFrontSlotIds?: Set<string>
+  forceInFrontSlotIds?: Set<string>,
+  /** Persistent interactive-hobby controller cache, keyed by slotId -- see
+   * HobbyControllerCacheEntry. Reused across calls (held in a ref by the
+   * component) so an active dance/tarot sequence survives an unrelated
+   * rebuild instead of being torn down and losing its animation state. */
+  hobbyCache?: Map<string, HobbyControllerCacheEntry>,
+  /** Called when a cache entry is disposed because its occupant actually
+   * changed (not just reclassified) -- lets the caller cancel any
+   * in-progress GliderMon interaction that was targeting that slot before
+   * the furniture it depends on disappears out from under it. */
+  onHobbyControllerInvalidated?: (slotId: string) => void
 ): Promise<Array<(dt: number) => void>> {
+  // Read fresh rather than threading through every populateFurnitureGroup
+  // caller (several call sites rebuild for unrelated reasons -- wander,
+  // sitting down, a palette change -- and none of them know or care about
+  // lamp state) -- this is a plain async function, not a hook, so
+  // useHousingStore.getState() is the same static read already used
+  // elsewhere in this file (e.g. the wander scheduler). Only bakes the
+  // INITIAL glow visibility for a freshly-built billboard; the interactive
+  // toggle itself (tryLampTap) flips the already-built glow mesh in place
+  // via the lampOffBySlot effect below instead of forcing a rebuild here.
+  const lampOffBySlot = useHousingStore.getState().lampOffBySlot;
+
+  // Drop/dispose any cached hobby controller whose slot is no longer
+  // occupied by the same interactiveHobbySpine occupant (slot cleared,
+  // furniture replaced, or its colorway changed) -- BEFORE building the new
+  // set, so a genuinely stale controller never gets reused.
+  if (hobbyCache) {
+    for (const [slotId, entry] of [...hobbyCache.entries()]) {
+      const occupant = activeFurnitureBySlot[slotId];
+      const stillSame = occupant && occupant.variantId === entry.variantId && occupant.paletteId === entry.paletteId;
+      if (!stillSame) {
+        entry.controller.dispose();
+        hobbyCache.delete(slotId);
+        onHobbyControllerInvalidated?.(slotId);
+      }
+    }
+  }
+
   const built: Array<{ group: THREE.Group; update?: (dt: number) => void }> = [];
   for (const slot of getSlotsForTier(roomSizeTier)) {
     const occupant = activeFurnitureBySlot[slot.slotId];
     if (!occupant) continue;
+
+    const variant = getFurnitureDef(occupant.furnitureId)?.variants.find((v) => v.id === occupant.variantId);
+    if (variant?.interactiveHobbySpine && hobbyCache) {
+      const forceInFront = forceInFrontSlotIds?.has(slot.slotId) ?? false;
+      let entry = hobbyCache.get(slot.slotId);
+      if (!entry) {
+        const controller = await buildInteractiveHobbyItem3D(
+          slot,
+          variant,
+          dims,
+          billboardQuaternion,
+          characterWorldPos,
+          occupant.paletteId,
+          forceInFront
+        );
+        if (!controller) continue;
+        controller.group.userData.persistentContent = true;
+        entry = { variantId: occupant.variantId, paletteId: occupant.paletteId, controller };
+        hobbyCache.set(slot.slotId, entry);
+      } else {
+        entry.controller.setDepthClass(forceInFront || isSlotAheadOfCharacter(slot, dims, characterWorldPos));
+      }
+      built.push({ group: entry.controller.group, update: entry.controller.update });
+      continue;
+    }
+
     const built3 = await buildFurnitureSlotBillboard(
       slot,
       occupant.furnitureId,
@@ -270,7 +374,8 @@ async function populateFurnitureGroup(
       billboardQuaternion,
       characterWorldPos,
       forceInFrontSlotIds?.has(slot.slotId) ?? false,
-      occupant.paletteId
+      occupant.paletteId,
+      !lampOffBySlot[slot.slotId]
     );
     if (built3) built.push(built3);
   }
@@ -285,6 +390,18 @@ async function populateFurnitureGroup(
     if (b.update) updaters.push(b.update);
   }
   return updaters;
+}
+
+// Same isometric depth classification furniture uses (see
+// slotWorldPlacement3D.ts) -- pulled out so a cached hobby controller can be
+// reclassified without rebuilding it.
+function isSlotAheadOfCharacter(
+  slot: RoomSlotDef,
+  dims: { width: number; height: number },
+  characterWorldPos: { x: number; z: number }
+): boolean {
+  const { x, z } = gridToWorld(slot.row, slot.col, dims, slot.footprint);
+  return x + z > characterWorldPos.x + characterWorldPos.z;
 }
 
 export default function IsometricRoomView3D({
@@ -314,6 +431,7 @@ export default function IsometricRoomView3D({
   const activeWallPatternIdRight = useHousingStore((s) => s.activeWallPatternIdRight);
   const persistedFurnitureBySlot = useHousingStore((s) => s.activeFurnitureBySlot);
   const characterTile = useHousingStore((s) => s.characterTile);
+  const lampOffBySlot = useHousingStore((s) => s.lampOffBySlot);
   // While Furnish Nest is active, the room previews the draft session's
   // placements instead of the persisted store value -- everything below that
   // builds/rebuilds the furniture layer reads this, not the raw store value,
@@ -386,6 +504,12 @@ export default function IsometricRoomView3D({
   // `initializedRef` guard only ever runs once per mount.
   const furnitureGroupRef = useRef<THREE.Group | null>(null);
   const roomGroupRef = useRef<THREE.Group | null>(null);
+  // Persistent interactive-hobby Spine controllers, keyed by slotId -- see
+  // HobbyControllerCacheEntry / populateFurnitureGroup. Survives ordinary
+  // furniture rebuilds (wander, unrelated palette/furniture changes) so an
+  // active dance/tarot sequence isn't torn down mid-animation; only disposed
+  // when its slot's actual occupant changes, or on unmount.
+  const hobbyControllersRef = useRef<Map<string, HobbyControllerCacheEntry>>(new Map());
   // --- Furnish Nest: slot markers + tap-to-select --------------------------
   const furnishModeRef = useRef(furnishMode);
   const selectedSlotIdRef = useRef(selectedSlotId);
@@ -433,11 +557,45 @@ export default function IsometricRoomView3D({
   // re-run (StrictMode, a furniture change) can't knock him off the seat.
   // null => the character group is positioned normally by the characterTile effect.
   const interactionTransformRef = useRef<{ x: number; y: number; z: number; scaleX: number } | null>(null);
+  // Which hobby-type furniture slot (if any) the CURRENT interaction targets
+  // -- set right before starting a dance/tarot sequence, cleared once that
+  // sequence fully ends. Lets cancelActiveFurnitureInteraction() find the
+  // right controller to stopAndReset() without guessing from behaviorKey
+  // alone (both the legacy piano/record-player placeholder AND the new
+  // BoomBox/Mushroom variants share behaviorKey "dance").
+  const activeHobbySlotIdRef = useRef<string | null>(null);
+  // Tarot's two-phase sub-state -- see the pending-interaction handling
+  // below. null outside of a tarot interaction. Guards against the
+  // synchronous forceIdle() call inside the reveal-start handoff re-entering
+  // the "thinking" phase's own onDone as if it were a genuine interruption.
+  const tarotPhaseRef = useRef<'thinking' | 'celebrating' | null>(null);
 
   const scaleRef = useRef(characterScale);
   useEffect(() => {
     scaleRef.current = characterScale;
   }, [characterScale]);
+
+  // Cancels any in-progress furniture interaction (chair sit, hobby dance/
+  // tarot, ...) cleanly, from outside the characterTile effect that started
+  // it. forceIdle() synchronously fires whatever onDone callback that effect
+  // registered -- which already does the full cleanup (interactingRef,
+  // render position, rebuildFurniture, camera) and, for a hobby interaction,
+  // also resets the furniture-side Spine controller (see the pending-
+  // interaction handling below) -- so this needs no cleanup logic of its
+  // own. A no-op when nothing is actually interacting. See spec section 15 /
+  // this file's furnishMode and unmount effects for the call sites.
+  const cancelActiveFurnitureInteraction = useCallback(() => {
+    if (!interactingRef.current) return;
+    spineRef.current?.idleDriver.forceIdle();
+  }, []);
+
+  // Furnish Nest lets the player replace/remove furniture (including an
+  // active hobby item) while GliderMon might be mid-interaction with it --
+  // cancel before that can happen. Only fires on the false->true edge (the
+  // dep array + the ref check inside make this idempotent either way).
+  useEffect(() => {
+    if (furnishMode) cancelActiveFurnitureInteraction();
+  }, [furnishMode, cancelActiveFurnitureInteraction]);
 
   // Rebuilds just the furniture layer when the store changes (buy/apply in
   // the shop) -- skips the very first render, since the initial scene build
@@ -455,7 +613,19 @@ export default function IsometricRoomView3D({
     const characterWorldPos = characterWorldPosRef.current;
     if (!group || !dims || !billboardQuaternion || !characterWorldPos) return;
     let cancelled = false;
-    populateFurnitureGroup(group, roomSizeTier, effectiveFurnitureBySlot, dims, billboardQuaternion, characterWorldPos).then((updaters) => {
+    populateFurnitureGroup(
+      group,
+      roomSizeTier,
+      effectiveFurnitureBySlot,
+      dims,
+      billboardQuaternion,
+      characterWorldPos,
+      undefined,
+      hobbyControllersRef.current,
+      (slotId) => {
+        if (activeHobbySlotIdRef.current === slotId) cancelActiveFurnitureInteraction();
+      }
+    ).then((updaters) => {
       if (__DEV__) console.log(`[housing3D DEBUG] rebuilt furniture layer, ${updaters.length} updater(s)`);
       if (!cancelled) furnitureUpdatersRef.current = updaters;
     });
@@ -463,6 +633,26 @@ export default function IsometricRoomView3D({
       cancelled = true;
     };
   }, [effectiveFurnitureBySlot, roomSizeTier]);
+
+  // Tap-to-toggle a placed lamp's light (tryLampTap below) flips
+  // lampOffBySlot instead of touching activeFurnitureBySlot, specifically so
+  // it DOESN'T have to go through the (async, texture-reloading) furniture
+  // rebuild above -- this just flips the `.visible` flag on each lamp's
+  // already-built glow mesh (tagged userData.isLightGlow in
+  // staticFurnitureBillboard3D.ts) directly. A freshly-built billboard's
+  // glow already starts in the right state (populateFurnitureGroup reads
+  // lampOffBySlot itself), so this effect only has real work to do on an
+  // actual toggle, but it's harmless to also run right after a rebuild.
+  useEffect(() => {
+    const group = furnitureGroupRef.current;
+    if (!group) return;
+    for (const slotGroup of group.children) {
+      const slotId = slotGroup.userData?.slotId;
+      if (typeof slotId !== 'string') continue;
+      const glow = slotGroup.children.find((c) => c.userData?.isLightGlow);
+      if (glow) glow.visible = !lampOffBySlot[slotId];
+    }
+  }, [lampOffBySlot, effectiveFurnitureBySlot]);
 
   // Furnish Nest: full marker-group build/rebuild/teardown. Only when
   // furnishMode toggles or the actual slot occupancy/tier changes -- a pure
@@ -600,7 +790,11 @@ export default function IsometricRoomView3D({
         dims,
         billboardQuaternion,
         charPos,
-        forceInFront
+        forceInFront,
+        hobbyControllersRef.current,
+        (slotId) => {
+          if (activeHobbySlotIdRef.current === slotId) cancelActiveFurnitureInteraction();
+        }
       ).then((updaters) => {
         if (!cancelled) furnitureUpdatersRef.current = updaters;
       });
@@ -627,19 +821,101 @@ export default function IsometricRoomView3D({
     const forceInFrontSlots: Set<string> | undefined = undefined;
     if (pending) {
       const driver = spineRef.current?.idleDriver;
-      const started =
-        driver?.startInteraction(pending.behaviorKey, undefined, (reason) => {
-          interactingRef.current = false;
-          interactionTransformRef.current = null;
-          characterGroup.position.set(charX, 0, charZ);
-          characterGroup.scale.x = 1;
-          characterWorldPosRef.current = { x: charX, z: charZ };
-          if (!cancelled) {
-            rebuildFurniture({ x: charX, z: charZ });
-            aimCameraAt(charX, charZ); // pan back off the seat when he stands
-          }
-          if (__DEV__) console.log(`[housing3D] interaction "${pending.behaviorKey}" ended (${reason})`);
-        }) ?? false;
+      // Shared cleanup for every interaction kind (generic, hobby dance,
+      // tarot) -- resets render position/camera and rebuilds furniture.
+      // Hobby-specific paths below reset the furniture-side Spine controller
+      // and hobby-only refs FIRST, then call this.
+      const finishInteraction = (reason: string) => {
+        interactingRef.current = false;
+        interactionTransformRef.current = null;
+        characterGroup.position.set(charX, 0, charZ);
+        characterGroup.scale.x = 1;
+        characterWorldPosRef.current = { x: charX, z: charZ };
+        if (!cancelled) {
+          rebuildFurniture({ x: charX, z: charZ });
+          aimCameraAt(charX, charZ); // pan back off the seat when he stands
+        }
+        if (__DEV__) console.log(`[housing3D] interaction "${pending.behaviorKey}" ended (${reason})`);
+      };
+
+      // An interactive hobby item (BoomBox/MushroomRecordPlayer/TarotTable --
+      // see interactiveHobbyItem3D.ts) is distinguished from the legacy
+      // piano/record-player placeholder (which shares behaviorKey "dance")
+      // by presence in hobbyControllersRef, not by behaviorKey alone.
+      const hobbyController = hobbyControllersRef.current.get(pending.furnitureSlotId)?.controller;
+      let started = false;
+
+      if (hobbyController && pending.behaviorKey === 'tarotThink') {
+        // Two-phase sequence: GliderMon thinks while the table shuffles, then
+        // both switch to celebration/reveal together once the shuffle
+        // completes (driven by the controller's onRevealStart, itself fired
+        // from a Spine TrackEntry completion listener -- see
+        // interactiveHobbyItem3D.ts's playTarotSequence). The 120s hold below
+        // is only a safety net in case onRevealStart never fires (e.g. a
+        // missing animation) -- normal sequences never reach it.
+        activeHobbySlotIdRef.current = pending.furnitureSlotId;
+        tarotPhaseRef.current = 'thinking';
+
+        const onThinkPhaseEnd = (reason: string) => {
+          // A no-op when this fires as the synchronous side effect of our
+          // own forceIdle() call in onRevealStart below (tarotPhaseRef has
+          // already moved on to 'celebrating' by then) -- only a genuine
+          // early end (external interruption, or the safety-net timeout)
+          // still finds 'thinking' here.
+          if (tarotPhaseRef.current !== 'thinking') return;
+          tarotPhaseRef.current = null;
+          activeHobbySlotIdRef.current = null;
+          hobbyController.stopAndReset();
+          finishInteraction(reason);
+        };
+        const onCelebratePhaseEnd = (reason: string) => {
+          if (tarotPhaseRef.current !== 'celebrating') return;
+          tarotPhaseRef.current = null;
+          activeHobbySlotIdRef.current = null;
+          hobbyController.stopAndReset();
+          finishInteraction(reason);
+        };
+
+        started = driver?.startInteraction('tarotThink', 120, onThinkPhaseEnd) ?? false;
+        if (started) {
+          hobbyController.playTarotSequence({
+            onRevealStart: (_card, revealDurationSeconds) => {
+              if (tarotPhaseRef.current !== 'thinking') return;
+              tarotPhaseRef.current = 'celebrating';
+              driver?.forceIdle(); // ends "thinking" -- onThinkPhaseEnd above no-ops, already past that phase
+              // Sized to the reveal clip's own real duration so GliderMon's
+              // celebration and the visible card end together (see spec
+              // section 12) instead of the card vanishing mid-celebration
+              // (stopAndReset() fires the instant the reveal clip completes).
+              const celebrateStarted = driver?.startInteraction('dance', revealDurationSeconds, onCelebratePhaseEnd) ?? false;
+              if (!celebrateStarted) {
+                // Shouldn't happen (forceIdle just returned the driver to
+                // idle) -- fail safe rather than leaving state stuck.
+                tarotPhaseRef.current = null;
+                activeHobbySlotIdRef.current = null;
+                hobbyController.stopAndReset();
+                finishInteraction('interrupted');
+              }
+            },
+          });
+        }
+      } else if (hobbyController && pending.behaviorKey === 'dance') {
+        // Simple dance: GliderMon's temporary dance behavior + the item's own
+        // dance loop + Music/NotesRising, all sharing one randomized 5-7s
+        // duration (spec section 7/8) so they start and end together.
+        activeHobbySlotIdRef.current = pending.furnitureSlotId;
+        const danceDurationSeconds = 5 + Math.random() * 2;
+        started =
+          driver?.startInteraction('dance', danceDurationSeconds, (reason) => {
+            activeHobbySlotIdRef.current = null;
+            hobbyController.stopAndReset();
+            finishInteraction(reason);
+          }) ?? false;
+        if (started) hobbyController.playDance(danceDurationSeconds);
+      } else {
+        started = driver?.startInteraction(pending.behaviorKey, undefined, finishInteraction) ?? false;
+      }
+
       if (started) {
         interactingRef.current = true;
         // Seating-style anchor: offset from the furniture's own world origin
@@ -745,7 +1021,7 @@ export default function IsometricRoomView3D({
           };
           if (__DEV__) {
             console.log(
-              `[housing3D] wander -> interact "${chosen.behavior}" @ ${chosen.furnitureSlotId}, tile (${dest.tile.row},${dest.tile.col})`
+              `[housing3D] wander -> interact "${chosen.behavior}" @ ${chosen.furnitureSlotId}, tile (${dest.tile.row},${dest.tile.col}), flipX=${chosen.characterFlipX}`
             );
           }
           setCharacterTile(dest.tile);
@@ -788,6 +1064,23 @@ export default function IsometricRoomView3D({
     const safeTile = findSafeFurnishIdleTile(roomSizeTier, slot);
     if (safeTile) useHousingStore.getState().setCharacterTile(safeTile);
   }, [furnishMode, selectedSlotId, characterTile, roomSizeTier]);
+
+  // DEV: when DEBUG_FORCE_HOBBY_ITEM is set, unlock + equip that variant into
+  // the `hobby` slot once, so it can be exercised without a shop purchase.
+  // Only writes the store once per mount (guarded by hasAppliedRef) -- it
+  // does NOT keep forcing the slot back if the player (or Furnish Nest)
+  // changes it afterward.
+  const debugHobbyItemAppliedRef = useRef(false);
+  useEffect(() => {
+    if (!DEBUG_FORCE_HOBBY_ITEM || !isLoaded || debugHobbyItemAppliedRef.current) return;
+    debugHobbyItemAppliedRef.current = true;
+    const store = useHousingStore.getState();
+    const furnitureId = 'hobby';
+    const variantId = DEBUG_FORCE_HOBBY_ITEM;
+    store.unlockFurniture(`${furnitureId}_${variantId}`);
+    store.setActiveFurniture('hobby', furnitureId, variantId);
+    if (__DEV__) console.log(`[housing3D] DEBUG_FORCE_HOBBY_ITEM: equipped ${furnitureId}_${variantId}`);
+  }, [isLoaded]);
 
   // DEV: when DEBUG_FORCE_INTERACTION is set, park Glidermon in that
   // interaction indefinitely with the tuning anchor/flip constants above --
@@ -834,7 +1127,9 @@ export default function IsometricRoomView3D({
         useHousingStore.getState().activeFurnitureBySlot,
         dims,
         billboardQuaternion,
-        { x, z }
+        { x, z },
+        undefined,
+        hobbyControllersRef.current
       ).then((updaters) => {
         furnitureUpdatersRef.current = updaters;
       });
@@ -1085,6 +1380,44 @@ export default function IsometricRoomView3D({
   }, [boardTextures, resolvedMode]);
 
   // Tap -> raycast the board surface -> start check-in (Goals + not-planned).
+  // Tap (outside Furnish Nest only) -> raycast the furniture layer -> if the
+  // hit slot's billboard has a light-glow child (staticFurnitureBillboard3D.ts
+  // tags it userData.isLightGlow -- only lamps with a lightSocket ever get
+  // one), flip that lamp's on/off state. Deliberately independent of
+  // tryBoardTap/tryFurnishTap below: it raycasts a different object
+  // (furnitureGroupRef, not the board surface or the marker group), so it
+  // can just run first and fall through harmlessly when nothing lamp-shaped
+  // was hit, same NDC/layer setup as the other two.
+  const tryLampTap = useCallback((localX: number, localY: number): boolean => {
+    if (furnishModeRef.current) return false;
+    const camera = cameraRef.current;
+    const furnitureGroup = furnitureGroupRef.current;
+    if (!camera || !furnitureGroup) return false;
+    const { w, h } = layoutSizeRef.current;
+    if (w <= 0 || h <= 0) return false;
+    const ndc = new THREE.Vector2((localX / w) * 2 - 1, -((localY / h) * 2 - 1));
+    raycasterRef.current.layers.set(CONTENT_LAYER);
+    raycasterRef.current.setFromCamera(ndc, camera);
+    const hits = raycasterRef.current.intersectObject(furnitureGroup, true);
+    for (const hit of hits) {
+      // Climb to the direct child of furnitureGroup -- that's one slot's
+      // whole billboard group (userData.slotId, see populateFurnitureGroup),
+      // whose own direct children are its mesh + (maybe) its glow.
+      let obj: THREE.Object3D | null = hit.object;
+      while (obj && obj.parent !== furnitureGroup) obj = obj.parent;
+      if (!obj) continue;
+      const slotId = obj.userData?.slotId;
+      if (typeof slotId !== 'string') continue;
+      const hasLight = obj.children.some((c) => c.userData?.isLightGlow);
+      if (hasLight) {
+        useHousingStore.getState().toggleLamp(slotId);
+        return true;
+      }
+      return false; // hit real furniture, just not a lamp -- don't fall through to the board.
+    }
+    return false;
+  }, []);
+
   const tryBoardTap = useCallback((localX: number, localY: number) => {
     if (!boardInteractiveRef.current || !onBoardTapRef.current) return;
     const camera = cameraRef.current;
@@ -1206,6 +1539,9 @@ export default function IsometricRoomView3D({
         cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
       }
+      cancelActiveFurnitureInteraction();
+      for (const entry of hobbyControllersRef.current.values()) entry.controller.dispose();
+      hobbyControllersRef.current.clear();
       rendererRef.current?.dispose();
       boardObjectRef.current?.dispose();
       skyTextureRef.current?.dispose();
@@ -1216,7 +1552,7 @@ export default function IsometricRoomView3D({
         (treetopMesh.material as THREE.MeshBasicMaterial).dispose();
       }
     },
-    []
+    [cancelActiveFurnitureInteraction]
   );
 
   const handleContextCreate = useCallback(async (gl: any) => {
@@ -1316,7 +1652,9 @@ export default function IsometricRoomView3D({
         effectiveFurnitureBySlot,
         dims,
         billboardQuaternion,
-        characterWorldPos
+        characterWorldPos,
+        undefined,
+        hobbyControllersRef.current
       );
 
       // Daily Adventure Board -- fixed system furnishing at the `adventureBoard`
@@ -1508,11 +1846,14 @@ export default function IsometricRoomView3D({
   return (
     <View
       style={{ width, height, backgroundColor: 'transparent' }}
-      // Tap detection for the in-world Adventure Board (Goals + not-planned)
-      // and, while Furnish Nest is active, for furniture/slot-marker
-      // selection. A quick tap that barely moves raycasts; anything larger
-      // is left alone (no room drag today, but future-proof).
-      onStartShouldSetResponder={() => boardInteractiveRef.current || furnishModeRef.current}
+      // Tap detection for: the in-world Adventure Board (Goals +
+      // not-planned); while Furnish Nest is active, furniture/slot-marker
+      // selection; and, outside Furnish Nest, toggling a tapped lamp's
+      // light. Always claims the responder (this view is a fixed,
+      // non-scrolling panel -- see HudScreen.tsx -- so there's no drag/scroll
+      // to conflict with); a quick tap that barely moves raycasts, anything
+      // larger is left alone (no room drag today, but future-proof).
+      onStartShouldSetResponder={() => true}
       onResponderGrant={(e) => {
         tapStartRef.current = {
           x: e.nativeEvent.locationX,
@@ -1529,7 +1870,7 @@ export default function IsometricRoomView3D({
         if (Math.hypot(dx, dy) > 12 || Date.now() - s.t > 600) return;
         if (furnishModeRef.current) {
           tryFurnishTap(e.nativeEvent.locationX, e.nativeEvent.locationY);
-        } else {
+        } else if (!tryLampTap(e.nativeEvent.locationX, e.nativeEvent.locationY)) {
           tryBoardTap(e.nativeEvent.locationX, e.nativeEvent.locationY);
         }
       }}

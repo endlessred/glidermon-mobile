@@ -452,8 +452,19 @@ const INTERACTION_BEHAVIORS: Record<string, Composite> = {
   // Placeholder "dance" assembled from existing primitives until a dedicated
   // Dance clip is exported -- a held sway with raised wings, wagging tail and a
   // smile. Uses a looping body triad (LeanRight) so it sustains for the whole
-  // hold rather than ending after a single one-shot.
+  // hold rather than ending after a single one-shot. Also reused as the
+  // celebration phase of the tarot-table interaction (see tarotThink below) --
+  // "happy bounce/dance" reads the same whether it's following a boombox beat
+  // or a revealed tarot card.
   dance: { body: BODY.leanRight, wings: WINGS.raise, tail: TAIL.wag, face: FACE.smile, holdRange: [4, 7] },
+  // Tarot-table interaction, phase 1 (see IsometricRoomView3D.tsx's tarot
+  // orchestration and render/interactiveHobbyItem3D.ts's shuffle animation).
+  // A calm, curious "considering" pose -- chin-scratch + looking up -- held
+  // for the shuffle's own duration (passed as an explicit holdSeconds by the
+  // caller, not this holdRange) so it ends in sync with the furniture.
+  // Phase 2 is the shared `dance` composite above, started once the shuffle
+  // completes and the card is revealed.
+  tarotThink: { body: BODY.leanLeft, arms: ARM.scratchChin, face: FACE.lookUp, holdRange: [1.3, 1.3] },
 };
 
 /** Behavior keys startInteraction() will actually perform. Callers treat a

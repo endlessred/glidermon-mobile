@@ -224,6 +224,57 @@ export interface StaticFurnitureVisual {
   };
 }
 
+/**
+ * Marks a hobby-slot variant as using the animated interactive-hobby Spine
+ * asset (render/interactiveHobbyItem3D.ts) instead of the plain
+ * layers/restPoseAsset/staticAtlas billboard paths -- see that file for the
+ * shared skeleton (one Spine file, one `HobbyItem` slot, four selectable
+ * furniture attachments). `attachment` is the exact attachment name to
+ * select on the shared `HobbyItem` slot; `interactionKind` tells the room
+ * coordinator which coordinated GliderMon+furniture sequence (if any) this
+ * item performs; `itemAnimation` is the Spine clip to loop on the item's own
+ * dance track for `interactionKind: 'dance'` (ignored otherwise).
+ */
+export type HobbyItemAttachmentId = 'BoomBox' | 'MushroomRecordPlayer' | 'TarotTable' | 'WitchyPotionStation';
+
+export interface InteractiveHobbySpineDescriptor {
+  attachment: HobbyItemAttachmentId;
+  interactionKind: 'dance' | 'tarot' | 'none';
+  itemAnimation?: string;
+}
+
+// --- Interactive-hobby Spine asset contract (Spine 4.3.26,
+// src/assets/Apartment/Hobby/hobby.*) -- slot/attachment/animation names,
+// used by both the catalog (below) and the renderer
+// (render/interactiveHobbyItem3D.ts), which validates the live skeleton
+// against this list in DEV. Kept here, not in the renderer, so the catalog
+// doesn't have to import a render-layer module for these string constants.
+export const HOBBY_ITEM_SLOT = 'HobbyItem';
+
+export const HOBBY_ATTACHMENT: Record<string, HobbyItemAttachmentId> = {
+  boomBox: 'BoomBox',
+  mushroomRecordPlayer: 'MushroomRecordPlayer',
+  tarotTable: 'TarotTable',
+  witchyPotionStation: 'WitchyPotionStation',
+};
+
+export const HOBBY_ANIM = {
+  boomBoxDance: 'HobbyItem/BoomBoxDance',
+  mushroomRecordPlayerDance: 'HobbyItem/MushroomRecordPlayerDance',
+  notesRising: 'Music/NotesRising',
+  tarotShuffle: 'Cards/Tarot Shuffle And Pull',
+  tarotReveal: 'Cards/Tarot Card Reveal',
+} as const;
+
+export type TarotCardId = 'glider' | 'acorn' | 'lantern' | 'moon';
+
+export const TAROT_ATTACHMENTS: Record<TarotCardId, string> = {
+  glider: 'Effects/GliderTarotCard',
+  acorn: 'Effects/AcornTarotCard',
+  lantern: 'Effects/LanternTarotCard',
+  moon: 'Effects/MoonTarotCard',
+};
+
 export interface FurnitureVariant {
   /** Variant identifier */
   id: string;
@@ -281,6 +332,12 @@ export interface FurnitureVariant {
   recolorable?: boolean;
   maskRecolor?: import("../../../data/cosmetics/palette").MaskRecolor;
   palettes?: import("../../../data/cosmetics/palette").CosmeticPalette[];
+  /**
+   * When present, this variant renders via the interactive-hobby Spine
+   * controller (render/interactiveHobbyItem3D.ts) instead of any of the
+   * other rendering paths -- see InteractiveHobbySpineDescriptor.
+   */
+  interactiveHobbySpine?: InteractiveHobbySpineDescriptor;
 
   // Shop stock metadata (see data/shop/shopTypes.ts) -- independent of cost
   // above. Absence of shopStock just means this variant isn't sold through

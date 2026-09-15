@@ -51,7 +51,10 @@ export async function buildFurnitureSlotBillboard(
   /** Selected colorway id for this slot's occupant (Furnish Nest's "Colors"
    * action) -- see StaticFurnitureVisual / FURNITURE_RECOLOR_PALETTES.
    * Ignored for variants that aren't `recolorable`. */
-  paletteId?: string
+  paletteId?: string,
+  /** Whether a lamp's light-glow overlay starts on. Ignored for anything
+   * without a lightSocket. See buildStaticFurnitureSlotBillboard's `lit`. */
+  lit = true
 ): Promise<BuiltFurnitureBillboard | null> {
   const def = getFurnitureDef(furnitureId);
   const variant = def?.variants.find((v) => v.id === variantId);
@@ -74,7 +77,8 @@ export async function buildFurnitureSlotBillboard(
       billboardQuaternion,
       characterWorldPos,
       forceInFront,
-      def.floorDecal
+      def.floorDecal,
+      lit
     );
   }
 
